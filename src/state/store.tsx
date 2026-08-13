@@ -78,7 +78,7 @@ export interface AppState {
   };
 }
 
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 
 export const STATO_INIZIALE: AppState = {
   schemaVersion: SCHEMA_VERSION,
@@ -107,7 +107,7 @@ export const STATO_INIZIALE: AppState = {
     { id: 'c5', categoria: 'Opere provvisionali', descrizione: 'Ponteggio di servizio', um: 'm²', quantita: '260', prezzo: '14.00' },
   ],
   ui: {
-    open: { sisma: true, vari: true, 'soll-risultati': true, 'soll-inerzia': false },
+    open: { sisma: true, vari: true, 'soll-risultati': true, 'soll-inerzia': true },
     exp: {},
     allDetails: { azioni: false, sollecitazioni: false, verifiche: false, costi: false },
     verifica: 'taglio-non-armato',
@@ -211,6 +211,9 @@ export function reducer(state: AppState, action: Action): AppState {
  */
 export function migra(raw: Partial<AppState>): AppState {
   const base = STATO_INIZIALE;
+  // Lo stato di apertura dei pannelli è parte del layout, non dei dati: se il
+  // salvataggio viene da una versione precedente si riparte dai default nuovi.
+  const aperture = raw.schemaVersion === SCHEMA_VERSION ? raw.ui?.open : undefined;
   return {
     schemaVersion: SCHEMA_VERSION,
     progetto: { ...base.progetto, ...raw.progetto },
@@ -230,7 +233,12 @@ export function migra(raw: Partial<AppState>): AppState {
       acciaio: { ...base.verifiche.acciaio, ...raw.verifiche?.acciaio },
     },
     costi: Array.isArray(raw.costi) && raw.costi.length ? raw.costi : base.costi,
-    ui: { ...base.ui, ...raw.ui, verifica: raw.ui?.verifica || base.ui.verifica },
+    ui: {
+      ...base.ui,
+      ...raw.ui,
+      open: { ...base.ui.open, ...aperture },
+      verifica: raw.ui?.verifica || base.ui.verifica,
+    },
   };
 }
 

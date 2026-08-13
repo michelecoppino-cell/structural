@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ArrowsHorizontal, ArrowsVertical, Info } from '@phosphor-icons/react';
+import { ArrowsHorizontal, ArrowsVertical, CaretDown, CaretUp, Info } from '@phosphor-icons/react';
 import { useCalcoli, useStore } from '../state/store';
 import { num } from '../calc/azioni';
 import {
@@ -105,6 +105,8 @@ export default function Sollecitazioni() {
   const inp = state.sollecitazioni;
   const set = (patch: Partial<typeof inp>) => dispatch({ type: 'sollecitazioni', patch });
   const [geomOpen, setGeomOpen] = useState(false);
+  /** Il dettaglio della combinazione sta sotto il riepilogo, a scomparsa. */
+  const combOpen = !!state.ui.exp['soll-combinazione'];
 
   const err = validaSollecitazioni(inp);
   const tutte = sorgenti(inp, az);
@@ -226,7 +228,22 @@ export default function Sollecitazioni() {
             ]}
           />
 
-          <div className="table-scroll" style={{ marginTop: 12 }}>
+          <button
+            type="button"
+            className="sub-toggle"
+            aria-expanded={combOpen}
+            aria-controls="soll-combinazione"
+            onClick={() => dispatch({ type: 'toggleExp', id: 'soll-combinazione' })}
+          >
+            {combOpen ? <CaretUp size={13} /> : <CaretDown size={13} />}
+            <span className="t">Calcolo della combinazione</span>
+            <span className="n">
+              {r.contributi.length} {r.contributi.length === 1 ? 'carico' : 'carichi'}
+            </span>
+          </button>
+
+          {combOpen && (
+          <div className="table-scroll" id="soll-combinazione" style={{ marginTop: 8 }}>
             <table className="table">
               <thead>
                 <tr>
@@ -265,6 +282,7 @@ export default function Sollecitazioni() {
               </tfoot>
             </table>
           </div>
+          )}
         </Accordion>
 
         <Accordion
@@ -387,12 +405,11 @@ export default function Sollecitazioni() {
         <section className="panel">
           <div className="panel-body" style={{ paddingTop: 12 }}>
             <div className="soll-riga-body">
-              <div className="soll-blocco">
+              <div className="soll-blocco soll-blocco-schema">
                 <span className="kicker">Schema statico</span>
                 <select
                   id="soll_schema"
                   className="input"
-                  style={{ width: 200 }}
                   value={inp.schema}
                   onChange={(e) => set({ schema: e.target.value as SchemaId })}
                 >
@@ -402,16 +419,12 @@ export default function Sollecitazioni() {
                     </option>
                   ))}
                 </select>
-              </div>
-
-              <div className="soll-blocco">
-                <span className="kicker">&nbsp;</span>
                 <div className="schema-preview" title={schema.note}>
                   <MiniSchema id={inp.schema} />
                 </div>
               </div>
 
-              <div className="soll-blocco">
+              <div className="soll-blocco soll-blocco-carichi">
                 <span className="kicker">Carichi applicati</span>
                 <div className="row-wrap">
                   {tutte.map((s) => (
@@ -437,7 +450,7 @@ export default function Sollecitazioni() {
                 </div>
               </div>
 
-              <div className="soll-blocco">
+              <div className="soll-blocco soll-blocco-geom">
                 <span className="kicker">
                   Geometria e carichi
                   <button

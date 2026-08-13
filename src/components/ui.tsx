@@ -255,7 +255,9 @@ export function Accordion({
       >
         {icon && <span className="icon">{icon}</span>}
         <span className="title">{title}</span>
-        <span className="hint">{hint}</span>
+        {/* a pannello aperto il riepilogo è ridondante: si toglie invece di
+            comparire troncato accanto a un titolo lungo */}
+        <span className="hint">{aperto ? '' : hint}</span>
         <span className="caret">{aperto ? <CaretUp size={15} /> : <CaretDown size={15} />}</span>
       </button>
       {aperto && (
