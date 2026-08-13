@@ -14,7 +14,8 @@ import {
 } from '@phosphor-icons/react';
 import { useStore, type TabId } from './state/store';
 import { migra } from './state/store';
-import { testoRelazione, verificheNonSoddisfatte } from './calc/relazione';
+import { testoRelazione, esitiVerifiche } from './calc/relazione';
+import { SlotProvider } from './components/ComandiScheda';
 import Azioni from './tabs/Azioni';
 import Sollecitazioni from './tabs/Sollecitazioni';
 import Verifiche from './tabs/Verifiche';
@@ -40,11 +41,12 @@ const TABS: { id: TabId; label: string; icon: React.ReactNode; sub: string }[] =
 export default function App() {
   const { state, dispatch } = useStore();
   const [toast, setToast] = useState('');
+  const [slot, setSlot] = useState<HTMLDivElement | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const timer = useRef<number | undefined>(undefined);
 
-  const attiva = TABS.find((t) => t.id === state.tab)!;
-  const { ko, tot } = verificheNonSoddisfatte(state);
+  const esiti = esitiVerifiche(state);
+  const ko = esiti.filter((e) => !e.ok);
 
   const flash = (t: string) => {
     setToast(t);
@@ -107,10 +109,6 @@ export default function App() {
         </div>
 
         <div className="header-actions">
-          <button type="button" className="btn btn-secondary" title="Esporta JSON" onClick={esporta}>
-            <DownloadSimple size={14} />
-            <span>Esporta JSON</span>
-          </button>
           <button
             type="button"
             className="btn btn-secondary"
@@ -131,14 +129,20 @@ export default function App() {
               e.target.value = '';
             }}
           />
+          {/* finché Microsoft Graph non è collegato, il salvataggio in cloud
+              non è l'azione principale: l'accento resta su Esporta JSON */}
           <button
             type="button"
-            className="btn btn-primary"
-            title="Salva su OneDrive (non ancora collegato)"
-            onClick={() => flash('OneDrive non ancora collegato — usa Esporta JSON')}
+            className="btn btn-secondary"
+            disabled
+            title="Salvataggio su OneDrive in arrivo — per ora usa Esporta JSON"
           >
             <CloudArrowUp size={14} />
             <span>OneDrive</span>
+          </button>
+          <button type="button" className="btn btn-primary" title="Esporta JSON" onClick={esporta}>
+            <DownloadSimple size={14} />
+            <span>Esporta JSON</span>
           </button>
         </div>
       </header>
@@ -151,30 +155,43 @@ export default function App() {
               key={t.id}
               type="button"
               className="nav-item"
+              title={`${t.label} — ${t.sub}`}
               aria-current={state.tab === t.id ? 'page' : undefined}
               onClick={() => dispatch({ type: 'tab', tab: t.id })}
             >
               {t.icon}
               <span className="label">{t.label}</span>
               {t.id === 'verifiche' && (
-                <span className={`nav-badge ${ko === 0 ? 'is-ok' : ''}`}>{ko === 0 ? '✓' : ko}</span>
+                <span className={`nav-badge ${ko.length === 0 ? 'is-ok' : ''}`}>
+                  {ko.length === 0 ? '✓' : ko.length}
+                </span>
               )}
             </button>
           ))}
-          <div className="nav-foot">
-            Verifiche non soddisfatte
-            <strong>
-              {ko} su {tot}
-            </strong>
+          <div className="nav-foot" title={ko.map((e) => e.label).join(', ')}>
+            {ko.length === 0 ? (
+              <>
+                <span className="ok-item">Tutte le verifiche soddisfatte</span>
+                <span className="dettaglio">{esiti.length} su {esiti.length}</span>
+              </>
+            ) : (
+              <>
+                Non soddisfatte
+                <span className="dettaglio">
+                  {ko.map((e) => (
+                    <span className="ko-item" key={e.label}>
+                      {e.label}
+                    </span>
+                  ))}
+                </span>
+              </>
+            )}
           </div>
         </nav>
 
         <main className={`app-main${fit ? ' is-fit' : ''}`}>
           <div className="tab-toolbar">
-            <div style={{ minWidth: 0 }}>
-              <h4>{attiva.label}</h4>
-              <div className="sub">{attiva.sub}</div>
-            </div>
+            <div className="toolbar-slot" ref={setSlot} />
             <div className="toolbar-actions">
               <button
                 type="button"
@@ -191,10 +208,12 @@ export default function App() {
             </div>
           </div>
 
-          {state.tab === 'azioni' && <Azioni />}
-          {state.tab === 'sollecitazioni' && <Sollecitazioni />}
-          {state.tab === 'verifiche' && <Verifiche />}
-          {state.tab === 'costi' && <Costi />}
+          <SlotProvider value={slot}>
+            {state.tab === 'azioni' && <Azioni />}
+            {state.tab === 'sollecitazioni' && <Sollecitazioni />}
+            {state.tab === 'verifiche' && <Verifiche />}
+            {state.tab === 'costi' && <Costi />}
+          </SlotProvider>
         </main>
       </div>
 
@@ -215,7 +234,9 @@ export default function App() {
 
       {toast && (
         <div className="toast" role="status">
-          <CheckCircle size={14} color="#c9932e" />
+          <span className="icona">
+            <CheckCircle size={14} />
+          </span>
           {toast}
         </div>
       )}

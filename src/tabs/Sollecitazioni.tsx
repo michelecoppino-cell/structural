@@ -1,16 +1,17 @@
 import { ArrowsHorizontal, ArrowsVertical } from '@phosphor-icons/react';
-import { useStore } from '../state/store';
-import { calcolaAzioni, num } from '../calc/azioni';
+import { useCalcoli, useStore } from '../state/store';
+import { num } from '../calc/azioni';
 import {
   COMBINAZIONI,
-  calcolaSollecitazioni,
   sorgenti,
   type Combinazione,
   type Orientamento,
   type SorgenteId,
 } from '../calc/sollecitazioni';
+import { validaSollecitazioni } from '../calc/validazione';
 import { SCHEMI, SCHEMI_BY_ID, type SchemaId } from '../calc/trave';
 import { Field, NumInput, Output, Seg } from '../components/ui';
+import { ComandiScheda } from '../components/ComandiScheda';
 import { DiagrammaCarichi, DiagrammaSerie } from '../components/Diagrammi';
 
 const fx = (v: number, d = 2) => (Number.isFinite(v) ? v.toFixed(d) : '—');
@@ -80,11 +81,11 @@ function Menu({
 
 export default function Sollecitazioni() {
   const { state, dispatch } = useStore();
+  const { azioni: az, sollecitazioni: r } = useCalcoli();
   const inp = state.sollecitazioni;
-  const az = calcolaAzioni(state.azioni);
-  const r = calcolaSollecitazioni(inp, az);
   const set = (patch: Partial<typeof inp>) => dispatch({ type: 'sollecitazioni', patch });
 
+  const err = validaSollecitazioni(inp);
   const tutte = sorgenti(inp, az);
   const verticale = inp.orientamento === 'verticale';
   const t = r.trave;
@@ -92,14 +93,36 @@ export default function Sollecitazioni() {
 
   return (
     <div className="soll-layout">
-      {/* ── grafici e risultati ────────────────────────────────────────── */}
+      {/* ── comandi che stanno bene in testa: combinazione e orientamento ── */}
+      <ComandiScheda>
+        <select
+          className="input"
+          style={{ width: 'auto', minWidth: 190 }}
+          aria-label="Combinazione di carico"
+          value={inp.combinazione}
+          onChange={(e) => set({ combinazione: e.target.value as Combinazione })}
+        >
+          {COMBINAZIONI.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.label}
+            </option>
+          ))}
+        </select>
+        <Seg<Orientamento>
+          label="Orientamento dell'elemento"
+          value={inp.orientamento}
+          onChange={(v) => set({ orientamento: v })}
+          options={[
+            { id: 'orizzontale', label: 'Orizzontale', icon: <ArrowsHorizontal size={14} /> },
+            { id: 'verticale', label: 'Verticale', icon: <ArrowsVertical size={14} /> },
+          ]}
+        />
+      </ComandiScheda>
+
+      {/* ── diagrammi ─────────────────────────────────────────────────── */}
       <div className="soll-col soll-risultati">
         <section className="panel panel-diagrammi">
-          <div className="panel-body" style={{ paddingTop: 12 }}>
-            <div className="section-title">
-              Diagrammi — {schema.label} ·{' '}
-              {verticale ? 'carichi a sinistra, sollecitazioni a destra' : 'carichi in alto, sollecitazioni in basso'}
-            </div>
+          <div className="panel-body" style={{ paddingTop: 10 }}>
             <div className={`diagrams ${inp.orientamento}`}>
               <DiagrammaCarichi
                 schema={inp.schema}
@@ -107,6 +130,9 @@ export default function Sollecitazioni() {
                 q={r.q}
                 P={num(inp.P)}
                 aP={num(inp.aP)}
+                N={r.N}
+                RA={t.reazioni.A.R}
+                RB={t.reazioni.B.R}
                 orientamento={inp.orientamento}
               />
               <DiagrammaSerie
@@ -116,21 +142,36 @@ export default function Sollecitazioni() {
                 L={r.L}
                 unita="kNm"
                 giu
+                quotaEstremi
+                orientamento={inp.orientamento}
               />
-              <DiagrammaSerie titolo="Taglio V" punti={t.punti} sel={(p) => p.V} L={r.L} unita="kN" />
+              <DiagrammaSerie
+                titolo="Taglio V"
+                punti={t.punti}
+                sel={(p) => p.V}
+                L={r.L}
+                unita="kN"
+                quotaEstremi
+                orientamento={inp.orientamento}
+              />
               <DiagrammaSerie
                 titolo="Deformata"
                 punti={t.punti}
                 sel={(p) => p.v * 1000}
                 L={r.L}
                 unita="mm"
+                decimali={2}
                 giu
-                colore="#9397ab"
+                variante="faint"
+                orientamento={inp.orientamento}
               />
             </div>
           </div>
         </section>
+      </div>
 
+      {/* ── risultati numerici ────────────────────────────────────────── */}
+      <div className="soll-col soll-esiti">
         <section className="panel">
           <div className="panel-body" style={{ paddingTop: 12 }}>
             <Output
@@ -163,7 +204,7 @@ export default function Sollecitazioni() {
                   {r.contributi.map((c) => (
                     <tr key={c.sorgente.id}>
                       <td>{c.sorgente.descr}</td>
-                      <td style={{ color: 'var(--text-faint)' }}>{c.ruolo}</td>
+                      <td className="faint">{c.ruolo}</td>
                       <td className="num">{fx(c.sorgente.qk)}</td>
                       <td className="num">{fx(c.gamma)}</td>
                       <td className="num">{fx(c.psi)}</td>
@@ -172,7 +213,7 @@ export default function Sollecitazioni() {
                   ))}
                   {!r.contributi.length && (
                     <tr>
-                      <td colSpan={6} style={{ color: 'var(--text-faint)' }}>
+                      <td colSpan={6} className="faint">
                         Nessun carico selezionato.
                       </td>
                     </tr>
@@ -192,7 +233,7 @@ export default function Sollecitazioni() {
         </section>
       </div>
 
-      {/* ── comandi: a lato su PC, in fondo su cellulare ───────────────── */}
+      {/* ── comandi: in fascia sotto i diagrammi su PC, in fondo su cellulare ─ */}
       <div className="soll-col soll-comandi">
         <section className="panel">
           <div className="panel-body" style={{ paddingTop: 12 }}>
@@ -215,34 +256,6 @@ export default function Sollecitazioni() {
             <div className="schema-preview" title={schema.note}>
               <MiniSchema id={inp.schema} />
               <span className="nota">{schema.note}</span>
-            </div>
-
-            <Menu id="soll_comb" label="Combinazione di carico">
-              <select
-                id="soll_comb"
-                className="input"
-                value={inp.combinazione}
-                onChange={(e) => set({ combinazione: e.target.value as Combinazione })}
-              >
-                {COMBINAZIONI.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.label}
-                  </option>
-                ))}
-              </select>
-            </Menu>
-
-            <div className="menu-blocco">
-              <span>Orientamento dell'elemento</span>
-              <Seg<Orientamento>
-                label="Orientamento dell'elemento"
-                value={inp.orientamento}
-                onChange={(v) => set({ orientamento: v })}
-                options={[
-                  { id: 'orizzontale', label: 'Orizzontale', icon: <ArrowsHorizontal size={14} /> },
-                  { id: 'verticale', label: 'Verticale', icon: <ArrowsVertical size={14} /> },
-                ]}
-              />
             </div>
           </div>
         </section>
@@ -272,8 +285,8 @@ export default function Sollecitazioni() {
             <p className="note" style={{ marginTop: 6 }}>
               ↩ = valore ripreso dalla scheda Azioni.
               {verticale
-                ? ' In elemento verticale i carichi gravitazionali diventano sforzo normale sull’area di influenza; solo le azioni orizzontali flettono l’elemento.'
-                : ' In elemento orizzontale tutti i carichi selezionati agiscono trasversalmente sull’interasse.'}
+                ? ' In verticale i carichi gravitazionali diventano sforzo normale sull’area di influenza.'
+                : ' In orizzontale tutti i carichi agiscono trasversalmente sull’interasse.'}
             </p>
           </div>
         </section>
@@ -281,76 +294,91 @@ export default function Sollecitazioni() {
         <section className="panel">
           <div className="panel-body" style={{ paddingTop: 12 }}>
             <div className="section-title">Geometria e carichi</div>
-            <div className="fields">
+            <div className="fields fields-fitti fields-compatti">
               <Field
                 id="soll_L"
                 tab="sollecitazioni"
                 label={verticale ? 'Altezza H' : 'Luce di calcolo L'}
                 unit="m"
+                errore={err.L}
                 dettaglio={{
                   formula: `Schema ${schema.label} su luce L = ${fx(r.L)} m`,
                   ref: 'Soluzioni di travi elementari variamente caricate',
                 }}
               >
-                <NumInput id="soll_L" value={inp.L} onChange={(v) => set({ L: v })} />
+                <NumInput id="soll_L" value={inp.L} errore={!!err.L} onChange={(v) => set({ L: v })} />
               </Field>
 
               <Field
                 id="soll_i"
                 tab="sollecitazioni"
-                label="Interasse (larghezza di influenza)"
+                label="Interasse"
                 unit="m"
+                errore={err.interasse}
                 dettaglio={{
-                  formula: `q = Σ (γ · ψ · qk) · i = ${fx(r.q)} kN/m`,
-                  ref: 'NTC2018 §2.5.3',
+                  formula: `q = Σ (γ · ψ · qk) · i = ${fx(r.q)} kN/m — larghezza di influenza`,
+                  ref: 'NTC2018 §2.5.3 — γG1 1.30, γG2 1.50, γQ 1.50 (Tab. 2.6.I, A1-STR)',
                   coeffs: r.contributi.map((c) => ({
                     k: c.sorgente.label,
                     v: `${fx(c.qd)} kN/m²`,
                   })),
                 }}
               >
-                <NumInput id="soll_i" value={inp.interasse} onChange={(v) => set({ interasse: v })} />
+                <NumInput
+                  id="soll_i"
+                  value={inp.interasse}
+                  errore={!!err.interasse}
+                  onChange={(v) => set({ interasse: v })}
+                />
               </Field>
 
               {verticale && (
                 <Field
                   id="soll_A"
                   tab="sollecitazioni"
-                  label="Area di influenza (carichi verticali)"
+                  label="Area di influenza"
                   unit="m²"
+                  errore={err.areaInfluenza}
                   dettaglio={{
                     formula: `N = Σ (γ · ψ · qk) · A = ${fx(r.N, 1)} kN`,
                     ref: 'NTC2018 §2.5.3',
                   }}
                 >
-                  <NumInput id="soll_A" value={inp.areaInfluenza} onChange={(v) => set({ areaInfluenza: v })} />
+                  <NumInput
+                    id="soll_A"
+                    value={inp.areaInfluenza}
+                    errore={!!err.areaInfluenza}
+                    onChange={(v) => set({ areaInfluenza: v })}
+                  />
                 </Field>
               )}
 
               <Field
                 id="soll_pp"
                 tab="sollecitazioni"
-                label="Peso proprio strutturale G1"
+                label="Peso proprio G1"
                 unit="kN/m²"
+                errore={err.pp}
                 dettaglio={{
                   formula: `γG1 = 1.30 in combinazione SLU sfavorevole`,
                   ref: 'NTC2018 §2.6.1 — Tab. 2.6.I',
                 }}
               >
-                <NumInput id="soll_pp" value={inp.pp} onChange={(v) => set({ pp: v })} />
+                <NumInput id="soll_pp" value={inp.pp} errore={!!err.pp} onChange={(v) => set({ pp: v })} />
               </Field>
 
               <Field
                 id="soll_g2"
                 tab="sollecitazioni"
-                label="Permanenti non strutturali G2"
+                label="Permanenti G2"
                 unit="kN/m²"
+                errore={err.g2}
                 dettaglio={{
                   formula: `γG2 = 1.50 in combinazione SLU sfavorevole`,
                   ref: 'NTC2018 §2.6.1 — Tab. 2.6.I',
                 }}
               >
-                <NumInput id="soll_g2" value={inp.g2} onChange={(v) => set({ g2: v })} />
+                <NumInput id="soll_g2" value={inp.g2} errore={!!err.g2} onChange={(v) => set({ g2: v })} />
               </Field>
 
               <Field
@@ -367,8 +395,14 @@ export default function Sollecitazioni() {
                 <NumInput id="soll_P" value={inp.P} onChange={(v) => set({ P: v })} />
               </Field>
 
-              <Field id="soll_aP" tab="sollecitazioni" label="Ascissa del carico concentrato" unit="m">
-                <NumInput id="soll_aP" value={inp.aP} onChange={(v) => set({ aP: v })} />
+              <Field
+                id="soll_aP"
+                tab="sollecitazioni"
+                label="Ascissa di P"
+                unit="m"
+                errore={err.aP}
+              >
+                <NumInput id="soll_aP" value={inp.aP} errore={!!err.aP} onChange={(v) => set({ aP: v })} />
               </Field>
 
               <Field
@@ -376,12 +410,13 @@ export default function Sollecitazioni() {
                 tab="sollecitazioni"
                 label="Modulo elastico E"
                 unit="MPa"
+                errore={err.E}
                 dettaglio={{
                   formula: `EJ = E · J = ${fx(num(inp.E), 0)} MPa · ${fx(num(inp.J), 0)} cm⁴ = ${fx(r.EJ, 0)} kNm²`,
                   ref: 'NTC2018 §4.1.1.1 (Ecm) / §4.2.1 (E acciaio)',
                 }}
               >
-                <NumInput id="soll_E" value={inp.E} onChange={(v) => set({ E: v })} />
+                <NumInput id="soll_E" value={inp.E} errore={!!err.E} onChange={(v) => set({ E: v })} />
               </Field>
 
               <Field
@@ -389,18 +424,15 @@ export default function Sollecitazioni() {
                 tab="sollecitazioni"
                 label="Momento d'inerzia J"
                 unit="cm⁴"
+                errore={err.J}
                 dettaglio={{
                   formula: `f = ${fx(Math.abs(t.fmax.val) * 1000, 2)} mm  →  L/f = ${Number.isFinite(t.Lsuf) ? fx(t.Lsuf, 0) : '∞'}`,
                   ref: 'NTC2018 §4.1.2.2.2 — limiti di deformabilità',
                 }}
               >
-                <NumInput id="soll_J" value={inp.J} onChange={(v) => set({ J: v })} />
+                <NumInput id="soll_J" value={inp.J} errore={!!err.J} onChange={(v) => set({ J: v })} />
               </Field>
             </div>
-            <p className="note" style={{ marginTop: 8 }}>
-              Coefficienti parziali γG1 = 1.30, γG2 = 1.50, γQ = 1.50 (Tab. 2.6.I, A1-STR);
-              l'azione variabile principale è quella con il valore caratteristico maggiore.
-            </p>
           </div>
         </section>
       </div>

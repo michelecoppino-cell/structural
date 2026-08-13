@@ -7,13 +7,22 @@ import {
   type Dispatch,
   type ReactNode,
 } from 'react';
-import { AZIONI_DEFAULT, type InputAzioni } from '../calc/azioni';
-import { SOLLECITAZIONI_DEFAULT, type InputSollecitazioni } from '../calc/sollecitazioni';
+import { AZIONI_DEFAULT, calcolaAzioni, type InputAzioni, type RisultatiAzioni } from '../calc/azioni';
+import {
+  SOLLECITAZIONI_DEFAULT,
+  calcolaSollecitazioni,
+  type InputSollecitazioni,
+  type RisultatiSollecitazioni,
+} from '../calc/sollecitazioni';
 import {
   TAGLIO_ARMATO_DEFAULT,
   TAGLIO_NON_ARMATO_DEFAULT,
+  verificaTaglioArmato,
+  verificaTaglioNonArmato,
   type InputTaglioArmato,
   type InputTaglioNonArmato,
+  type RisultatiTaglioArmato,
+  type RisultatiTaglioNonArmato,
 } from '../calc/verifiche';
 
 export type TabId = 'azioni' | 'sollecitazioni' | 'verifiche' | 'costi';
@@ -54,6 +63,8 @@ export interface AppState {
     open: Record<string, boolean>;
     exp: Record<string, boolean>;
     allDetails: Record<TabId, boolean>;
+    /** Verifica visibile nella scheda Verifiche (una per volta). */
+    verifica: string;
   };
 }
 
@@ -64,7 +75,7 @@ export const STATO_INIZIALE: AppState = {
   progetto: {
     nome: 'Nuova commessa',
     commessa: `${new Date().getFullYear()}-001`,
-    localita: "L'Aquila (AQ)",
+    localita: `${AZIONI_DEFAULT.comune} (${AZIONI_DEFAULT.prov})`,
     revisione: '0',
   },
   tab: 'azioni',
@@ -84,9 +95,10 @@ export const STATO_INIZIALE: AppState = {
     { id: 'c5', categoria: 'Opere provvisionali', descrizione: 'Ponteggio di servizio', um: 'm²', quantita: '260', prezzo: '14.00' },
   ],
   ui: {
-    open: { sisma: true, vari: true, taglio_non_armato: true },
+    open: { sisma: true, vari: true },
     exp: {},
     allDetails: { azioni: false, sollecitazioni: false, verifiche: false, costi: false },
+    verifica: 'taglio-non-armato',
   },
 };
 
@@ -102,6 +114,7 @@ export type Action =
   | { type: 'toggleOpen'; id: string }
   | { type: 'toggleExp'; id: string }
   | { type: 'toggleAllDetails'; tab: TabId }
+  | { type: 'verificaAttiva'; id: string }
   | { type: 'carica'; stato: AppState }
   | { type: 'reset' };
 
@@ -153,6 +166,8 @@ export function reducer(state: AppState, action: Action): AppState {
           allDetails: { ...state.ui.allDetails, [action.tab]: !state.ui.allDetails[action.tab] },
         },
       };
+    case 'verificaAttiva':
+      return { ...state, ui: { ...state.ui, verifica: action.id } };
     case 'carica':
       return migra(action.stato);
     case 'reset':
@@ -183,7 +198,7 @@ export function migra(raw: Partial<AppState>): AppState {
       taglioArmato: { ...base.verifiche.taglioArmato, ...raw.verifiche?.taglioArmato },
     },
     costi: Array.isArray(raw.costi) && raw.costi.length ? raw.costi : base.costi,
-    ui: { ...base.ui, ...raw.ui },
+    ui: { ...base.ui, ...raw.ui, verifica: raw.ui?.verifica || base.ui.verifica },
   };
 }
 
@@ -201,23 +216,103 @@ function statoIniziale(): AppState {
 
 const StoreContext = createContext<{ state: AppState; dispatch: Dispatch<Action> } | null>(null);
 
+/**
+ * Risultati del motore di calcolo, computati una volta sola per modifica dello
+ * stato e condivisi da tutte le schede: senza questo, ogni render di App,
+ * Sollecitazioni e Verifiche risolveva daccapo la trave.
+ */
+export interface Calcoli {
+  azioni: RisultatiAzioni;
+  sollecitazioni: RisultatiSollecitazioni;
+  taglioNonArmato: RisultatiTaglioNonArmato;
+  taglioArmato: RisultatiTaglioArmato;
+  /** Taglio massimo in valore assoluto dalle Sollecitazioni (kN). */
+  VEdSollecitazioni: number;
+}
+
+const CalcoliContext = createContext<Calcoli | null>(null);
+
+/** Ritardo di scrittura su localStorage: una sola serializzazione per pausa. */
+const RITARDO_SALVATAGGIO = 300;
+
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(reducer, undefined, statoIniziale);
 
   useEffect(() => {
-    try {
-      localStorage.setItem(CHIAVE, JSON.stringify(state));
-    } catch {
-      // quota esaurita o modalità privata: la persistenza è best effort
-    }
+    const id = window.setTimeout(() => {
+      try {
+        localStorage.setItem(CHIAVE, JSON.stringify(state));
+      } catch {
+        // quota esaurita o modalità privata: la persistenza è best effort
+      }
+    }, RITARDO_SALVATAGGIO);
+    return () => window.clearTimeout(id);
   }, [state]);
 
   const value = useMemo(() => ({ state, dispatch }), [state]);
-  return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;
+
+  const azioni = useMemo(() => calcolaAzioni(state.azioni), [state.azioni]);
+  const sollecitazioni = useMemo(
+    () => calcolaSollecitazioni(state.sollecitazioni, azioni),
+    [state.sollecitazioni, azioni],
+  );
+  const VEdSollecitazioni = Math.abs(sollecitazioni.trave.VmaxAbs.val);
+
+  // Con il collegamento attivo il VEd è un valore derivato: si calcola qui,
+  // non si salva nello stato (che conserva solo il VEd inserito a mano).
+  const collega = state.verifiche.collegaSollecitazioni;
+  const VEd = VEdSollecitazioni.toFixed(1);
+
+  const taglioNonArmato = useMemo(
+    () =>
+      verificaTaglioNonArmato(
+        collega ? { ...state.verifiche.taglioNonArmato, VEd } : state.verifiche.taglioNonArmato,
+      ),
+    [state.verifiche.taglioNonArmato, collega, VEd],
+  );
+  const taglioArmato = useMemo(
+    () =>
+      verificaTaglioArmato(
+        collega ? { ...state.verifiche.taglioArmato, VEd } : state.verifiche.taglioArmato,
+      ),
+    [state.verifiche.taglioArmato, collega, VEd],
+  );
+
+  const calcoli = useMemo<Calcoli>(
+    () => ({ azioni, sollecitazioni, taglioNonArmato, taglioArmato, VEdSollecitazioni }),
+    [azioni, sollecitazioni, taglioNonArmato, taglioArmato, VEdSollecitazioni],
+  );
+
+  return (
+    <StoreContext.Provider value={value}>
+      <CalcoliContext.Provider value={calcoli}>{children}</CalcoliContext.Provider>
+    </StoreContext.Provider>
+  );
 }
 
 export function useStore() {
   const ctx = useContext(StoreContext);
   if (!ctx) throw new Error('useStore va usato dentro <StoreProvider>');
   return ctx;
+}
+
+export function useCalcoli() {
+  const ctx = useContext(CalcoliContext);
+  if (!ctx) throw new Error('useCalcoli va usato dentro <StoreProvider>');
+  return ctx;
+}
+
+/**
+ * Input effettivi delle verifiche: con il collegamento attivo il VEd è quello
+ * calcolato in Sollecitazioni, altrimenti quello scritto a mano.
+ */
+export function inputVerifiche(state: AppState, VEdSollecitazioni: number) {
+  const VEd = VEdSollecitazioni.toFixed(1);
+  const collega = state.verifiche.collegaSollecitazioni;
+  return {
+    taglioNonArmato: collega
+      ? { ...state.verifiche.taglioNonArmato, VEd }
+      : state.verifiche.taglioNonArmato,
+    taglioArmato: collega ? { ...state.verifiche.taglioArmato, VEd } : state.verifiche.taglioArmato,
+  };
 }

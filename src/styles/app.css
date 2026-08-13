@@ -49,7 +49,7 @@ button {
 }
 
 ::selection {
-  background: rgba(201, 147, 46, 0.3);
+  background: var(--accent-30);
 }
 
 ::-webkit-scrollbar {
@@ -155,6 +155,8 @@ button {
   min-height: 0;
 }
 
+/* ─────────────────────────── navigazione laterale ─────────────────────────── */
+
 .side-nav {
   width: 212px;
   flex: none;
@@ -189,13 +191,13 @@ button {
 }
 
 .nav-item:hover {
-  background: rgba(233, 233, 237, 0.05);
+  background: var(--hover-soft);
 }
 
 .nav-item[aria-current='page'] {
   color: var(--color-accent-400);
-  border-color: rgba(201, 147, 46, 0.45);
-  background: rgba(201, 147, 46, 0.1);
+  border-color: var(--accent-45);
+  background: var(--accent-10);
 }
 
 .nav-item .label {
@@ -211,7 +213,7 @@ button {
 }
 
 .nav-badge.is-ok {
-  background: rgba(86, 169, 120, 0.18);
+  background: var(--ok-bg);
   color: var(--ok);
 }
 
@@ -221,20 +223,35 @@ button {
   font-size: 11px;
   color: var(--text-faint);
   line-height: 1.5;
+  border-top: 1px solid var(--divider-soft);
 }
 
-.nav-foot strong {
+.nav-foot .ko-item {
   display: block;
-  color: var(--color-accent-400);
-  font-size: 13px;
-  font-weight: 400;
+  color: var(--err);
+  margin-top: 3px;
 }
+
+.nav-foot .ok-item {
+  display: block;
+  color: var(--ok);
+  margin-top: 3px;
+}
+
+/* ─────────────────────────── area principale ─────────────────────────── */
 
 .app-main {
   flex: 1;
   min-width: 0;
-  padding: 18px 24px 30px;
+  padding: 0 24px 30px;
   overflow-y: auto;
+}
+
+/* misura massima del contenuto: oltre, i pannelli restano centrati */
+.app-main > * {
+  max-width: var(--content-max);
+  margin-inline: auto;
+  width: 100%;
 }
 
 /* schede che stanno in una schermata sola: scorre l'interno, non la pagina */
@@ -258,33 +275,43 @@ button {
   display: none;
 }
 
-/* ─────────────────────────── toolbar ─────────────────────────── */
+/* ─────────────────── toolbar di scheda (sticky in tutte le schede) ────────── */
 
 .tab-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: 10px 14px;
   flex-wrap: wrap;
-  margin-bottom: 14px;
+  padding: 12px 0 10px;
+  margin-bottom: 6px;
+  background: var(--ground);
+  border-bottom: 1px solid var(--divider-soft);
 }
 
-.tab-toolbar h4 {
-  font-size: 19px;
+/* comandi della scheda attiva, al posto del titolo che ripeteva la voce di menù */
+.toolbar-slot {
+  display: flex;
+  align-items: center;
+  gap: 8px 12px;
+  flex-wrap: wrap;
+  min-width: 0;
+  flex: 1;
 }
 
-.tab-toolbar .sub {
-  font-size: 11.5px;
-  color: var(--text-muted);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+/* i controlli della barra non si comprimono: o stanno in riga, o vanno a capo */
+.toolbar-slot > * {
+  flex: none;
 }
 
 .toolbar-actions {
   display: flex;
   gap: 6px;
   flex: none;
+  margin-left: auto;
 }
 
 /* ─────────────────────────── controlli ─────────────────────────── */
@@ -303,6 +330,7 @@ button {
   background: transparent;
   border: 1px solid transparent;
   padding: 5px 10px;
+  min-height: var(--control-h-sm);
   border-radius: var(--radius-lg);
 }
 
@@ -317,7 +345,7 @@ button {
 }
 
 .btn-primary:hover:not(:disabled) {
-  background: rgba(201, 147, 46, 0.12);
+  background: var(--accent-12);
 }
 
 .btn-secondary {
@@ -325,7 +353,7 @@ button {
 }
 
 .btn-secondary:hover:not(:disabled) {
-  background: rgba(233, 233, 237, 0.07);
+  background: var(--hover);
 }
 
 .btn-icon {
@@ -336,7 +364,7 @@ button {
 
 .input {
   width: 100%;
-  min-height: 32px;
+  min-height: var(--control-h);
   padding: 4px 8px;
   font: inherit;
   font-size: 13px;
@@ -361,11 +389,22 @@ button {
   font-variant-numeric: tabular-nums;
 }
 
+.input::placeholder {
+  color: var(--text-faint);
+  opacity: 1;
+}
+
+/* dato fuori dai limiti ammessi: il campo lo dice, l'esito si blocca */
+.input.is-error,
+.input.is-error:hover {
+  border-color: var(--err);
+}
+
 select.input {
   background: var(--control);
 }
 
-/* segmented control */
+/* segmented control — anche come navigazione a schede (role="tablist") */
 .seg {
   display: inline-flex;
   flex-wrap: wrap;
@@ -379,7 +418,9 @@ select.input {
   align-items: center;
   gap: 6px;
   padding: 6px 11px;
+  min-height: var(--control-h-sm);
   font-size: 12.5px;
+  white-space: nowrap;
   cursor: pointer;
   background: transparent;
   border: 0;
@@ -391,13 +432,24 @@ select.input {
   border-left: 0;
 }
 
-.seg-opt[aria-pressed='true'] {
+.seg-opt[aria-pressed='true'],
+.seg-opt[aria-selected='true'] {
   color: var(--color-accent);
   box-shadow: inset 0 0 0 1px var(--color-accent);
 }
 
-.seg-opt:not([aria-pressed='true']):hover {
-  background: rgba(233, 233, 237, 0.07);
+.seg-opt:not([aria-pressed='true']):not([aria-selected='true']):hover {
+  background: var(--hover);
+}
+
+.seg-opt .seg-nota {
+  font-size: 11px;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.seg-opt[aria-selected='true'] .seg-nota {
+  color: var(--color-accent-400);
 }
 
 /* chip toggle (selettore carichi applicati) */
@@ -406,6 +458,7 @@ select.input {
   align-items: center;
   gap: 7px;
   padding: 5px 10px 5px 8px;
+  min-height: var(--control-h-sm);
   font-size: 12px;
   border-radius: var(--radius-lg);
   cursor: pointer;
@@ -415,8 +468,8 @@ select.input {
 }
 
 .chip-toggle[aria-pressed='true'] {
-  border-color: rgba(201, 147, 46, 0.55);
-  background: rgba(201, 147, 46, 0.1);
+  border-color: var(--accent-55);
+  background: var(--accent-10);
   color: var(--color-accent-300);
 }
 
@@ -443,8 +496,24 @@ select.input {
   padding-bottom: 28px;
 }
 
+/* pannelli su due colonne: l'apertura di uno muove solo la sua colonna */
+.stack-2col {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  padding-bottom: 28px;
+}
+
+.stack-2col > .col {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
 .panel {
-  border: 1px solid rgba(233, 233, 237, 0.11);
+  border: 1px solid var(--border-panel);
   border-radius: var(--radius-lg);
   background: var(--surface);
   overflow: hidden;
@@ -469,6 +538,12 @@ select.input {
   display: grid;
 }
 
+.panel-head .caret {
+  color: var(--text-muted);
+  flex: none;
+  display: grid;
+}
+
 .panel-head .title {
   font-size: 15px;
   font-weight: 500;
@@ -487,6 +562,10 @@ select.input {
 .panel-body {
   padding: 2px 14px 14px;
   animation: fadein 0.16s ease-out;
+  /* i pannelli sono riusati in contesti larghi e stretti: le colonne interne
+     si decidono sulla larghezza del pannello, non su quella della finestra */
+  container-type: inline-size;
+  container-name: pannello;
 }
 
 .rule {
@@ -495,32 +574,82 @@ select.input {
   background: linear-gradient(
     to right,
     transparent,
-    rgba(233, 233, 237, 0.14) 40px,
-    rgba(233, 233, 237, 0.14) calc(100% - 40px),
+    var(--divider) 40px,
+    var(--divider) calc(100% - 40px),
     transparent
   );
   margin: 0 0 12px;
 }
 
-.fields {
+/* input a sinistra, risultati e disegno di supporto a destra */
+.panel-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 14px 20px;
+  align-items: start;
+}
+
+.panel-split > .col-aside {
   display: flex;
   flex-direction: column;
-  gap: 7px;
+  gap: 12px;
+  min-width: 0;
+}
+
+@container pannello (min-width: 700px) {
+  .panel-split {
+    grid-template-columns: minmax(0, 1fr) minmax(250px, 0.62fr);
+  }
 }
 
 /* ─────────────────────────── campo espandibile ─────────────────────────── */
 
+.fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 8px 20px;
+  align-items: start;
+}
+
+/* una colonna sola: usata dove il campo deve restare a tutta larghezza */
+.fields.fields-1 {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+/* colonne più fitte: campi con l'etichetta sopra, dove lo spazio è poco */
+.fields.fields-fitti {
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
 .field-row {
   display: grid;
-  grid-template-columns: minmax(160px, 1fr) minmax(210px, 260px);
-  gap: 14px;
+  grid-template-columns: minmax(0, 1fr) minmax(150px, 200px);
+  gap: 12px;
   align-items: center;
+}
+
+/* etichetta sopra il campo: colonne strette (comandi) e pannelli compatti */
+.fields-compatti .field-row,
+.field-row.is-stacked {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 3px;
+}
+
+@container pannello (max-width: 430px) {
+  .field-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 3px;
+  }
 }
 
 .field-row > label {
   font-size: 12.5px;
   color: var(--text-2);
   line-height: 1.3;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  flex-wrap: wrap;
 }
 
 .field-control {
@@ -532,13 +661,13 @@ select.input {
 .field-unit {
   font-size: 11.5px;
   color: var(--text-faint);
-  width: 42px;
+  width: 38px;
   flex: none;
 }
 
 .field-info {
-  width: 28px;
-  height: 28px;
+  width: var(--control-h-sm);
+  height: var(--control-h-sm);
   flex: none;
   display: grid;
   place-items: center;
@@ -552,6 +681,44 @@ select.input {
 .field-info[aria-expanded='true'] {
   border-color: var(--color-accent);
   color: var(--color-accent);
+}
+
+/* provenienza del valore: «↩ ripreso da…», cliccabile per scollegare */
+.field-origin {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10.5px;
+  line-height: 1.4;
+  padding: 1px 7px;
+  border-radius: 9px;
+  border: 1px solid var(--accent-45);
+  background: var(--accent-10);
+  color: var(--color-accent-300);
+  white-space: nowrap;
+}
+
+button.field-origin {
+  cursor: pointer;
+  font-family: inherit;
+}
+
+button.field-origin:hover {
+  background: var(--accent-12);
+  border-color: var(--color-accent);
+}
+
+.field-origin.is-manuale {
+  border-color: var(--divider-strong);
+  background: transparent;
+  color: var(--text-faint);
+}
+
+.field-error {
+  font-size: 11px;
+  color: var(--err);
+  margin-top: 3px;
+  line-height: 1.4;
 }
 
 .field-detail {
@@ -594,7 +761,7 @@ select.input {
   font-size: 11.5px;
   padding: 3px 8px;
   border-radius: var(--radius-sm);
-  background: rgba(233, 233, 237, 0.05);
+  background: var(--hover-soft);
   border: 1px solid var(--border-faint);
 }
 
@@ -620,8 +787,8 @@ select.input {
   margin-top: 14px;
   padding: 11px 13px;
   border-radius: var(--radius-md);
-  border: 1px dashed rgba(201, 147, 46, 0.35);
-  background: rgba(201, 147, 46, 0.05);
+  border: 1px dashed var(--accent-35);
+  background: var(--accent-05);
 }
 
 .output-grid {
@@ -672,13 +839,14 @@ select.input {
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--text-muted);
-  padding: var(--space-2);
+  padding: var(--space-2) var(--space-1);
   white-space: nowrap;
 }
 
 .table td {
-  padding: 4px var(--space-2);
-  border-bottom: 1px solid rgba(233, 233, 237, 0.07);
+  padding: 4px var(--space-1);
+  border-bottom: 1px solid var(--border-faint);
+  overflow-wrap: anywhere;
 }
 
 .table thead tr {
@@ -688,12 +856,18 @@ select.input {
 .table .num {
   text-align: right;
   font-variant-numeric: tabular-nums;
+  /* i numeri non si spezzano mai: in colonna stretta scorre la tabella */
+  white-space: nowrap;
 }
 
 .table tfoot td {
   border-bottom: 0;
   border-top: 1px solid var(--divider);
   font-weight: 500;
+}
+
+.table .faint {
+  color: var(--text-faint);
 }
 
 /* ─────────────────────────── esito verifiche ─────────────────────────── */
@@ -718,13 +892,20 @@ select.input {
   color: var(--err);
 }
 
+.verdict.dati {
+  background: var(--hover);
+  color: var(--text-muted);
+}
+
 .bar {
   position: relative;
   height: 5px;
   border-radius: 3px;
-  background: rgba(233, 233, 237, 0.08);
+  background: var(--hover);
   overflow: hidden;
   min-width: 90px;
+  flex: 1;
+  max-width: 260px;
 }
 
 .bar > span {
@@ -738,32 +919,52 @@ select.input {
   background: var(--err);
 }
 
+.bar.dati > span {
+  background: var(--divider-strong);
+}
+
+/* esito in testa alla verifica, sempre visibile */
+.esito-testa {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 9px 12px;
+  margin-bottom: 12px;
+  border-radius: var(--radius-md);
+  background: var(--nested);
+  border: 1px solid var(--border-faint);
+}
+
 /* ─────────────────────────── diagrammi ─────────────────────────── */
 
 .diagrams {
-  display: flex;
-  gap: 10px;
+  /* tetto di larghezza: oltre, un diagramma non guadagna leggibilità */
+  max-width: 1200px;
 }
 
 .diagrams.orizzontale {
+  display: flex;
   flex-direction: column;
+  gap: 10px;
 }
 
+/* elemento verticale: griglia, mai una riga che scorre in orizzontale */
 .diagrams.verticale {
-  flex-direction: row;
-  overflow-x: auto;
-  padding-bottom: 6px;
-}
-
-.diagrams.verticale > * {
-  flex: 1 0 240px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
 }
 
 .diagram {
-  border: 1px solid rgba(233, 233, 237, 0.11);
+  border: 1px solid var(--border-panel);
   border-radius: var(--radius-lg);
   background: var(--surface);
-  padding: 8px 10px 6px;
+  padding: 6px 9px;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
 }
 
 .diagram-head {
@@ -771,7 +972,8 @@ select.input {
   align-items: baseline;
   justify-content: space-between;
   gap: 8px;
-  margin-bottom: 2px;
+  margin-bottom: 4px;
+  flex: none;
 }
 
 .diagram-head .t {
@@ -785,10 +987,112 @@ select.input {
   font-variant-numeric: tabular-nums;
 }
 
-.diagram svg {
+/* il riquadro ha un rapporto d'aspetto governato: il disegno dentro è in
+   coordinate reali (viewBox misurato), quindi non si deforma mai */
+.diagram-canvas {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 6 / 1;
+  min-height: 88px;
+  max-height: 190px;
+}
+
+.diagrams.verticale .diagram-canvas {
+  aspect-ratio: 3 / 4;
+  min-height: 190px;
+  max-height: 380px;
+}
+
+.diagram-canvas > svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* colori dei diagrammi: dai token, non scritti negli SVG */
+.dg-line {
+  fill: none;
+  stroke: var(--diagram-line);
+}
+
+.dg-area {
+  fill: var(--diagram-fill);
+  stroke: none;
+  opacity: 0.16;
+}
+
+.dg-line.is-faint {
+  stroke: var(--diagram-faint);
+}
+
+.dg-area.is-faint {
+  fill: var(--diagram-faint);
+}
+
+.dg-axis {
+  stroke: var(--diagram-axis);
+  fill: none;
+}
+
+.dg-beam {
+  stroke: var(--diagram-beam);
+  fill: none;
+}
+
+.dg-vinc {
+  stroke: var(--diagram-faint);
+  fill: none;
+}
+
+.dg-carico {
+  stroke: var(--diagram-line);
+  fill: none;
+}
+
+.dg-testo {
+  fill: var(--diagram-faint);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.dg-testo.is-accent {
+  fill: var(--color-accent-400);
+}
+
+.dg-punto {
+  fill: var(--diagram-line);
+  stroke: none;
+}
+
+.dg-punto.is-faint {
+  fill: var(--diagram-faint);
+}
+
+/* Disegni di supporto (sezione, spettro, paramento, falda): la larghezza è
+   limitata perché il disegno è a scala fissa — allargandolo crescerebbero
+   anche le scritte, che devono restare della misura del resto dell'interfaccia. */
+.disegno {
+  border: 1px solid var(--border-panel);
+  border-radius: var(--radius-lg);
+  background: var(--nested);
+  padding: 8px 10px;
+  max-width: 360px;
+}
+
+.disegno > svg {
   display: block;
   width: 100%;
-  height: 120px;
+  max-width: 320px;
+  height: auto;
+  margin-inline: auto;
+}
+
+.disegno .titolo {
+  font-size: 11px;
+  color: var(--text-faint);
+  margin-bottom: 4px;
 }
 
 /* ─────────────────────────── varie ─────────────────────────── */
@@ -814,10 +1118,12 @@ select.input {
   gap: 10px;
 }
 
+/* il testo corrente non supera la misura di lettura */
 .note {
   font-size: 11.5px;
   color: var(--text-faint);
   line-height: 1.5;
+  max-width: var(--reading-max);
 }
 
 .placeholder {
@@ -844,7 +1150,7 @@ select.input {
 .toast {
   position: fixed;
   left: 50%;
-  bottom: 74px;
+  bottom: 24px;
   transform: translateX(-50%);
   background: var(--control);
   box-shadow: var(--shadow-md);
@@ -858,11 +1164,17 @@ select.input {
   z-index: 40;
 }
 
-/* ───────────────── scheda Sollecitazioni: grafico + comandi a lato ──────── */
+.toast .icona {
+  color: var(--color-accent);
+  display: grid;
+}
+
+/* ───────────────── scheda Sollecitazioni: grafico + comandi ──────────────── */
 
 .soll-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) clamp(310px, 26vw, 390px);
+  grid-template-rows: minmax(0, 1fr) auto;
   gap: 10px;
   min-height: 0;
   padding-bottom: 6px;
@@ -876,8 +1188,20 @@ select.input {
   min-width: 0;
 }
 
-/* la colonna dei comandi scorre da sola, la pagina resta ferma */
+.soll-risultati {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.soll-esiti {
+  grid-column: 1;
+  grid-row: 2;
+}
+
 .soll-comandi {
+  grid-column: 2;
+  grid-row: 1 / -1;
+  /* fallback su desktop stretto: la colonna scorre da sola, la pagina resta ferma */
   overflow-y: auto;
   overscroll-behavior: contain;
   padding-right: 2px;
@@ -903,50 +1227,26 @@ select.input {
   flex-direction: column;
 }
 
-.panel-diagrammi .diagrams {
+.panel-diagrammi .diagrams.orizzontale {
   flex: 1;
   min-height: 0;
 }
 
-.panel-diagrammi .diagram {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
+.panel-diagrammi .diagrams.orizzontale > .diagram {
   flex: 1 1 0;
 }
 
 /* allo schema statico serve un po' più di respiro: ci stanno vincoli e frecce */
-.panel-diagrammi .diagram:first-child {
-  flex: 1.35 1 0;
+.panel-diagrammi .diagrams.orizzontale > .diagram:first-child {
+  flex: 1.3 1 0;
 }
 
-.panel-diagrammi .diagram svg {
+/* a schermata piena i riquadri si dividono l'altezza che avanza: il rapporto
+   d'aspetto cede il passo, ma il disegno resta in coordinate reali */
+.panel-diagrammi .diagrams.orizzontale .diagram-canvas {
   flex: 1;
-  height: auto;
-  min-height: 54px;
-}
-
-/* campi più stretti nella colonna comandi */
-.soll-comandi .field-row {
-  grid-template-columns: minmax(0, 1fr) 152px;
-  gap: 10px;
-}
-
-.soll-comandi .field-control {
-  gap: 5px;
-}
-
-.soll-comandi .field-unit {
-  width: 32px;
-}
-
-.soll-comandi .field-info {
-  width: 24px;
-  height: 24px;
-}
-
-.soll-comandi .input {
-  min-width: 0;
+  aspect-ratio: auto;
+  min-height: 60px;
 }
 
 .menu-blocco {
@@ -984,9 +1284,98 @@ select.input {
   line-height: 1.35;
 }
 
+/* ───────────── ≥ 1200px: due colonne per i pannelli impilati ───────────── */
+
+@media (min-width: 1200px) {
+  .stack-2col {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* ───────── ≥ 1400px: i comandi passano in fascia sotto i diagrammi ──────── */
+
+@media (min-width: 1400px) {
+  .soll-layout {
+    grid-template-columns: minmax(0, 1fr) clamp(330px, 23vw, 440px);
+  }
+
+  .soll-esiti {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  /* i comandi passano in fascia sotto i diagrammi: tre colonne, la terza più
+     larga perché ospita gli otto campi di geometria */
+  .soll-comandi {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    display: grid;
+    grid-template-columns: minmax(0, 0.8fr) minmax(0, 1fr) minmax(0, 1.6fr);
+    gap: 10px;
+    align-items: start;
+    overflow: visible;
+    padding-right: 0;
+  }
+}
+
+/* ───────────── ≥ 1600px: più colonne dove c'è davvero spazio ───────────── */
+
+@media (min-width: 1600px) {
+  .diagrams.verticale {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+/* ────────── < 1200px: la nav si riduce a una rail di sole icone ────────── */
+
+@media (max-width: 1199px) {
+  .side-nav {
+    width: 58px;
+    padding: 14px 8px;
+    align-items: center;
+  }
+
+  .nav-group-label {
+    display: none;
+  }
+
+  .nav-item {
+    justify-content: center;
+    padding: 9px 0;
+    position: relative;
+  }
+
+  .nav-item .label {
+    display: none;
+  }
+
+  .nav-item .nav-badge {
+    position: absolute;
+    top: 2px;
+    right: 4px;
+    padding: 0 4px;
+    font-size: 9px;
+  }
+
+  .nav-foot {
+    padding: 8px 2px;
+    text-align: center;
+  }
+
+  .nav-foot .dettaglio {
+    display: none;
+  }
+}
+
 /* ─────────────────────────── mobile < 900px ─────────────────────────── */
 
 @media (max-width: 899px) {
+  :root {
+    /* soglia di tocco: 44 px consigliati su cellulare */
+    --control-h: 42px;
+    --control-h-sm: 40px;
+  }
+
   .app-header {
     padding: 10px 12px;
   }
@@ -998,6 +1387,7 @@ select.input {
   .header-actions .btn {
     font-size: 12px;
     padding: 5px 8px;
+    min-width: 40px;
   }
 
   .app-body {
@@ -1009,7 +1399,7 @@ select.input {
   }
 
   .app-main {
-    padding: 12px 12px 18px;
+    padding: 0 12px 18px;
     overflow: visible;
   }
 
@@ -1019,8 +1409,44 @@ select.input {
     overflow: visible;
   }
 
+  /* su cellulare la barra non è appiccicata: la navigazione è quella in fondo,
+     e due righe fisse in testa costerebbero troppa altezza */
+  .tab-toolbar {
+    position: static;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    padding: 10px 0 8px;
+  }
+
+  /* i comandi della scheda restano in riga e scorrono di lato */
+  .toolbar-slot {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    padding-bottom: 4px;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  .toolbar-actions {
+    margin-left: 0;
+    flex-wrap: wrap;
+    min-width: 0;
+    max-width: 100%;
+  }
+
   .soll-layout {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: none;
+  }
+
+  .soll-risultati,
+  .soll-esiti,
+  .soll-comandi {
+    grid-column: 1;
+    grid-row: auto;
   }
 
   .soll-comandi {
@@ -1031,18 +1457,38 @@ select.input {
     flex: none;
   }
 
-  .panel-diagrammi .diagram {
+  .panel-diagrammi .diagrams.orizzontale > .diagram,
+  .panel-diagrammi .diagrams.orizzontale > .diagram:first-child {
     flex: none;
   }
 
-  .panel-diagrammi .diagram svg {
+  .panel-diagrammi .diagrams.orizzontale .diagram-canvas {
     flex: none;
-    height: 120px;
+    aspect-ratio: 5 / 2;
+    max-height: 220px;
   }
 
-  .soll-comandi .field-row {
-    grid-template-columns: 1fr;
+  .diagrams.verticale {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .field-row {
+    grid-template-columns: minmax(0, 1fr);
     gap: 5px;
+  }
+
+  .fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .field-info {
+    width: var(--control-h-sm);
+    height: var(--control-h-sm);
+  }
+
+  .toast {
+    /* sopra la barra inferiore, che su cellulare esiste */
+    bottom: calc(74px + env(safe-area-inset-bottom));
   }
 
   .bottom-bar {
@@ -1079,22 +1525,5 @@ select.input {
 
   .bottom-item .label {
     font-size: 10.5px;
-  }
-
-  .tab-toolbar {
-    align-items: flex-start;
-  }
-
-  .field-row {
-    grid-template-columns: 1fr;
-    gap: 5px;
-  }
-
-  .diagrams.verticale {
-    flex-direction: column;
-  }
-
-  .diagrams.verticale > * {
-    flex: none;
   }
 }

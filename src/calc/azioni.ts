@@ -60,10 +60,19 @@ export interface InputAzioni {
   delta: string;
 }
 
+/**
+ * Sito di partenza: Fagagna (UD), Friuli-Venezia Giulia.
+ * I valori legati al sito sono coerenti fra loro:
+ *  - as = 177 m — quota del capoluogo comunale;
+ *  - zona di carico neve I — Alpina: Tab. 3.4.I elenca Udine fra le province
+ *    della zona alpina;
+ *  - zona di vento 1 (vb,0 = 25 m/s): Tab. 3.3.I assegna alla zona 1 tutto il
+ *    Friuli-Venezia Giulia con la sola eccezione della provincia di Trieste.
+ */
 export const AZIONI_DEFAULT: InputAzioni = {
-  regione: 'Abruzzo',
-  prov: 'AQ',
-  comune: "L'Aquila",
+  regione: 'Friuli-Venezia Giulia',
+  prov: 'UD',
+  comune: 'Fagagna',
   sl: 'SLV',
   agManuale: '',
   suolo: 'C',
@@ -73,12 +82,12 @@ export const AZIONI_DEFAULT: InputAzioni = {
   F0: '',
   TCstar: '',
   q: '3.0',
-  zneve: 'II — Mediterranea',
-  as: '714',
+  zneve: 'I — Alpina',
+  as: '177',
   mu: '0.80',
   ceN: '1.00',
   ct: '1.00',
-  zvento: '3 — 27 m/s',
+  zvento: '1 — 25 m/s',
   z: '9.00',
   espo: 'III',
   cp: '1.00',

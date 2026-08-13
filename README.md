@@ -108,14 +108,15 @@ diventa anche la località riportata in testata e nella relazione, e porta con s
 Il periodo di ritorno dell'azione viene da VR = VN · CU e dallo **stato limite** scelto
 (SLO, SLD, SLV, SLC — Tab. 3.2.I): `TR = −VR / ln(1 − PVR)`. Fra i periodi tabellati si
 interpola in log-log, come prescrive l'Allegato A, e la scheda mostra il quadro dei quattro
-stati limite con TR, ag, F0 e TC\*. Per L'Aquila, VN 50 e classe II:
+stati limite con TR, ag, F0 e TC\*. Per il sito di partenza — **Fagagna (UD)**, VN 50 e
+classe II:
 
 | SL | PVR | TR | ag/g | F0 | TC\* |
 |---|---|---|---|---|---|
-| SLO | 81% | 30 | 0.079 | 2.393 | 0.273 |
-| SLD | 63% | 50 | 0.104 | 2.333 | 0.282 |
-| SLV | 10% | 475 | 0.261 | 2.365 | 0.348 |
-| SLC | 5% | 975 | 0.334 | 2.401 | 0.365 |
+| SLO | 81% | 30 | 0.059 | 2.473 | 0.241 |
+| SLD | 63% | 50 | 0.078 | 2.477 | 0.262 |
+| SLV | 10% | 475 | 0.217 | 2.451 | 0.333 |
+| SLC | 5% | 975 | 0.289 | 2.476 | 0.348 |
 
 I tre campi `ag/g`, `F0` e `TC*` restano scrivibili: **lasciati vuoti** prendono il valore
 del reticolo, **compilati** vincono sul reticolo (utile per una risposta sismica locale).
@@ -126,11 +127,12 @@ formule di Tab. 3.2.IV, che dipendono da ag, F0 e TC*. Da lì escono S = SS·ST 
 TB, TC, TD dello spettro.
 
 ### 2. Sollecitazioni
-Su desktop la scheda **sta tutta in una schermata**, senza scroll di pagina: i diagrammi
-occupano la colonna di sinistra e si allungano per riempire l'altezza disponibile, con
-sotto i risultati e la tabella dei contributi; i comandi (menù a tendina e campi) stanno
-nella colonna di destra, che scorre per conto suo. Su cellulare tutto torna in colonna
-unica, con i **grafici in alto e i comandi in fondo**.
+Su desktop la scheda **sta tutta in una schermata**, senza scroll — né di pagina né interno.
+Sopra i 1400 px i diagrammi occupano la fascia larga in alto a sinistra, i risultati e la
+tabella dei contributi stanno a destra, e i comandi passano in una **fascia a tre colonne
+sotto i diagrammi**, così non resta mezza larghezza vuota. Sotto i 1400 px i comandi tornano
+in una colonna laterale; su cellulare tutto è in colonna unica, con i **grafici in alto e i
+comandi in fondo**.
 
 - **Selettore dei carichi da applicare**: PP (G1), G2 e le azioni calcolate nella scheda
   Azioni (Qk da tabella NTC, Neve, Vento). I valori marcati `↩` arrivano dalla scheda
@@ -138,9 +140,10 @@ unica, con i **grafici in alto e i comandi in fondo**.
 - **Orizzontale / Verticale**: in elemento orizzontale tutti i carichi selezionati agiscono
   trasversalmente sull'interasse; in elemento verticale i carichi gravitazionali diventano
   sforzo normale sull'area di influenza e solo le azioni orizzontali (vento) flettono
-  l'elemento. L'orientamento cambia anche la disposizione dei diagrammi: carichi in alto e
-  sollecitazioni in basso in orizzontale, carichi a sinistra e sollecitazioni a destra in
-  verticale.
+  l'elemento. **In verticale ruota anche il disegno**: l'asta va verso l'alto con il vincolo
+  in basso, la quota H sull'asse verticale, il vento come frecce orizzontali e N come freccia
+  in sommità; M, V e deformata seguono la stessa rotazione e i quattro riquadri si dispongono
+  in griglia. I testi restano orizzontali.
 - **Schema statico**: menù a tendina con anteprima dei vincoli. **Di default: trave
   appoggio–appoggio.**
   1. Appoggio — appoggio
@@ -151,20 +154,33 @@ unica, con i **grafici in alto e i comandi in fondo**.
 - **Combinazione**: SLU fondamentale, SLE rara, frequente, quasi permanente
   (§2.5.3), con γG1 = 1.30, γG2 = 1.50, γQ = 1.50 (Tab. 2.6.I, A1-STR) e i ψ della
   categoria d'uso. La tabella dei contributi mostra γ, ψ e qd di ogni azione.
-- **Diagrammi**: carichi con schema statico, momento flettente, taglio e deformata.
+- **Diagrammi**: carichi con schema statico, momento flettente, taglio e deformata. Il
+  riquadro si misura e il disegno è costruito in **coordinate reali** — nessuno stiramento
+  dei vincoli, delle frecce o dei testi al variare della larghezza. Ogni diagramma è quotato:
+  valore e ascissa del punto notevole, valori agli estremi, RA e RB scritte ai vincoli.
 
 ### 3. Verifiche
-Tab per materiale. Il **calcestruzzo** è implementato con le due verifiche a taglio
-trascritte dai fogli di calcolo in repository:
+Tab per materiale, e sotto una **barra di schede** con una verifica visibile per volta —
+esito e barra di sfruttamento fissi in testa. La barra si costruisce da un elenco per
+materiale: flessione e pressoflessione si aggiungono con una voce, non riscrivendo la scheda.
+Il **calcestruzzo** è implementato con le due verifiche a taglio trascritte dai fogli di
+calcolo in repository:
 
 | Verifica | Foglio di origine | Riferimento |
 |---|---|---|
 | Taglio, elementi senza armature trasversali | `01 - Verifica a taglio elementi non armati.xlsx` | §4.1.2.3.5.1, eq. 4.1.23 |
 | Taglio, elementi con armature trasversali | `02 - Verifica a taglio elementi armati.xlsx` (foglio `VERIFICA_STAFFE`) | §4.1.2.3.5.2, eq. 4.1.18 / 4.1.19 |
 
-Il VEd può essere agganciato al taglio massimo calcolato nella scheda Sollecitazioni.
+Il VEd può essere agganciato al taglio massimo calcolato nella scheda Sollecitazioni: con il
+collegamento attivo è un **valore derivato**, calcolato in render e non salvato nello stato,
+che conserva solo il numero scritto a mano. Il campo porta il badge `↩ da Sollecitazioni`,
+che premuto scollega il valore.
+
 Ogni verifica riporta esito, margine percentuale e barra di sfruttamento; sono verificati
 anche i minimi di normativa (Asw,min = 1.5·bw e passo massimo min(330; 0.8·d), §4.1.6.1.1).
+I dati in ingresso sono **controllati**: passo delle staffe o luce nulli, d maggiore di h,
+α fuori da 45°÷90°, γc < 1 marcano il campo e **bloccano l'esito** invece di dichiararne uno
+falso. Accanto ai campi c'è la **sezione quotata** con bw, h, d, staffe e armatura.
 
 Acciaio, legno e muratura sono segnaposto — vedi "Prossimi passi".
 
@@ -177,8 +193,18 @@ e torta di incidenza per macrocategoria.
 - **Copia per relazione**: copia negli appunti un blocco di testo con valori, formule e
   riferimenti normativi, pronto da incollare in Word.
 - **Esporta / Importa JSON**: l'intero stato del progetto, con numero di versione dello
-  schema e migrazione dei file salvati da versioni precedenti.
-- **OneDrive**: segnaposto, non ancora collegato (serve Microsoft Graph + MSAL).
+  schema e migrazione dei file salvati da versioni precedenti. Lo stato si salva in
+  `localStorage` con un ritardo di 300 ms, così scrivere in un campo non costa una
+  serializzazione per carattere.
+- **OneDrive**: disabilitato finché Microsoft Graph + MSAL non sono collegati — l'azione
+  principale della testata resta *Esporta JSON*.
+- **Intestazione di scheda sticky**: resta in vista mentre si scorre e ospita i comandi
+  della scheda attiva (materiale, verifica visibile, combinazione, orientamento).
+- **Impaginazione**: il contenuto non supera i 1600 px e il testo corrente le ~78 battute;
+  i campi vanno su più colonne dove c'è spazio, con breakpoint a 900, 1200, 1400 e 1600 px e
+  container query dove lo stesso pannello è riusato largo e stretto. Sotto i 1200 px la
+  navigazione laterale si riduce a una rail di sole icone. Su cellulare input e pulsanti
+  salgono a 40÷42 px, sopra la soglia del tocco.
 
 ---
 
