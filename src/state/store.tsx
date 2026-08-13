@@ -15,12 +15,20 @@ import {
   type RisultatiSollecitazioni,
 } from '../calc/sollecitazioni';
 import {
+  ACCIAIO_SEZIONE_DEFAULT,
+  FLESSIONE_CA_DEFAULT,
   TAGLIO_ARMATO_DEFAULT,
   TAGLIO_NON_ARMATO_DEFAULT,
+  verificaAcciaioSezione,
+  verificaFlessioneCA,
   verificaTaglioArmato,
   verificaTaglioNonArmato,
+  type InputAcciaioSezione,
+  type InputFlessioneCA,
   type InputTaglioArmato,
   type InputTaglioNonArmato,
+  type RisultatiAcciaioSezione,
+  type RisultatiFlessioneCA,
   type RisultatiTaglioArmato,
   type RisultatiTaglioNonArmato,
 } from '../calc/verifiche';
@@ -55,6 +63,8 @@ export interface AppState {
     materiale: MaterialeId;
     taglioNonArmato: InputTaglioNonArmato;
     taglioArmato: InputTaglioArmato;
+    flessioneCA: InputFlessioneCA;
+    acciaio: InputAcciaioSezione;
     /** VEd delle verifiche allineato al taglio calcolato in Sollecitazioni. */
     collegaSollecitazioni: boolean;
   };
@@ -85,6 +95,8 @@ export const STATO_INIZIALE: AppState = {
     materiale: 'cls',
     taglioNonArmato: TAGLIO_NON_ARMATO_DEFAULT,
     taglioArmato: TAGLIO_ARMATO_DEFAULT,
+    flessioneCA: FLESSIONE_CA_DEFAULT,
+    acciaio: ACCIAIO_SEZIONE_DEFAULT,
     collegaSollecitazioni: true,
   },
   costi: [
@@ -110,6 +122,8 @@ export type Action =
   | { type: 'verifiche'; patch: Partial<AppState['verifiche']> }
   | { type: 'taglioNonArmato'; patch: Partial<InputTaglioNonArmato> }
   | { type: 'taglioArmato'; patch: Partial<InputTaglioArmato> }
+  | { type: 'flessioneCA'; patch: Partial<InputFlessioneCA> }
+  | { type: 'acciaioSezione'; patch: Partial<InputAcciaioSezione> }
   | { type: 'costi'; voci: VoceCosto[] }
   | { type: 'toggleOpen'; id: string }
   | { type: 'toggleExp'; id: string }
@@ -144,6 +158,22 @@ export function reducer(state: AppState, action: Action): AppState {
         verifiche: {
           ...state.verifiche,
           taglioArmato: { ...state.verifiche.taglioArmato, ...action.patch },
+        },
+      };
+    case 'flessioneCA':
+      return {
+        ...state,
+        verifiche: {
+          ...state.verifiche,
+          flessioneCA: { ...state.verifiche.flessioneCA, ...action.patch },
+        },
+      };
+    case 'acciaioSezione':
+      return {
+        ...state,
+        verifiche: {
+          ...state.verifiche,
+          acciaio: { ...state.verifiche.acciaio, ...action.patch },
         },
       };
     case 'costi':
@@ -196,6 +226,8 @@ export function migra(raw: Partial<AppState>): AppState {
       ...raw.verifiche,
       taglioNonArmato: { ...base.verifiche.taglioNonArmato, ...raw.verifiche?.taglioNonArmato },
       taglioArmato: { ...base.verifiche.taglioArmato, ...raw.verifiche?.taglioArmato },
+      flessioneCA: { ...base.verifiche.flessioneCA, ...raw.verifiche?.flessioneCA },
+      acciaio: { ...base.verifiche.acciaio, ...raw.verifiche?.acciaio },
     },
     costi: Array.isArray(raw.costi) && raw.costi.length ? raw.costi : base.costi,
     ui: { ...base.ui, ...raw.ui, verifica: raw.ui?.verifica || base.ui.verifica },
@@ -226,6 +258,8 @@ export interface Calcoli {
   sollecitazioni: RisultatiSollecitazioni;
   taglioNonArmato: RisultatiTaglioNonArmato;
   taglioArmato: RisultatiTaglioArmato;
+  flessioneCA: RisultatiFlessioneCA;
+  acciaio: RisultatiAcciaioSezione;
   /** Taglio massimo in valore assoluto dalle Sollecitazioni (kN). */
   VEdSollecitazioni: number;
 }
@@ -278,9 +312,26 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [state.verifiche.taglioArmato, collega, VEd],
   );
 
+  const flessioneCA = useMemo(
+    () => verificaFlessioneCA(state.verifiche.flessioneCA),
+    [state.verifiche.flessioneCA],
+  );
+  const acciaio = useMemo(
+    () => verificaAcciaioSezione(state.verifiche.acciaio),
+    [state.verifiche.acciaio],
+  );
+
   const calcoli = useMemo<Calcoli>(
-    () => ({ azioni, sollecitazioni, taglioNonArmato, taglioArmato, VEdSollecitazioni }),
-    [azioni, sollecitazioni, taglioNonArmato, taglioArmato, VEdSollecitazioni],
+    () => ({
+      azioni,
+      sollecitazioni,
+      taglioNonArmato,
+      taglioArmato,
+      flessioneCA,
+      acciaio,
+      VEdSollecitazioni,
+    }),
+    [azioni, sollecitazioni, taglioNonArmato, taglioArmato, flessioneCA, acciaio, VEdSollecitazioni],
   );
 
   return (
