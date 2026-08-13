@@ -29,9 +29,10 @@ Il ciclo di ogni modifica:
    ```bash
    git push -u origin claude/<descrizione-breve>
    ```
-5. Attendere che la CI sia verde (typecheck + test + build).
+5. Attendere che la CI sia verde (typecheck + test + build). Cloudflare pubblica anche
+   un'anteprima della PR, comoda per guardare la modifica prima di decidere.
 6. **Merge della PR su `main`.** Il merge su `main` fa partire in automatico il deploy
-   su GitHub Pages.
+   in produzione.
 7. Cancellare il ramo dopo il merge.
 
 Se una PR è già stata mergiata, il lavoro successivo riparte da un ramo nuovo:
@@ -55,14 +56,31 @@ Altri comandi:
 | `npm run build` | Build di produzione in `dist/` |
 | `npm run preview` | Serve la build di produzione |
 
+La versione di Node è fissata in `.nvmrc` (Node 22): la leggono sia `nvm` in locale sia
+Cloudflare in fase di build, così l'ambiente è lo stesso ovunque.
+
 ## Deploy
 
-Il deploy è automatico su **GitHub Pages** a ogni push su `main`
-(`.github/workflows/deploy.yml`). L'app viene pubblicata su
-`https://<utente>.github.io/structural/`.
+Il deploy è su **Cloudflare Pages**, collegato a questo repository:
 
-Da fare una volta sola, nelle impostazioni del repository:
-**Settings → Pages → Source: GitHub Actions**.
+- merge su `main` → deploy in produzione su `https://structural.pages.dev`;
+- apertura di una PR → deploy di anteprima su un URL dedicato, utile per controllare una
+  modifica prima del merge.
+
+Impostazioni del progetto Cloudflare (già configurate, qui per memoria):
+
+| Campo | Valore |
+|---|---|
+| Build command | `npm run build` |
+| Build output directory | `dist` |
+| Production branch | `main` |
+| Versione di Node | da `.nvmrc` |
+
+L'app è servita dalla radice del dominio, quindi `base` di Vite resta `/`: se un giorno si
+passasse a un hosting su sottocartella, va impostato lì.
+
+La CI su GitHub (`.github/workflows/ci.yml`) resta e continua a girare su ogni PR:
+typecheck, test e build. È il cancello prima del merge; il deploy lo fa Cloudflare.
 
 ---
 
