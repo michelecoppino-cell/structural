@@ -1,94 +1,167 @@
+import { useEffect, useRef, useState } from 'react';
 import type { PuntoDiagramma, SchemaId } from '../calc/trave';
 import { SCHEMI_BY_ID } from '../calc/trave';
 import type { Orientamento } from '../calc/sollecitazioni';
 
 /**
  * Diagrammi di sollecitazione disegnati in SVG (niente libreria di charting).
- * In orizzontale i riquadri sono impilati con i carichi in alto; in verticale
- * sono affiancati con i carichi a sinistra, secondo l'orientamento scelto.
+ *
+ * Due scelte tengono in piedi tutto il resto:
+ *
+ *  1. il riquadro si misura (ResizeObserver) e il viewBox è costruito sulla
+ *     dimensione reale in px, quindi il disegno è sempre in scala 1:1 e non si
+ *     deforma mai — solo l'asse dei valori viene scalato;
+ *  2. il disegno è espresso in coordinate (a, b) sull'asse dell'elemento:
+ *     `a` corre lungo l'asta a partire dal nodo A, `b` è lo scostamento
+ *     trasversale. L'orientamento verticale è una sola trasformazione di
+ *     queste coordinate (rotazione di 90°), non una seconda variante di codice.
+ *     I testi restano orizzontali perché sono posizionati, non ruotati.
+ *
+ * I colori vengono dai token: gli elementi portano una classe (dg-*) e app.css
+ * la lega a var(--diagram-*).
  */
 
-const ACC = '#c9932e';
-const FAINT = '#75798c';
-const AXIS = 'rgba(233,233,237,.35)';
+/* ─────────────────────────── misura del riquadro ─────────────────────────── */
 
-// viewBox proporzionato al riquadro reale (900 × 120 px): con
-// preserveAspectRatio="none" il disegno riempie la larghezza senza
-// deformare in modo percettibile vincoli e frecce.
-const W = 900;
-const H = 120;
-const PAD_X = 40;
-const PAD_Y = 18;
+function useMisura<T extends HTMLElement>() {
+  const ref = useRef<T>(null);
+  const [box, setBox] = useState({ w: 0, h: 0 });
 
-interface Serie {
-  punti: PuntoDiagramma[];
-  sel: (p: PuntoDiagramma) => number;
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver((entries) => {
+      const r = entries[0]?.contentRect;
+      if (r) setBox({ w: Math.round(r.width), h: Math.round(r.height) });
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  return [ref, box] as const;
 }
 
-function scala(punti: PuntoDiagramma[], sel: (p: PuntoDiagramma) => number) {
-  const vals = punti.map(sel);
-  const max = Math.max(...vals.map(Math.abs), 1e-9);
-  return { max, vals };
+/* ─────────────────────────── assi dell'elemento ─────────────────────────── */
+
+interface Assi {
+  /** Lunghezza in px del tratto che rappresenta l'elemento. */
+  len: number;
+  /** Spazio trasversale disponibile dal lato dei carichi (b negativo). */
+  ampCarichi: number;
+  /** Spazio trasversale disponibile dal lato delle etichette (b positivo). */
+  ampEtichette: number;
+  /** Da (a, b) al punto sullo schermo. */
+  p: (a: number, b: number) => [number, number];
 }
 
-function pathArea(
-  { punti, sel }: Serie,
-  L: number,
-  h: number,
-  /** true = valori positivi disegnati verso il basso (convenzione dei momenti). */
-  giu: boolean,
-) {
-  const { max } = scala(punti, sel);
-  const x = (v: number) => PAD_X + (L > 0 ? (v / L) * (W - 2 * PAD_X) : 0);
-  const y0 = h / 2;
-  const amp = h / 2 - PAD_Y;
-  const y = (v: number) => y0 + (giu ? 1 : -1) * (v / max) * amp;
-
-  const linea = punti.map((p, i) => `${i ? 'L' : 'M'}${x(p.x).toFixed(2)},${y(sel(p)).toFixed(2)}`);
-  const area = [
-    `M${x(punti[0]?.x ?? 0).toFixed(2)},${y0}`,
-    ...punti.map((p) => `L${x(p.x).toFixed(2)},${y(sel(p)).toFixed(2)}`),
-    `L${x(punti[punti.length - 1]?.x ?? 0).toFixed(2)},${y0}`,
-    'Z',
-  ];
-  return { linea: linea.join(''), area: area.join(''), y0 };
+/**
+ * @param fraz posizione dell'asse dell'elemento nello spazio trasversale
+ *             (0 = tutto lo spazio ai carichi, 1 = tutto alle etichette).
+ */
+function assi(w: number, h: number, orient: Orientamento, padA: number, fraz: number): Assi {
+  if (orient === 'verticale') {
+    // rotazione di −90°: «lungo l'asse» va verso l'alto, «trasversale» a destra
+    const asse = Math.round(fraz * w);
+    return {
+      len: Math.max(1, h - 2 * padA),
+      ampCarichi: asse,
+      ampEtichette: w - asse,
+      p: (a, b) => [asse + b, h - padA - a],
+    };
+  }
+  const asse = Math.round(fraz * h);
+  return {
+    len: Math.max(1, w - 2 * padA),
+    ampCarichi: asse,
+    ampEtichette: h - asse,
+    p: (a, b) => [padA + a, asse + b],
+  };
 }
+
+/** `M`/`L` di un path a partire da coordinate (a, b). */
+const seg = (c: 'M' | 'L', ax: Assi, a: number, b: number) => {
+  const [x, y] = ax.p(a, b);
+  return `${c}${x.toFixed(2)},${y.toFixed(2)}`;
+};
+
+const fx = (v: number, d = 2) => (Number.isFinite(v) ? v.toFixed(d) : '—');
+
+/* ─────────────────────────── riquadro ─────────────────────────── */
 
 function Riquadro({
   titolo,
   picco,
-  children,
-  altezza = H,
+  disegna,
 }: {
   titolo: string;
   picco: string;
-  children: React.ReactNode;
-  altezza?: number;
+  disegna: (w: number, h: number) => React.ReactNode;
 }) {
+  const [ref, box] = useMisura<HTMLDivElement>();
+
   return (
     <div className="diagram">
       <div className="diagram-head">
         <span className="t">{titolo}</span>
         <span className="peak">{picco}</span>
       </div>
-      <svg viewBox={`0 0 ${W} ${altezza}`} preserveAspectRatio="none" role="img" aria-label={titolo}>
-        {children}
-      </svg>
+      <div className="diagram-canvas" ref={ref}>
+        {box.w > 0 && box.h > 0 && (
+          <svg viewBox={`0 0 ${box.w} ${box.h}`} role="img" aria-label={`${titolo} — ${picco}`}>
+            {disegna(box.w, box.h)}
+          </svg>
+        )}
+      </div>
     </div>
   );
 }
 
-function Asse({ y }: { y: number }) {
-  return <line x1={PAD_X} y1={y} x2={W - PAD_X} y2={y} stroke={AXIS} strokeWidth={1} />;
+/* ─────────────────────────── etichette quotate ─────────────────────────── */
+
+/** Testo sempre orizzontale, tenuto dentro il riquadro. */
+function Etichetta({
+  x,
+  y,
+  w,
+  h,
+  children,
+  accent = false,
+  ancora = 'middle',
+}: {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  children: React.ReactNode;
+  accent?: boolean;
+  ancora?: 'start' | 'middle' | 'end';
+}) {
+  const cx = Math.min(w - 4, Math.max(4, x));
+  const cy = Math.min(h - 4, Math.max(11, y));
+  return (
+    <text
+      x={cx}
+      y={cy}
+      className={`dg-testo${accent ? ' is-accent' : ''}`}
+      textAnchor={ancora}
+      dominantBaseline="middle"
+    >
+      {children}
+    </text>
+  );
 }
 
-/** Schema statico con i vincoli e i carichi applicati. */
+/* ─────────────────────────── schema statico e carichi ────────────────────── */
+
 export function DiagrammaCarichi({
   schema,
   L,
   q,
   P,
   aP,
+  N,
+  RA,
+  RB,
   orientamento,
 }: {
   schema: SchemaId;
@@ -96,91 +169,204 @@ export function DiagrammaCarichi({
   q: number;
   P: number;
   aP: number;
+  /** Sforzo normale di progetto (kN), disegnato solo in verticale. */
+  N: number;
+  RA: number;
+  RB: number;
   orientamento: Orientamento;
 }) {
-  const yTrave = 78;
-  const vinc = SCHEMI_BY_ID[schema].vincoli;
-  const xa = PAD_X;
-  const xb = W - PAD_X;
+  const verticale = orientamento === 'verticale';
 
-  const frecce = [];
-  const n = 13;
-  if (Math.abs(q) > 1e-9) {
-    for (let i = 0; i < n; i++) {
-      const x = xa + ((xb - xa) * i) / (n - 1);
-      frecce.push(
-        <g key={i} stroke={ACC} strokeWidth={1}>
-          <line x1={x} y1={34} x2={x} y2={yTrave - 4} />
-          <path d={`M${x - 3.5},${yTrave - 10} L${x},${yTrave - 3} L${x + 3.5},${yTrave - 10}`} fill="none" />
-        </g>,
-      );
-    }
-  }
+  const disegna = (w: number, h: number) => {
+    const ax = assi(w, h, orientamento, verticale ? 40 : 44, 0.64);
+    const { len } = ax;
+    const hCar = Math.max(16, Math.min(42, ax.ampCarichi - 14));
+    const bEtich = Math.min(ax.ampEtichette - 8, 26);
 
-  const vincolo = (x: number, v: { v: boolean; r: boolean }, lato: 'A' | 'B') => {
-    if (!v.v && !v.r) return null; // estremo libero
-    if (v.v && v.r) {
-      // incastro
-      const dir = lato === 'A' ? -1 : 1;
-      return (
-        <g stroke={FAINT} strokeWidth={1.4}>
-          <line x1={x} y1={yTrave - 14} x2={x} y2={yTrave + 14} />
-          {[-10, -5, 0, 5, 10].map((d) => (
-            <line key={d} x1={x} y1={yTrave + d} x2={x + dir * 7} y2={yTrave + d + 5} strokeWidth={1} />
-          ))}
-        </g>
+    const el: React.ReactNode[] = [];
+
+    // ── carico distribuito: frecce verso l'asta ──────────────────────────
+    if (Math.abs(q) > 1e-9) {
+      const n = verticale ? 9 : 13;
+      for (let i = 0; i < n; i++) {
+        const a = (len * i) / (n - 1);
+        el.push(
+          <path
+            key={`q${i}`}
+            className="dg-carico"
+            strokeWidth={1}
+            d={
+              seg('M', ax, a, -hCar) +
+              seg('L', ax, a, -4) +
+              seg('M', ax, a - 3.5, -10) +
+              seg('L', ax, a, -3) +
+              seg('L', ax, a + 3.5, -10)
+            }
+          />,
+        );
+      }
+      el.push(
+        <path
+          key="qline"
+          className="dg-carico"
+          strokeWidth={1}
+          d={seg('M', ax, 0, -hCar) + seg('L', ax, len, -hCar)}
+        />,
       );
     }
-    if (v.v && !v.r) {
-      // appoggio / cerniera
-      return (
-        <g stroke={FAINT} strokeWidth={1.4} fill="none">
-          <path d={`M${x},${yTrave} L${x - 9},${yTrave + 14} L${x + 9},${yTrave + 14} Z`} />
-          <line x1={x - 13} y1={yTrave + 16} x2={x + 13} y2={yTrave + 16} />
-        </g>
+
+    // ── carico concentrato ───────────────────────────────────────────────
+    if (Math.abs(P) > 1e-9) {
+      const aP_ = L > 0 ? Math.min(1, Math.max(0, aP / L)) * len : 0;
+      el.push(
+        <path
+          key="P"
+          className="dg-carico"
+          strokeWidth={1.6}
+          d={
+            seg('M', ax, aP_, -hCar - 14) +
+            seg('L', ax, aP_, -4) +
+            seg('M', ax, aP_ - 4.5, -12) +
+            seg('L', ax, aP_, -3) +
+            seg('L', ax, aP_ + 4.5, -12)
+          }
+        />,
       );
     }
-    // doppio pendolo (blocca la rotazione, libera la traslazione)
-    return (
-      <g stroke={FAINT} strokeWidth={1.4} fill="none">
-        <line x1={x - 8} y1={yTrave - 11} x2={x - 8} y2={yTrave + 11} />
-        <line x1={x + 3} y1={yTrave - 11} x2={x + 3} y2={yTrave + 11} />
-        <circle cx={x - 2.5} cy={yTrave - 6} r={2.5} stroke={FAINT} />
-        <circle cx={x - 2.5} cy={yTrave + 6} r={2.5} stroke={FAINT} />
-      </g>
+
+    // ── sforzo normale in sommità (solo elemento verticale) ──────────────
+    if (verticale && Math.abs(N) > 1e-9) {
+      el.push(
+        <path
+          key="N"
+          className="dg-carico"
+          strokeWidth={1.8}
+          d={
+            seg('M', ax, len + 24, 0) +
+            seg('L', ax, len + 5, 0) +
+            seg('M', ax, len + 12, -4.5) +
+            seg('L', ax, len + 4, 0) +
+            seg('L', ax, len + 12, 4.5)
+          }
+        />,
+      );
+      // etichetta di fianco alla freccia, non sopra
+      const [nx, ny] = ax.p(len + 15, -10);
+      el.push(
+        <Etichetta key="Nlab" x={nx} y={ny} w={w} h={h} accent ancora="end">
+          N {fx(Math.abs(N), 1)} kN
+        </Etichetta>,
+      );
+    }
+
+    // ── asta ─────────────────────────────────────────────────────────────
+    el.push(
+      <path
+        key="asta"
+        className="dg-beam"
+        strokeWidth={2.5}
+        d={seg('M', ax, 0, 0) + seg('L', ax, len, 0)}
+      />,
     );
-  };
 
-  const xP = PAD_X + (L > 0 ? Math.min(1, Math.max(0, aP / L)) * (xb - xa) : 0);
+    // ── vincoli ──────────────────────────────────────────────────────────
+    const vinc = SCHEMI_BY_ID[schema].vincoli;
+    const vincolo = (a: number, v: { v: boolean; r: boolean }, lato: 'A' | 'B') => {
+      if (!v.v && !v.r) return null; // estremo libero
+      const dir = lato === 'A' ? -1 : 1;
+
+      if (v.v && v.r) {
+        // incastro: piastra trasversale + tratteggio verso l'esterno
+        let d = seg('M', ax, a, -14) + seg('L', ax, a, 14);
+        for (const t of [-10, -5, 0, 5, 10]) {
+          d += seg('M', ax, a, t) + seg('L', ax, a + dir * 7, t + 5);
+        }
+        return <path key={`v${lato}`} className="dg-vinc" strokeWidth={1.2} d={d} />;
+      }
+
+      if (v.v && !v.r) {
+        // appoggio / cerniera
+        const d =
+          seg('M', ax, a, 0) +
+          seg('L', ax, a - 9, 14) +
+          seg('L', ax, a + 9, 14) +
+          'Z' +
+          seg('M', ax, a - 13, 16) +
+          seg('L', ax, a + 13, 16);
+        return <path key={`v${lato}`} className="dg-vinc" strokeWidth={1.4} d={d} />;
+      }
+
+      // doppio pendolo: blocca la rotazione, libera la traslazione
+      const d =
+        seg('M', ax, a - 8, -11) +
+        seg('L', ax, a - 8, 11) +
+        seg('M', ax, a + 3, -11) +
+        seg('L', ax, a + 3, 11);
+      const [c1x, c1y] = ax.p(a - 2.5, -6);
+      const [c2x, c2y] = ax.p(a - 2.5, 6);
+      return (
+        <g key={`v${lato}`} className="dg-vinc" strokeWidth={1.4}>
+          <path d={d} />
+          <circle cx={c1x} cy={c1y} r={2.5} />
+          <circle cx={c2x} cy={c2y} r={2.5} />
+        </g>
+      );
+    };
+
+    el.push(vincolo(0, vinc.A, 'A'), vincolo(len, vinc.B, 'B'));
+
+    // ── quote: nodi, luce, reazioni ──────────────────────────────────────
+    const [ax0, ay0] = ax.p(0, bEtich + 8);
+    const [ax1, ay1] = ax.p(len, bEtich + 8);
+    const [axm, aym] = ax.p(len / 2, bEtich + 8);
+
+    el.push(
+      <Etichetta key="A" x={ax0} y={ay0} w={w} h={h}>
+        A
+      </Etichetta>,
+      <Etichetta key="B" x={ax1} y={ay1} w={w} h={h}>
+        B
+      </Etichetta>,
+      <Etichetta key="L" x={axm} y={aym} w={w} h={h}>
+        {verticale ? 'H' : 'L'} = {fx(L)} m
+      </Etichetta>,
+    );
+
+    if (vinc.A.v && Math.abs(RA) > 1e-6) {
+      const [rx, ry] = ax.p(0, bEtich + 22);
+      el.push(
+        <Etichetta key="RA" x={rx} y={ry} w={w} h={h} accent>
+          RA {fx(RA, 1)} kN
+        </Etichetta>,
+      );
+    }
+    if (vinc.B.v && Math.abs(RB) > 1e-6) {
+      const [rx, ry] = ax.p(len, bEtich + 22);
+      el.push(
+        <Etichetta key="RB" x={rx} y={ry} w={w} h={h} accent>
+          RB {fx(RB, 1)} kN
+        </Etichetta>,
+      );
+    }
+
+    return el;
+  };
 
   return (
     <Riquadro
-      titolo={`Carichi — ${SCHEMI_BY_ID[schema].label}${orientamento === 'verticale' ? ' (elemento verticale)' : ''}`}
-      picco={`q ${q.toFixed(2)} kN/m${Math.abs(P) > 1e-9 ? ` · P ${P.toFixed(1)} kN` : ''}`}
-    >
-      {frecce}
-      {Math.abs(q) > 1e-9 && <line x1={xa} y1={34} x2={xb} y2={34} stroke={ACC} strokeWidth={1} />}
-      {Math.abs(P) > 1e-9 && (
-        <g stroke={ACC} strokeWidth={1.6}>
-          <line x1={xP} y1={16} x2={xP} y2={yTrave - 4} />
-          <path d={`M${xP - 4.5},${yTrave - 12} L${xP},${yTrave - 3} L${xP + 4.5},${yTrave - 12}`} fill="none" />
-        </g>
-      )}
-      <line x1={xa} y1={yTrave} x2={xb} y2={yTrave} stroke="#e9e9ed" strokeWidth={2.5} />
-      {vincolo(xa, vinc.A, 'A')}
-      {vincolo(xb, vinc.B, 'B')}
-      <text x={xa} y={yTrave + 33} fill={FAINT} fontSize={11} textAnchor="middle">
-        A
-      </text>
-      <text x={xb} y={yTrave + 33} fill={FAINT} fontSize={11} textAnchor="middle">
-        B
-      </text>
-      <text x={W / 2} y={yTrave + 33} fill={FAINT} fontSize={11} textAnchor="middle">
-        L = {L.toFixed(2)} m
-      </text>
-    </Riquadro>
+      // in verticale i riquadri stanno in griglia e sono stretti: sigla, non etichetta estesa
+      titolo={`Carichi — ${verticale ? SCHEMI_BY_ID[schema].short : SCHEMI_BY_ID[schema].label}`}
+      picco={
+        `q ${fx(q)} kN/m` +
+        (Math.abs(P) > 1e-9 ? ` · P ${fx(P, 1)} kN` : '') +
+        (verticale && Math.abs(N) > 1e-9 ? ` · N ${fx(N, 1)} kN` : '')
+      }
+      disegna={disegna}
+    />
   );
 }
+
+/* ─────────────────────────── serie M, V, deformata ───────────────────────── */
 
 export function DiagrammaSerie({
   titolo,
@@ -188,26 +374,122 @@ export function DiagrammaSerie({
   sel,
   L,
   unita,
+  decimali = 1,
   giu = false,
-  colore = ACC,
+  variante = 'accent',
+  orientamento,
+  quotaEstremi = false,
 }: {
   titolo: string;
   punti: PuntoDiagramma[];
   sel: (p: PuntoDiagramma) => number;
   L: number;
   unita: string;
+  decimali?: number;
+  /** true = valori positivi verso il basso (convenzione dei momenti). */
   giu?: boolean;
-  colore?: string;
+  variante?: 'accent' | 'faint';
+  orientamento: Orientamento;
+  /** Quota anche i valori ai due estremi (utile per gli incastri). */
+  quotaEstremi?: boolean;
 }) {
   if (!punti.length) return null;
-  const { max } = scala(punti, sel);
-  const { linea, area, y0 } = pathArea({ punti, sel }, L, H, giu);
+
+  const vals = punti.map(sel);
+  const max = Math.max(...vals.map(Math.abs), 1e-9);
+  const faint = variante === 'faint' ? ' is-faint' : '';
+
+  // punto di picco: valore e ascissa
+  let iPicco = 0;
+  for (let i = 1; i < vals.length; i++) if (Math.abs(vals[i]) > Math.abs(vals[iPicco])) iPicco = i;
+
+  const disegna = (w: number, h: number) => {
+    const ax = assi(w, h, orientamento, orientamento === 'verticale' ? 24 : 40, 0.5);
+    const { len } = ax;
+    const amp = Math.max(6, Math.min(ax.ampCarichi, ax.ampEtichette) - 14);
+
+    const a = (x: number) => (L > 0 ? (x / L) * len : 0);
+    const b = (v: number) => (giu ? 1 : -1) * (v / max) * amp;
+
+    const linea = punti.map((p, i) => seg(i ? 'L' : 'M', ax, a(p.x), b(sel(p)))).join('');
+    const area =
+      seg('M', ax, a(punti[0].x), 0) +
+      punti.map((p) => seg('L', ax, a(p.x), b(sel(p)))).join('') +
+      seg('L', ax, a(punti[punti.length - 1].x), 0) +
+      'Z';
+
+    const el: React.ReactNode[] = [
+      <path
+        key="asse"
+        className="dg-axis"
+        strokeWidth={1}
+        d={seg('M', ax, 0, 0) + seg('L', ax, len, 0)}
+      />,
+      <path key="area" className={`dg-area${faint}`} d={area} />,
+      <path key="linea" className={`dg-line${faint}`} strokeWidth={1.6} d={linea} />,
+    ];
+
+    // marcatore sul picco: valore e ascissa
+    const pk = punti[iPicco];
+    if (Math.abs(sel(pk)) > max * 1e-6) {
+      const ap = a(pk.x);
+      const bp = b(sel(pk));
+      const [px, py] = ax.p(ap, bp);
+      el.push(
+        <circle key="pk" className={`dg-punto${faint}`} cx={px} cy={py} r={2.6} />,
+        <path
+          key="pkl"
+          className="dg-axis"
+          strokeWidth={1}
+          strokeDasharray="2 3"
+          d={seg('M', ax, ap, 0) + seg('L', ax, ap, bp)}
+        />,
+      );
+      // etichetta spostata oltre il picco, dalla parte del diagramma
+      const [lx, ly] = ax.p(ap, bp + Math.sign(bp || 1) * 11);
+      el.push(
+        <Etichetta
+          key="pkt"
+          x={lx}
+          y={ly}
+          w={w}
+          h={h}
+          accent={variante === 'accent'}
+          ancora={ap > len * 0.8 ? 'end' : ap < len * 0.2 ? 'start' : 'middle'}
+        >
+          {fx(sel(pk), decimali)} {unita} · x {fx(pk.x)} m
+        </Etichetta>,
+      );
+    }
+
+    if (quotaEstremi) {
+      for (const [chiave, p] of [
+        ['e0', punti[0]],
+        ['e1', punti[punti.length - 1]],
+      ] as const) {
+        const v = sel(p);
+        if (Math.abs(v) < max * 0.02) continue;
+        const ap = a(p.x);
+        const [lx, ly] = ax.p(ap, b(v) + Math.sign(b(v) || 1) * 11);
+        el.push(
+          <Etichetta
+            key={chiave}
+            x={lx}
+            y={ly}
+            w={w}
+            h={h}
+            ancora={chiave === 'e0' ? 'start' : 'end'}
+          >
+            {fx(v, decimali)}
+          </Etichetta>,
+        );
+      }
+    }
+
+    return el;
+  };
 
   return (
-    <Riquadro titolo={titolo} picco={`max ${max.toPrecision(3)} ${unita}`}>
-      <Asse y={y0} />
-      <path d={area} fill={colore} opacity={0.16} />
-      <path d={linea} fill="none" stroke={colore} strokeWidth={1.6} />
-    </Riquadro>
+    <Riquadro titolo={titolo} picco={`max ${max.toPrecision(3)} ${unita}`} disegna={disegna} />
   );
 }

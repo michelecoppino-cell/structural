@@ -33,6 +33,19 @@
   --divider-strong: rgba(233, 233, 237, 0.16);
   --divider-soft: rgba(233, 233, 237, 0.1);
   --border-faint: rgba(233, 233, 237, 0.08);
+  --border-panel: rgba(233, 233, 237, 0.11);
+  --hover-soft: rgba(233, 233, 237, 0.05);
+  --hover: rgba(233, 233, 237, 0.07);
+
+  /* — velature dell'accento: derivate dal token, non riscritte a mano —
+     cambiare --color-accent basta a cambiare tutta l'interfaccia. */
+  --accent-05: color-mix(in srgb, var(--color-accent) 5%, transparent);
+  --accent-10: color-mix(in srgb, var(--color-accent) 10%, transparent);
+  --accent-12: color-mix(in srgb, var(--color-accent) 12%, transparent);
+  --accent-30: color-mix(in srgb, var(--color-accent) 30%, transparent);
+  --accent-35: color-mix(in srgb, var(--color-accent) 35%, transparent);
+  --accent-45: color-mix(in srgb, var(--color-accent) 45%, transparent);
+  --accent-55: color-mix(in srgb, var(--color-accent) 55%, transparent);
 
   /* — stati (unico uso ammesso del colore oltre l'accento) — */
   --ok: #56a978;
@@ -52,6 +65,24 @@
   --radius-sm: 5px;
   --radius-md: 6px;
   --radius-lg: 8px;
+
+  /* — misure di impaginazione —
+     il contenuto non si allarga oltre --content-max, il testo corrente
+     non supera --reading-max: oltre si legge peggio, non meglio. */
+  --content-max: 1600px;
+  --reading-max: 78ch;
+
+  /* — altezza dei controlli: densità 0.70x su desktop, soglia di tocco
+     su cellulare (ridefinita nel breakpoint mobile di app.css) — */
+  --control-h: 32px;
+  --control-h-sm: 28px;
+
+  /* — colori dei diagrammi: gli SVG non scrivono colori propri — */
+  --diagram-line: var(--color-accent);
+  --diagram-fill: var(--color-accent);
+  --diagram-faint: var(--text-faint);
+  --diagram-axis: var(--divider-strong);
+  --diagram-beam: var(--text);
 
   --shadow-sm: 0 0 0 1px #3f424d;
   --shadow-md: 0 0 0 1px #595d6c, 0 6px 18px rgba(0, 0, 0, 0.55);

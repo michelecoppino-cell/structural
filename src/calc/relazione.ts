@@ -4,10 +4,12 @@
  */
 
 import type { AppState, TabId } from '../state/store';
+import { inputVerifiche } from '../state/store';
 import { calcolaAzioni, num } from './azioni';
 import { COMBINAZIONI, calcolaSollecitazioni } from './sollecitazioni';
 import { SCHEMI_BY_ID } from './trave';
 import { verificaTaglioArmato, verificaTaglioNonArmato } from './verifiche';
+import { valido, validaTaglioArmato, validaTaglioNonArmato } from './validazione';
 
 const fx = (v: number, d = 2) => (Number.isFinite(v) ? v.toFixed(d) : '—');
 
@@ -83,23 +85,24 @@ export function testoRelazione(state: AppState, tab: TabId): string {
   }
 
   if (tab === 'verifiche') {
-    const na = verificaTaglioNonArmato(state.verifiche.taglioNonArmato);
-    const ar = verificaTaglioArmato(state.verifiche.taglioArmato);
+    const inp = verificheDi(state);
+    const na = verificaTaglioNonArmato(inp.taglioNonArmato);
+    const ar = verificaTaglioArmato(inp.taglioArmato);
     return [
       ...intestazione,
       'VERIFICA A TAGLIO — ELEMENTI SENZA ARMATURE TRASVERSALI (NTC2018 §4.1.2.3.5.1)',
-      `  Sezione ${state.verifiche.taglioNonArmato.bw} × ${state.verifiche.taglioNonArmato.h} mm; d = ${state.verifiche.taglioNonArmato.d} mm; ${state.verifiche.taglioNonArmato.cls}`,
+      `  Sezione ${inp.taglioNonArmato.bw} × ${inp.taglioNonArmato.h} mm; d = ${inp.taglioNonArmato.d} mm; ${inp.taglioNonArmato.cls}`,
       `  As = ${fx(na.As, 0)} mm²; ρ1 = ${fx(na.rho1, 5)}; k = ${fx(na.k, 3)}; σcp = ${fx(na.sigmaCp, 3)} N/mm²; νmin = ${fx(na.vmin, 4)} N/mm²`,
       `  VRd = max[(0.18·k·(100·ρ1·fck)^⅓/γc + 0.15·σcp)·bw·d ; (νmin + 0.15·σcp)·bw·d] = ${fx(na.VRd, 1)} kN`,
-      `  VEd = ${state.verifiche.taglioNonArmato.VEd} kN → VEd/VRd = ${fx(na.esito.sfruttamento, 3)} — ${na.esito.ok ? 'VERIFICATO' : 'NON VERIFICATO'} (margine ${fx(na.esito.margine, 1)}%)`,
+      `  VEd = ${inp.taglioNonArmato.VEd} kN → VEd/VRd = ${fx(na.esito.sfruttamento, 3)} — ${na.esito.ok ? 'VERIFICATO' : 'NON VERIFICATO'} (margine ${fx(na.esito.margine, 1)}%)`,
       '',
       'VERIFICA A TAGLIO — ELEMENTI CON ARMATURE TRASVERSALI (NTC2018 §4.1.2.3.5.2)',
-      `  Sezione ${state.verifiche.taglioArmato.bw} × ${state.verifiche.taglioArmato.h} mm; d = ${fx(ar.d, 0)} mm; ${state.verifiche.taglioArmato.cls}`,
-      `  Staffe ⌀${state.verifiche.taglioArmato.phiStaffa}/${state.verifiche.taglioArmato.passo} mm a ${state.verifiche.taglioArmato.nBracci} bracci; Asw = ${fx(ar.Asw, 1)} mm²; α = ${state.verifiche.taglioArmato.alfa}°`,
+      `  Sezione ${inp.taglioArmato.bw} × ${inp.taglioArmato.h} mm; d = ${fx(ar.d, 0)} mm; ${inp.taglioArmato.cls}`,
+      `  Staffe ⌀${inp.taglioArmato.phiStaffa}/${inp.taglioArmato.passo} mm a ${inp.taglioArmato.nBracci} bracci; Asw = ${fx(ar.Asw, 1)} mm²; α = ${inp.taglioArmato.alfa}°`,
       `  ωsw = ${fx(ar.omegaSw, 5)}; cotϑ* = ${fx(ar.cotThetaStar, 3)} → cotϑ = ${fx(ar.cotTheta, 3)} (ϑ = ${fx(ar.theta, 1)}°); αc = ${fx(ar.alfaC, 3)}`,
       `  VRsd (eq. 4.1.18) = ${fx(ar.VRsd, 1)} kN; VRcd (eq. 4.1.19) = ${fx(ar.VRcd, 1)} kN`,
       `  VRd = min(VRsd, VRcd) = ${fx(ar.VRd, 1)} kN — meccanismo governante: ${ar.governa}`,
-      `  VEd = ${state.verifiche.taglioArmato.VEd} kN → VEd/VRd = ${fx(ar.esito.sfruttamento, 3)} — ${ar.esito.ok ? 'VERIFICATO' : 'NON VERIFICATO'} (margine ${fx(ar.esito.margine, 1)}%)`,
+      `  VEd = ${inp.taglioArmato.VEd} kN → VEd/VRd = ${fx(ar.esito.sfruttamento, 3)} — ${ar.esito.ok ? 'VERIFICATO' : 'NON VERIFICATO'} (margine ${fx(ar.esito.margine, 1)}%)`,
       `  Minimi §4.1.6.1.1: Asw,min = ${fx(ar.AswMin, 0)} mm²/m — ${ar.esitoAswMin.ok ? 'soddisfatto' : 'NON soddisfatto'}; passo max = ${fx(ar.passoMax, 0)} mm — ${ar.esitoPasso.ok ? 'soddisfatto' : 'NON soddisfatto'}`,
     ].join('\n');
   }
@@ -113,10 +116,35 @@ export function testoRelazione(state: AppState, tab: TabId): string {
   return [...intestazione, 'COMPUTO SINTETICO', ...righe, '', `  TOTALE GENERALE = ${generale.toFixed(2)} €`].join('\n');
 }
 
+/** Input delle verifiche con il VEd effettivamente in uso (collegato o a mano). */
+function verificheDi(state: AppState) {
+  const az = calcolaAzioni(state.azioni);
+  const soll = calcolaSollecitazioni(state.sollecitazioni, az);
+  return inputVerifiche(state, Math.abs(soll.trave.VmaxAbs.val));
+}
+
+/**
+ * Esito di ogni verifica, con il nome: alimenta badge e piede della nav.
+ * Una verifica con dati in ingresso non validi non è «soddisfatta»: conta fra
+ * quelle da sistemare, altrimenti il badge direbbe ✓ mentre il pannello dice
+ * che l'esito non è calcolabile.
+ */
+export function esitiVerifiche(state: AppState): { label: string; ok: boolean }[] {
+  const inp = verificheDi(state);
+  const na = verificaTaglioNonArmato(inp.taglioNonArmato);
+  const ar = verificaTaglioArmato(inp.taglioArmato);
+  const naOk = valido(validaTaglioNonArmato(inp.taglioNonArmato));
+  const arOk = valido(validaTaglioArmato(inp.taglioArmato));
+  return [
+    { label: 'Taglio senza staffe', ok: naOk && na.esito.ok },
+    { label: 'Taglio con staffe', ok: arOk && ar.esito.ok },
+    { label: 'Armatura minima', ok: arOk && ar.esitoAswMin.ok },
+    { label: 'Passo massimo', ok: arOk && ar.esitoPasso.ok },
+  ];
+}
+
 /** Numero di verifiche non soddisfatte, per il badge di navigazione. */
 export function verificheNonSoddisfatte(state: AppState): { ko: number; tot: number } {
-  const na = verificaTaglioNonArmato(state.verifiche.taglioNonArmato);
-  const ar = verificaTaglioArmato(state.verifiche.taglioArmato);
-  const esiti = [na.esito, ar.esito, ar.esitoAswMin, ar.esitoPasso];
+  const esiti = esitiVerifiche(state);
   return { ko: esiti.filter((e) => !e.ok).length, tot: esiti.length };
 }

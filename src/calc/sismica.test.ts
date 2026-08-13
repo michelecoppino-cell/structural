@@ -158,13 +158,13 @@ describe('Tab. 3.2.IV — amplificazione stratigrafica', () => {
 describe('spettro di progetto con i default della scheda', () => {
   const r = calcolaAzioni(AZIONI_DEFAULT).sisma;
 
-  it("parte da L'Aquila, suolo C, SLV", () => {
-    expect(r.sito).toBe("L'Aquila (AQ)");
-    expect(r.zona).toBe(1);
+  it('parte da Fagagna (UD), suolo C, SLV', () => {
+    expect(r.sito).toBe('Fagagna (UD)');
+    expect(r.zona).toBe(2);
     expect(r.fonte).toBe('reticolo');
     expect(r.VR).toBe(50);
     expect(r.TR).toBeCloseTo(475, 0);
-    expect(r.ag).toBeCloseTo(0.261, 3);
+    expect(r.ag).toBeCloseTo(0.217, 3);
   });
 
   it('S = SS·ST e Sd = ag·S·F0/q', () => {

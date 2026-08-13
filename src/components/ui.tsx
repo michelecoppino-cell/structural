@@ -1,5 +1,5 @@
-import type { ReactNode } from 'react';
-import { CaretDown, CaretUp, CaretUpDown, Info, BookOpenText } from '@phosphor-icons/react';
+import { useRef, type ReactNode } from 'react';
+import { CaretDown, CaretUp, CaretUpDown, Info, BookOpenText, ArrowUUpLeft } from '@phosphor-icons/react';
 import { useStore } from '../state/store';
 import type { TabId } from '../state/store';
 
@@ -34,6 +34,49 @@ export function DettaglioPanel({ dettaglio }: { dettaglio: Dettaglio }) {
   );
 }
 
+/* ─────────────────────────── provenienza del valore ─────────────────────── */
+
+/**
+ * Badge accanto all'etichetta che dice da dove arriva il numero.
+ * Con `onClick` diventa un pulsante: serve a scollegare il valore ripreso.
+ */
+export function Origine({
+  testo,
+  titolo,
+  ripreso = false,
+  onClick,
+}: {
+  testo: string;
+  titolo?: string;
+  /** true = valore ripreso da un'altra scheda (marcato con ↩). */
+  ripreso?: boolean;
+  onClick?: () => void;
+}) {
+  const contenuto = (
+    <>
+      {ripreso && <ArrowUUpLeft size={10} weight="bold" />}
+      {testo}
+    </>
+  );
+  if (onClick) {
+    return (
+      <button
+        type="button"
+        className={`field-origin${ripreso ? '' : ' is-manuale'}`}
+        title={titolo}
+        onClick={onClick}
+      >
+        {contenuto}
+      </button>
+    );
+  }
+  return (
+    <span className={`field-origin${ripreso ? '' : ' is-manuale'}`} title={titolo}>
+      {contenuto}
+    </span>
+  );
+}
+
 /* ─────────────────────────── campo espandibile ─────────────────────────── */
 
 interface FieldProps {
@@ -42,6 +85,10 @@ interface FieldProps {
   label: string;
   unit?: string;
   dettaglio?: Dettaglio;
+  /** Messaggio di errore: il campo si marca e l'esito a valle si blocca. */
+  errore?: string;
+  /** Badge di provenienza del valore, accanto all'etichetta. */
+  origine?: ReactNode;
   children: ReactNode;
 }
 
@@ -49,30 +96,40 @@ interface FieldProps {
  * Riga compatta etichetta + controllo + unità + bottone info; il pannello
  * con formula, coefficienti e riferimento normativo è a scomparsa.
  */
-export function Field({ id, tab, label, unit = '', dettaglio, children }: FieldProps) {
+export function Field({ id, tab, label, unit = '', dettaglio, errore, origine, children }: FieldProps) {
   const { state, dispatch } = useStore();
   const aperto = state.ui.allDetails[tab] || !!state.ui.exp[id];
 
   return (
     <div>
       <div className="field-row">
-        <label htmlFor={id}>{label}</label>
-        <div className="field-control">
-          {children}
-          <span className="field-unit">{unit}</span>
-          {dettaglio ? (
-            <button
-              type="button"
-              className="field-info"
-              aria-expanded={aperto}
-              aria-controls={`${id}-detail`}
-              title="Formula e riferimenti"
-              onClick={() => dispatch({ type: 'toggleExp', id })}
-            >
-              {aperto ? <CaretUpDown size={14} weight="fill" /> : <Info size={14} />}
-            </button>
-          ) : (
-            <span className="field-info" style={{ border: 0 }} />
+        <label htmlFor={id}>
+          {label}
+          {origine}
+        </label>
+        <div>
+          <div className="field-control">
+            {children}
+            {unit && <span className="field-unit">{unit}</span>}
+            {dettaglio ? (
+              <button
+                type="button"
+                className="field-info"
+                aria-expanded={aperto}
+                aria-controls={`${id}-detail`}
+                title="Formula e riferimenti"
+                onClick={() => dispatch({ type: 'toggleExp', id })}
+              >
+                {aperto ? <CaretUpDown size={14} weight="fill" /> : <Info size={14} />}
+              </button>
+            ) : (
+              <span className="field-info" style={{ border: 0 }} />
+            )}
+          </div>
+          {errore && (
+            <div className="field-error" id={`${id}-errore`}>
+              {errore}
+            </div>
           )}
         </div>
       </div>
@@ -92,20 +149,28 @@ export function NumInput({
   value,
   onChange,
   disabled,
+  placeholder,
+  errore,
 }: {
   id?: string;
   value: string;
   onChange: (v: string) => void;
   disabled?: boolean;
+  placeholder?: string;
+  /** true = valore fuori dai limiti ammessi. */
+  errore?: boolean;
 }) {
   return (
     <input
       id={id}
-      className="input num"
+      className={`input num${errore ? ' is-error' : ''}`}
       type="text"
       inputMode="decimal"
       value={value}
       disabled={disabled}
+      placeholder={placeholder}
+      aria-invalid={errore || undefined}
+      aria-describedby={errore && id ? `${id}-errore` : undefined}
       onChange={(e) => onChange(e.target.value)}
     />
   );
@@ -163,7 +228,7 @@ export function Accordion({
         {icon && <span className="icon">{icon}</span>}
         <span className="title">{title}</span>
         <span className="hint">{hint}</span>
-        {aperto ? <CaretUp size={15} color="#9397ab" /> : <CaretDown size={15} color="#9397ab" />}
+        <span className="caret">{aperto ? <CaretUp size={15} /> : <CaretDown size={15} />}</span>
       </button>
       {aperto && (
         <div className="panel-body" id={`${id}-body`}>
@@ -204,38 +269,94 @@ export function Output({ voci, titolo = 'Output' }: { voci: VoceOutput[]; titolo
 
 /* ─────────────────────────── controllo segmentato ───────────────────────── */
 
+export interface OpzioneSeg<T extends string> {
+  id: T;
+  label: string;
+  icon?: ReactNode;
+  /** Testo secondario (es. lo sfruttamento della verifica). */
+  nota?: string;
+}
+
+/**
+ * Con `ruolo="tabs"` è una vera navigazione a schede: role tablist/tab,
+ * aria-selected, tabindex mobile e spostamento con le frecce.
+ * Con `ruolo="group"` resta un gruppo di pulsanti a stato (aria-pressed).
+ */
 export function Seg<T extends string>({
   value,
   options,
   onChange,
   label,
+  ruolo = 'group',
+  idPannello,
 }: {
   value: T;
-  options: { id: T; label: string; icon?: ReactNode }[];
+  options: OpzioneSeg<T>[];
   onChange: (v: T) => void;
   label: string;
+  ruolo?: 'group' | 'tabs';
+  idPannello?: string;
 }) {
+  const tabs = ruolo === 'tabs';
+  const refs = useRef<(HTMLButtonElement | null)[]>([]);
+
+  const onKeyDown = (e: React.KeyboardEvent, i: number) => {
+    if (!tabs) return;
+    let j = -1;
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') j = (i + 1) % options.length;
+    else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') j = (i - 1 + options.length) % options.length;
+    else if (e.key === 'Home') j = 0;
+    else if (e.key === 'End') j = options.length - 1;
+    if (j < 0) return;
+    e.preventDefault();
+    onChange(options[j].id);
+    refs.current[j]?.focus();
+  };
+
   return (
-    <div className="seg" role="group" aria-label={label}>
-      {options.map((o) => (
-        <button
-          key={o.id}
-          type="button"
-          className="seg-opt"
-          aria-pressed={value === o.id}
-          onClick={() => onChange(o.id)}
-        >
-          {o.icon}
-          {o.label}
-        </button>
-      ))}
+    <div className="seg" role={tabs ? 'tablist' : 'group'} aria-label={label}>
+      {options.map((o, i) => {
+        const attivo = value === o.id;
+        return (
+          <button
+            key={o.id}
+            ref={(el) => {
+              refs.current[i] = el;
+            }}
+            type="button"
+            role={tabs ? 'tab' : undefined}
+            id={tabs ? `tab-${o.id}` : undefined}
+            className="seg-opt"
+            aria-selected={tabs ? attivo : undefined}
+            aria-pressed={tabs ? undefined : attivo}
+            aria-controls={tabs ? idPannello : undefined}
+            tabIndex={tabs ? (attivo ? 0 : -1) : undefined}
+            onKeyDown={(e) => onKeyDown(e, i)}
+            onClick={() => onChange(o.id)}
+          >
+            {o.icon}
+            {o.label}
+            {o.nota && <span className="seg-nota">{o.nota}</span>}
+          </button>
+        );
+      })}
     </div>
   );
 }
 
 /* ─────────────────────────── esito verifica ─────────────────────────── */
 
-export function Verdict({ ok, margine }: { ok: boolean; margine: number }) {
+export function Verdict({
+  ok,
+  margine,
+  bloccato,
+}: {
+  ok: boolean;
+  margine: number;
+  /** true = dati in ingresso non validi: l'esito non viene dichiarato. */
+  bloccato?: boolean;
+}) {
+  if (bloccato) return <span className="verdict dati">Esito non calcolabile</span>;
   const m = Number.isFinite(margine) ? margine : -100;
   return (
     <span className={`verdict ${ok ? 'ok' : 'ko'}`}>
@@ -248,7 +369,14 @@ export function Verdict({ ok, margine }: { ok: boolean; margine: number }) {
   );
 }
 
-export function Bar({ sfruttamento }: { sfruttamento: number }) {
+export function Bar({ sfruttamento, bloccato }: { sfruttamento: number; bloccato?: boolean }) {
+  if (bloccato) {
+    return (
+      <div className="bar dati" title="Dati in ingresso non validi">
+        <span style={{ width: '100%' }} />
+      </div>
+    );
+  }
   const s = Number.isFinite(sfruttamento) ? sfruttamento : 1;
   return (
     <div className={`bar ${s > 1 ? 'ko' : ''}`} title={`Sfruttamento ${(s * 100).toFixed(1)}%`}>
