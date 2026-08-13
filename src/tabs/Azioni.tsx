@@ -1,18 +1,16 @@
 import { Waveform, Snowflake, Wind, Stack, Mountains } from '@phosphor-icons/react';
 import { useStore } from '../state/store';
 import { calcolaAzioni, num } from '../calc/azioni';
-import { SUOLI } from '../calc/sismica';
+import { STATI_LIMITE, SUOLI, type StatoLimite } from '../calc/sismica';
 import { ST, CU, ZONE_NEVE, VB0, ESPOSIZIONE, CAT } from '../data/ntc2018';
 import { REGIONI, comuniDi, provinceDi } from '../data/comuni';
 import { Accordion, Field, NumInput, Output, Select } from '../components/ui';
 
 const fx = (v: number, d = 2) => (Number.isFinite(v) ? v.toFixed(d) : '—');
 
-const FONTE_AG: Record<string, string> = {
-  manuale: 'valore inserito a mano',
-  tabella: 'reticolo di riferimento',
-  zona: 'zona sismica del comune',
-};
+/** Etichetta della provenienza di un parametro del sito. */
+const fonteDi = (manuale: boolean, fonte: string) =>
+  manuale ? 'inserito a mano' : fonte === 'reticolo' ? 'reticolo di riferimento' : 'zona sismica';
 
 export default function Azioni() {
   const { state, dispatch } = useStore();
@@ -87,12 +85,12 @@ export default function Azioni() {
             tab="azioni"
             label="Comune"
             dettaglio={{
-              formula: r.sisma.notaAg,
-              ref: 'NTC2018 §3.2 — pericolosità sismica di base',
+              formula: r.sisma.nota,
+              ref: 'NTC2018 §3.2 — All. A e B, media pesata 1/d sui 4 nodi più vicini',
               coeffs: [
                 { k: 'zona sismica', v: r.sisma.zonaLabel ?? '—' },
                 { k: 'ag/g', v: fx(r.sisma.ag, 3) },
-                { k: 'fonte', v: FONTE_AG[r.sisma.fonteAg] },
+                { k: 'TR', v: `${fx(r.sisma.TR, 0)} anni` },
               ],
             }}
           >
@@ -105,19 +103,48 @@ export default function Azioni() {
           </Field>
 
           <Field
+            id="sisma_sl"
+            tab="azioni"
+            label="Stato limite di riferimento"
+            dettaglio={{
+              formula: `TR = −VR / ln(1 − PVR) = −${fx(r.sisma.VR, 0)} / ln(1 − ${fx(
+                STATI_LIMITE.find((s) => s.id === (inp.sl ?? 'SLV'))?.PVR ?? 0.1,
+              )}) = ${fx(r.sisma.TR, 0)} anni`,
+              ref: 'NTC2018 §3.2.1 — Tab. 3.2.I',
+              coeffs: r.sisma.statiLimite.map((s) => ({
+                k: s.id,
+                v: `TR ${fx(s.TR, 0)} anni · ag ${fx(s.ag, 3)} g`,
+              })),
+            }}
+          >
+            <select
+              id="sisma_sl"
+              className="input"
+              value={inp.sl ?? 'SLV'}
+              onChange={(e) => set({ sl: e.target.value as StatoLimite })}
+            >
+              {STATI_LIMITE.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.label}
+                </option>
+              ))}
+            </select>
+          </Field>
+
+          <Field
             id="sisma_ag"
             tab="azioni"
-            label="ag/g del sito — vuoto = da mappatura"
+            label="ag/g del sito — vuoto = dal reticolo"
             unit="g"
             dettaglio={{
-              formula: r.sisma.notaAg,
+              formula: r.sisma.nota,
               ref:
-                r.sisma.fonteAg === 'zona'
+                r.sisma.fonte === 'zona'
                   ? 'OPCM 3519/2006, all. 1b — limite superiore di zona'
-                  : 'NTC2018 §3.2.3 — All. B, reticolo di riferimento',
+                  : 'NTC2018 §3.2.3 — All. B, interpolato per TR',
               coeffs: [
                 { k: 'ag/g in uso', v: fx(r.sisma.ag, 3) },
-                { k: 'fonte', v: FONTE_AG[r.sisma.fonteAg] },
+                { k: 'fonte', v: fonteDi(r.sisma.manuali.ag, r.sisma.fonte) },
               ],
             }}
           >
@@ -184,11 +211,11 @@ export default function Azioni() {
             label="Classe d'uso"
             unit="CU"
             dettaglio={{
-              formula: `TR = −VR / ln(1 − PVR) = −${fx(r.sisma.VR, 0)} / ln(1 − 0.10) = ${fx(r.sisma.TR, 0)} anni`,
+              formula: `VR = VN · CU = ${fx(r.sisma.VR, 0)} anni → TR (${inp.sl ?? 'SLV'}) = ${fx(r.sisma.TR, 0)} anni`,
               ref: 'NTC2018 §2.4.2 — Tab. 2.4.II',
               coeffs: [
-                { k: 'SL', v: 'SLV' },
-                { k: 'PVR', v: '10%' },
+                { k: 'CU', v: fx(r.sisma.cu, 1) },
+                { k: 'VR', v: `${fx(r.sisma.VR, 0)} anni` },
               ],
             }}
           >
@@ -198,11 +225,12 @@ export default function Azioni() {
           <Field
             id="sisma_f0"
             tab="azioni"
-            label="Fattore di amplificazione F0"
+            label="F0 — vuoto = dal reticolo"
             unit="—"
             dettaglio={{
-              formula: 'F0 dal reticolo di riferimento per il periodo di ritorno considerato',
-              ref: 'NTC2018 §3.2.3.2 — All. B',
+              formula: `F0 = ${fx(r.sisma.F0, 3)} per TR = ${fx(r.sisma.TR, 0)} anni`,
+              ref: 'NTC2018 §3.2.3.2 — All. B, interpolato per TR',
+              coeffs: [{ k: 'fonte', v: fonteDi(r.sisma.manuali.F0, r.sisma.fonte) }],
             }}
           >
             <NumInput id="sisma_f0" value={inp.F0} onChange={(v) => set({ F0: v })} />
@@ -211,7 +239,7 @@ export default function Azioni() {
           <Field
             id="sisma_tcstar"
             tab="azioni"
-            label="Periodo di riferimento TC*"
+            label="TC* — vuoto = dal reticolo"
             unit="s"
             dettaglio={{
               formula: `TC = CC · TC* = ${fx(r.sisma.Cc)} · ${fx(r.sisma.TCstar)} = ${fx(r.sisma.TC)} s; TB = TC/3 = ${fx(r.sisma.TB)} s; TD = 4.0·ag/g + 1.6 = ${fx(r.sisma.TD)} s`,
@@ -220,6 +248,7 @@ export default function Azioni() {
                 { k: 'TB', v: `${fx(r.sisma.TB)} s` },
                 { k: 'TC', v: `${fx(r.sisma.TC)} s` },
                 { k: 'TD', v: `${fx(r.sisma.TD)} s` },
+                { k: 'fonte TC*', v: fonteDi(r.sisma.manuali.TCstar, r.sisma.fonte) },
               ],
             }}
           >
@@ -245,18 +274,48 @@ export default function Azioni() {
           voci={[
             { k: 'Zona sismica', v: r.sisma.zonaLabel ?? '—' },
             { k: 'ag/g', v: fx(r.sisma.ag, 3) },
+            { k: 'F0', v: fx(r.sisma.F0, 3) },
+            { k: 'TC*', v: fx(r.sisma.TCstar, 3), u: 's' },
             { k: 'SS', v: fx(r.sisma.Ss) },
             { k: 'S = SS·ST', v: fx(r.sisma.S) },
             { k: 'TC', v: fx(r.sisma.TC), u: 's' },
             { k: 'Sd(T1)', v: fx(r.sisma.Sd, 3), u: 'g' },
             { k: 'VR', v: fx(r.sisma.VR, 0), u: 'anni' },
-            { k: 'TR (SLV)', v: fx(r.sisma.TR, 0), u: 'anni' },
+            { k: `TR (${inp.sl ?? 'SLV'})`, v: fx(r.sisma.TR, 0), u: 'anni' },
           ]}
         />
+
+        <div className="table-scroll" style={{ marginTop: 12 }}>
+          <table className="table">
+            <thead>
+              <tr>
+                <th>Stato limite</th>
+                <th className="num">PVR</th>
+                <th className="num">TR</th>
+                <th className="num">ag/g</th>
+                <th className="num">F0</th>
+                <th className="num">TC*</th>
+              </tr>
+            </thead>
+            <tbody>
+              {r.sisma.statiLimite.map((s) => (
+                <tr key={s.id} style={s.id === (inp.sl ?? 'SLV') ? { color: 'var(--color-accent-300)' } : undefined}>
+                  <td>{s.label}</td>
+                  <td className="num">
+                    {fx((STATI_LIMITE.find((x) => x.id === s.id)?.PVR ?? 0) * 100, 0)}%
+                  </td>
+                  <td className="num">{fx(s.TR, 0)}</td>
+                  <td className="num">{fx(s.ag, 3)}</td>
+                  <td className="num">{fx(s.F0, 3)}</td>
+                  <td className="num">{fx(s.TCstar, 3)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
         <p className="note" style={{ marginTop: 8 }}>
-          {r.sisma.notaAg}.{' '}
-          {r.sisma.fonteAg === 'zona' &&
-            'Per il calcolo definitivo inserire ag del sito dal reticolo di riferimento (All. B) nel campo ag/g.'}
+          {r.sisma.nota}.
         </p>
       </Accordion>
 

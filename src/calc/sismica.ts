@@ -1,58 +1,39 @@
 /**
- * Pericolosità sismica di base — NTC2018 §3.2.
+ * Pericolosità sismica di base — NTC2018 §3.2, Allegati A e B.
  *
- * Il sito è individuato scegliendo regione → provincia → comune: da lì
- * arrivano la classificazione sismica nazionale (zona 1÷4) e le coordinate.
+ * Il sito si individua scegliendo regione → provincia → comune. Per ogni
+ * comune sono precalcolati ag, F0 e TC* ai 9 periodi di ritorno del reticolo
+ * di riferimento (media pesata con 1/d sui 4 nodi più vicini, All. A); qui si
+ * interpola fra quei periodi per il TR dello stato limite richiesto e si
+ * ricavano SS, CC e i periodi dello spettro con le formule di Tab. 3.2.IV.
  *
- * L'accelerazione ag è determinata, in ordine di preferenza:
- *  1. dal valore inserito a mano (parametro di reticolo dell'Allegato B,
- *     quando il progettista ce l'ha per il sito specifico);
- *  2. dal valore tabellato per le località di riferimento;
- *  3. dal limite superiore della zona sismica del comune — valore cautelativo
- *     di predimensionamento (OPCM 3519/2006, all. 1b).
- *
- * SS e CC seguono le formule di Tab. 3.2.IV, che dipendono da ag, F0 e TC*:
- * non sono più coefficienti fissi per categoria di sottosuolo.
+ * Ogni parametro può essere forzato a mano: il valore inserito vince sempre
+ * su quello del reticolo, e la scheda dichiara quale dei due sta usando.
  */
 
 import { trovaComune, type Comune, type ZonaSismica } from '../data/comuni';
+import { TR_RETICOLO, parametriSito } from '../data/parametri-sismici';
 
-/**
- * ag/g su suolo rigido per TR = 475 anni, dal reticolo dell'Allegato B,
- * per alcune località di riferimento. Chiave: "SIGLA:Comune".
- */
-export const AG_TABELLATE: Record<string, number> = {
-  "AQ:L'Aquila": 0.261,
-  'RM:Roma': 0.128,
-  'MI:Milano': 0.05,
-  'NA:Napoli': 0.168,
-  'FI:Firenze': 0.131,
-  'TO:Torino': 0.055,
-  'BO:Bologna': 0.157,
-  'PA:Palermo': 0.163,
-  'VE:Venezia': 0.065,
-  'BA:Bari': 0.049,
-};
+/** Stati limite e relative probabilità di superamento in VR — Tab. 3.2.I. */
+export const STATI_LIMITE = [
+  { id: 'SLO', label: 'SLO — operatività', PVR: 0.81 },
+  { id: 'SLD', label: 'SLD — danno', PVR: 0.63 },
+  { id: 'SLV', label: 'SLV — salvaguardia della vita', PVR: 0.1 },
+  { id: 'SLC', label: 'SLC — prevenzione del collasso', PVR: 0.05 },
+] as const;
+
+export type StatoLimite = (typeof STATI_LIMITE)[number]['id'];
+
+export const PVR: Record<StatoLimite, number> = Object.fromEntries(
+  STATI_LIMITE.map((s) => [s.id, s.PVR]),
+) as Record<StatoLimite, number>;
 
 /**
  * Limite superiore di ag/g per zona sismica (TR = 475 anni).
- * OPCM 3519/2006, all. 1b: zona 1 ag > 0.25g, zona 2 0.15÷0.25g,
- * zona 3 0.05÷0.15g, zona 4 ≤ 0.05g. Per la zona 1 si assume 0.35g,
- * estremo superiore della scala di classificazione.
+ * OPCM 3519/2006, all. 1b. Serve solo come rete di sicurezza quando il comune
+ * non è in elenco: con il reticolo caricato non entra mai in gioco.
  */
 export const AG_ZONA: Record<ZonaSismica, number> = { 1: 0.35, 2: 0.25, 3: 0.15, 4: 0.05 };
-
-export type FonteAg = 'manuale' | 'tabella' | 'zona';
-
-export interface SitoSismico {
-  comune?: Comune;
-  /** Accelerazione orizzontale massima su suolo rigido, in g (TR = 475 anni). */
-  ag: number;
-  fonte: FonteAg;
-  /** Spiegazione della provenienza del valore, mostrata in scheda e relazione. */
-  nota: string;
-  zona?: ZonaSismica;
-}
 
 /** Categorie di sottosuolo — Tab. 3.2.II e Tab. 3.2.IV. */
 export const SUOLI: Record<string, { descr: string }> = {
@@ -64,6 +45,27 @@ export const SUOLI: Record<string, { descr: string }> = {
 };
 
 const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v));
+
+/** Periodo di ritorno dell'azione: TR = −VR / ln(1 − PVR) — §3.2.1. */
+export function periodoRitorno(VR: number, pvr: number): number {
+  return -VR / Math.log(1 - pvr);
+}
+
+/**
+ * Valore del parametro per un TR qualsiasi, interpolato fra i periodi
+ * tabellati con legge log-log (NTC2018, All. A). Fuori dall'intervallo
+ * 30÷2475 anni si resta sul valore estremo, come prescrive la norma.
+ */
+export function interpolaTR(valori: readonly number[], TR: number): number {
+  const T = clamp(TR, TR_RETICOLO[0], TR_RETICOLO[TR_RETICOLO.length - 1]);
+  let i = TR_RETICOLO.findIndex((t) => t >= T);
+  if (i <= 0) return valori[0];
+  const [t1, t2] = [TR_RETICOLO[i - 1], TR_RETICOLO[i]];
+  const [p1, p2] = [valori[i - 1], valori[i]];
+  if (p1 <= 0 || p2 <= 0) return p1;
+  const logp = Math.log(p1) + (Math.log(p2 / p1) * Math.log(T / t1)) / Math.log(t2 / t1);
+  return Math.exp(logp);
+}
 
 /**
  * Coefficiente di amplificazione stratigrafica SS — Tab. 3.2.IV.
@@ -106,58 +108,90 @@ export function coefficienteCC(suolo: string, TCstar: number): number {
   }
 }
 
-const fx3 = (v: number) => v.toFixed(3);
+export type FonteSito = 'reticolo' | 'zona';
 
-/**
- * Risolve il sito sismico a partire dalla scelta regione/provincia/comune.
- * `agManuale` (in g) ha sempre la precedenza quando è un numero valido.
- */
+export interface Override {
+  /** ag/g imposto a mano; undefined = dal reticolo. */
+  ag?: number;
+  F0?: number;
+  TCstar?: number;
+}
+
+export interface SitoSismico {
+  comune?: Comune;
+  zona?: ZonaSismica;
+  zonaLabel?: string;
+  /** Periodo di ritorno usato per leggere il reticolo, in anni. */
+  TR: number;
+  ag: number;
+  F0: number;
+  TCstar: number;
+  /** Da dove arrivano i parametri non forzati a mano. */
+  fonte: FonteSito;
+  /** Quali dei tre parametri sono stati imposti a mano. */
+  manuali: { ag: boolean; F0: boolean; TCstar: boolean };
+  /** Riga di spiegazione per scheda e relazione. */
+  nota: string;
+}
+
+const num3 = (v: number) => v.toFixed(3);
+
+/** Parametri del sito per un dato periodo di ritorno. */
 export function risolviSito(
   regione: string,
   sigla: string,
   nomeComune: string,
-  agManuale?: number,
+  TR: number,
+  override: Override = {},
 ): SitoSismico {
   const comune = trovaComune(regione, sigla, nomeComune);
+  const tabella = comune ? parametriSito(comune.indice) : undefined;
 
-  if (agManuale !== undefined && Number.isFinite(agManuale) && agManuale > 0) {
-    return {
-      comune,
-      ag: agManuale,
-      fonte: 'manuale',
-      nota: `ag = ${fx3(agManuale)} g inserito a mano (reticolo di riferimento, All. B)`,
-      zona: comune?.zona,
-    };
-  }
+  const manuali = {
+    ag: Number.isFinite(override.ag) && (override.ag as number) > 0,
+    F0: Number.isFinite(override.F0) && (override.F0 as number) > 0,
+    TCstar: Number.isFinite(override.TCstar) && (override.TCstar as number) > 0,
+  };
 
-  if (!comune) {
-    return {
-      ag: AG_ZONA[3],
-      fonte: 'zona',
-      nota: 'Comune non selezionato: assunto il limite della zona sismica 3',
-      zona: 3,
-    };
-  }
+  const base = tabella
+    ? {
+        ag: interpolaTR(tabella.ag, TR),
+        F0: interpolaTR(tabella.F0, TR),
+        TCstar: interpolaTR(tabella.TCstar, TR),
+        fonte: 'reticolo' as FonteSito,
+      }
+    : {
+        // comune sconosciuto: si ripiega sul limite della zona sismica
+        ag: AG_ZONA[comune?.zona ?? 3],
+        F0: 2.5,
+        TCstar: 0.3,
+        fonte: 'zona' as FonteSito,
+      };
 
-  const tabellato = AG_TABELLATE[`${comune.sigla}:${comune.nome}`];
-  if (tabellato !== undefined) {
-    return {
-      comune,
-      ag: tabellato,
-      fonte: 'tabella',
-      nota: `ag = ${fx3(tabellato)} g da reticolo di riferimento per ${comune.nome} (TR = 475 anni)`,
-      zona: comune.zona,
-    };
-  }
+  const ag = manuali.ag ? (override.ag as number) : base.ag;
+  const F0 = manuali.F0 ? (override.F0 as number) : base.F0;
+  const TCstar = manuali.TCstar ? (override.TCstar as number) : base.TCstar;
 
-  const ag = AG_ZONA[comune.zona];
+  const dove = comune ? `${comune.nome} (${comune.sigla})` : 'sito non individuato';
+  const forzati = (['ag', 'F0', 'TCstar'] as const).filter((k) => manuali[k]);
+  const nota =
+    base.fonte === 'reticolo'
+      ? `ag = ${num3(ag)} g, F0 = ${F0.toFixed(3)}, TC* = ${num3(TCstar)} s per ${dove} ` +
+        `— reticolo di riferimento, TR = ${TR.toFixed(0)} anni` +
+        (forzati.length ? `; imposti a mano: ${forzati.join(', ')}` : '')
+      : `Reticolo non disponibile per ${dove}: assunto ag = ${num3(ag)} g, ` +
+        `limite superiore della zona sismica ${comune?.zonaLabel ?? '3'}`;
+
   return {
     comune,
+    zona: comune?.zona,
+    zonaLabel: comune?.zonaLabel,
+    TR,
     ag,
-    fonte: 'zona',
-    nota:
-      `ag = ${fx3(ag)} g, limite superiore della zona sismica ${comune.zonaLabel} ` +
-      `assegnata a ${comune.nome} (${comune.sigla}): valore cautelativo di predimensionamento`,
-    zona: comune.zona,
+    F0,
+    TCstar,
+    fonte: base.fonte,
+    manuali,
+    nota,
   };
 }

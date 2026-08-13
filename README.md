@@ -101,16 +101,27 @@ diventa anche la località riportata in testata e nella relazione, e porta con s
 
 - la **zona sismica** della classificazione nazionale del Dipartimento della Protezione
   Civile (aggiornamento 2024, OPCM 3519/2006), sottozone comprese (`2A`, `3S`, …);
-- le **coordinate** del municipio (WGS84);
-- il valore di **ag** usato nel calcolo, con la fonte sempre dichiarata in scheda:
+- **ag, F0 e TC\*** dal **reticolo di riferimento dell'Allegato B** (10751 nodi): per ogni
+  comune i parametri sono la media pesata con 1/d sui 4 nodi più vicini (All. A), tabellati
+  ai 9 periodi di ritorno 30 ÷ 2475 anni.
 
-  | Fonte | Quando | Valore |
-  |---|---|---|
-  | valore inserito a mano | il campo `ag/g` non è vuoto | quello scritto |
-  | reticolo di riferimento | comune fra le località tabellate | ag dell'All. B, TR 475 anni |
-  | zona sismica | tutti gli altri comuni | limite superiore della zona (cautelativo) |
+Il periodo di ritorno dell'azione viene da VR = VN · CU e dallo **stato limite** scelto
+(SLO, SLD, SLV, SLC — Tab. 3.2.I): `TR = −VR / ln(1 − PVR)`. Fra i periodi tabellati si
+interpola in log-log, come prescrive l'Allegato A, e la scheda mostra il quadro dei quattro
+stati limite con TR, ag, F0 e TC\*. Per L'Aquila, VN 50 e classe II:
 
-SS e CC **non** sono più coefficienti fissi per categoria di sottosuolo: si calcolano con le
+| SL | PVR | TR | ag/g | F0 | TC\* |
+|---|---|---|---|---|---|
+| SLO | 81% | 30 | 0.079 | 2.393 | 0.273 |
+| SLD | 63% | 50 | 0.104 | 2.333 | 0.282 |
+| SLV | 10% | 475 | 0.261 | 2.365 | 0.348 |
+| SLC | 5% | 975 | 0.334 | 2.401 | 0.365 |
+
+I tre campi `ag/g`, `F0` e `TC*` restano scrivibili: **lasciati vuoti** prendono il valore
+del reticolo, **compilati** vincono sul reticolo (utile per una risposta sismica locale).
+La scheda dichiara sempre da dove arriva ogni valore.
+
+SS e CC **non** sono coefficienti fissi per categoria di sottosuolo: si calcolano con le
 formule di Tab. 3.2.IV, che dipendono da ag, F0 e TC*. Da lì escono S = SS·ST e i periodi
 TB, TC, TD dello spettro.
 
@@ -174,18 +185,21 @@ e torta di incidenza per macrocategoria.
 ## Struttura del codice
 
 ```
+dati/
+  spettri2008.csv    reticolo di riferimento NTC, All. B (10751 nodi)
 scripts/
-  genera-comuni.mjs  rigenera src/data/comuni.ts dalle sorgenti pubbliche
+  genera-comuni.mjs  rigenera i due file di dati dei comuni
 src/
   calc/            motore di calcolo — funzioni pure, testabili, senza React
     trave.ts       solutore di trave a campata unica (FEM Eulero–Bernoulli)
     azioni.ts      azioni NTC2018 cap. 3
-    sismica.ts     pericolosità sismica di base: ag del sito, SS, CC (§3.2)
+    sismica.ts     pericolosità sismica di base: TR, ag/F0/TC*, SS, CC (§3.2)
     sollecitazioni.ts  combinazioni di carico e collegamento con il solutore
     verifiche.ts   verifiche a taglio (dai fogli Excel)
     relazione.ts   generazione del testo per la relazione
   data/            tabelle normative e di materiali (ntc2018.ts, materiali.ts)
     comuni.ts      FILE GENERATO: comuni, zona sismica, coordinate
+    parametri-sismici.ts  FILE GENERATO: ag/F0/TC* per comune e per TR
   components/      pattern di UI riusabili e diagrammi SVG
   tabs/            una scheda per file
   state/           stato dell'app (useReducer + context, persistenza locale)
@@ -197,20 +211,30 @@ così le formule restano verificabili con i test.
 
 ### I dati dei comuni
 
-`src/data/comuni.ts` è generato e committato: l'app non fa nessuna chiamata di rete. Per
-aggiornarlo dopo una revisione della classificazione o dell'elenco ISTAT:
+`src/data/comuni.ts` e `src/data/parametri-sismici.ts` sono generati e committati: l'app
+non fa nessuna chiamata di rete. Vanno rigenerati **insieme** — il secondo è indicizzato
+sulla posizione del comune nel primo — dopo una revisione della classificazione,
+dell'elenco ISTAT o del reticolo:
 
 ```bash
 node scripts/genera-comuni.mjs
 ```
 
-Lo script scarica la **classificazione sismica DPC** (mirror
-[ferdi2005/zonasismica](https://github.com/ferdi2005/zonasismica)) e le **coordinate dei
-comuni** ([opendatasicilia/comuni-italiani](https://github.com/opendatasicilia/comuni-italiani),
-su base ISTAT), le incrocia sul codice ISTAT e riscrive il file. Le poche coordinate
-malformate nella sorgente (separatore decimale perso) vengono risanate e conteggiate a
-video; se un comune restasse senza coordinate lo script si ferma con errore invece di
-scrivere dati incompleti.
+Lo script:
+
+1. scarica la **classificazione sismica DPC** (mirror
+   [ferdi2005/zonasismica](https://github.com/ferdi2005/zonasismica)) e le **coordinate dei
+   comuni** ([opendatasicilia/comuni-italiani](https://github.com/opendatasicilia/comuni-italiani),
+   su base ISTAT) e le incrocia sul codice ISTAT. Le poche coordinate malformate nella
+   sorgente (separatore decimale perso) vengono risanate e conteggiate a video; se un
+   comune restasse senza coordinate lo script si ferma con errore invece di scrivere dati
+   incompleti;
+2. legge `dati/spettri2008.csv` (reticolo dell'Allegato B, ag in g/10) e interpola sul
+   municipio di ogni comune i parametri ai 9 periodi di ritorno.
+
+I due file sono impacchettati in stringhe compatte (base 36, per differenze successive) e
+Vite li tiene in un chunk separato `dati-comuni`: circa 300 kB gzip che il browser rimette
+in cache solo quando cambiano i dati, non a ogni deploy dell'app.
 
 
 ### Il solutore di trave
@@ -231,11 +255,14 @@ npm test
 
 ## Note sulle formule
 
-- Il **reticolo sismico** dell'Allegato B (10751 nodi) non è caricato: `ag` è esatto solo
-  per le località di riferimento tabellate, per gli altri comuni si usa il limite superiore
-  della zona sismica — cautelativo, ma grossolano (per Roma, zona 2, dà 0.25 g contro i
-  0.128 g del reticolo). Per un calcolo definitivo va scritto nel campo `ag/g` il valore
-  del sito; caricando il file dell'Allegato B si potrà interpolare sui 4 nodi più vicini.
+- I parametri sismici sono riferiti al **municipio** del comune, non al punto esatto del
+  cantiere: per un comune esteso la differenza esiste, e si copre inserendo a mano ag, F0 e
+  TC\* del sito. I parametri sono arrotondati alla terza cifra decimale, la stessa con cui
+  sono pubblicati. Le coordinate dei comuni sono WGS84 e quelle del reticolo ED50: lo
+  scarto fra i due datum è di un centinaio di metri, trascurabile rispetto al passo della
+  maglia (circa 5 km).
+- Il **limite superiore della zona sismica** resta solo come rete di sicurezza per un
+  comune che non fosse in elenco; con il reticolo caricato non entra mai in gioco.
 - Nel foglio `01 - Verifica a taglio elementi non armati.xlsx` il limite su σcp è scritto
   come `≤ 0.02·fcd` nella cella di controllo, mentre le NTC (§4.1.2.3.5.1) prescrivono
   `σcp ≤ 0.2·fcd`. **L'app applica il limite di normativa, 0.2·fcd.**
@@ -249,7 +276,5 @@ npm test
    come step a sé.
 2. Verifiche a flessione e pressoflessione per il calcestruzzo.
 3. Legno e muratura.
-4. Reticolo sismico completo (All. B, 10751 nodi) da file dati, con interpolazione sui 4
-   nodi più vicini alle coordinate del comune: la scheda è già pronta a riceverlo, oggi ag
-   arriva dalla zona sismica o dal valore inserito a mano.
+4. Spettro di risposta disegnato (Se(T) e Sd(T)) a partire dai parametri già calcolati.
 5. Salvataggio su OneDrive con Microsoft Graph.

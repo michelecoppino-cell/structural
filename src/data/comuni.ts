@@ -29,6 +29,8 @@ export interface Comune {
   zonaLabel: string;
   lat: number;
   lon: number;
+  /** Posizione in COMUNI: è la chiave dei parametri sismici del sito. */
+  indice: number;
 }
 
 const DATI = `
@@ -8089,6 +8091,7 @@ function leggi(): Comune[] {
         zonaLabel,
         lat: +lat,
         lon: +lon,
+        indice: out.length,
       });
     }
   }

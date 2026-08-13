@@ -1,8 +1,14 @@
 /**
- * Rigenera `src/data/comuni.ts` — elenco dei comuni italiani con regione,
- * provincia, classificazione sismica e coordinate.
+ * Rigenera i due file di dati dei comuni:
  *
- * Sorgenti (entrambe pubbliche, scaricate al volo):
+ *  - `src/data/comuni.ts`           regione, provincia, zona sismica, coordinate;
+ *  - `src/data/parametri-sismici.ts` ag, F0 e TC* del sito per i 9 periodi di
+ *    ritorno del reticolo, già interpolati sul comune.
+ *
+ * I due file vanno rigenerati insieme: il secondo è indicizzato sulla posizione
+ * del comune nel primo.
+ *
+ * Sorgenti:
  *
  *  1. Classificazione sismica dei comuni italiani (zona 1÷4), aggiornamento
  *     2024 del Dipartimento della Protezione Civile — OPCM 3519/2006.
@@ -10,15 +16,17 @@
  *  2. Coordinate del municipio di ogni comune (WGS84, EPSG:4326), da
  *     github.com/opendatasicilia/comuni-italiani (dati/coordinate.csv),
  *     costruite sui dati ISTAT.
+ *  3. `dati/spettri2008.csv` — reticolo di riferimento dell'Allegato B alle
+ *     NTC (10751 nodi, ag/F0/TC* per TR 30÷2475 anni), in repository.
  *
  * Uso:
  *   node scripts/genera-comuni.mjs
  *
- * Il file generato è committato in repository: lo script serve solo quando
- * esce un aggiornamento della classificazione o dell'elenco ISTAT.
+ * I file generati sono committati: lo script serve solo quando esce un
+ * aggiornamento della classificazione, dell'elenco ISTAT o del reticolo.
  */
 
-import { writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
@@ -154,6 +162,8 @@ export interface Comune {
   zonaLabel: string;
   lat: number;
   lon: number;
+  /** Posizione in COMUNI: è la chiave dei parametri sismici del sito. */
+  indice: number;
 }
 
 const DATI = \`
@@ -189,6 +199,7 @@ function leggi(): Comune[] {
         zonaLabel,
         lat: +lat,
         lon: +lon,
+        indice: out.length,
       });
     }
   }
@@ -226,4 +237,157 @@ writeFileSync(destinazione, intestazione, 'utf8');
 console.log(
   `${destinazione}: ${comuni.length} comuni, ${province.size} province, ${regioni.size} regioni ` +
     `(${(Buffer.byteLength(intestazione) / 1024).toFixed(0)} kB, ${risanate} coordinate risanate)`,
+);
+
+/* ── parametri sismici del sito, dal reticolo dell'Allegato B ───────────── */
+
+const TR = [30, 50, 72, 101, 140, 201, 475, 975, 2475];
+
+// il file ha due righe di intestazione: OBJECTID, ID, LON, LAT e poi
+// ag, F0, Tc per ciascuno dei 9 periodi di ritorno. ag è in g/10.
+const reticolo = righe(readFileSync(join(qui, '..', 'dati', 'spettri2008.csv'), 'utf8'), ',')
+  .slice(2)
+  .filter((r) => r.length >= 31 && r[0].trim())
+  .map((r) => r.map((v) => Number(v.replace(/"/g, ''))));
+
+if (reticolo.length !== 10751) throw new Error(`reticolo: attesi 10751 nodi, trovati ${reticolo.length}`);
+
+const nodoLon = Float64Array.from(reticolo, (r) => r[2]);
+const nodoLat = Float64Array.from(reticolo, (r) => r[3]);
+const nodoVal = reticolo.map((r) => r.slice(4, 31));
+
+const GRADI_KM = 111.19;
+
+/**
+ * Parametri nel sito: media pesata con 1/d sui 4 nodi più vicini del reticolo
+ * (NTC2018, All. A). Le coordinate dei comuni sono WGS84 e quelle del reticolo
+ * ED50: lo scarto fra i due datum è di un centinaio di metri, trascurabile
+ * rispetto al passo della maglia (circa 5 km).
+ */
+function interpolaSito(lat, lon) {
+  const cos = Math.cos((lat * Math.PI) / 180);
+  // ricerca dei 4 nodi più vicini, senza ordinare tutto il reticolo
+  const migliori = [];
+  for (let i = 0; i < nodoLat.length; i++) {
+    const dx = (nodoLon[i] - lon) * cos;
+    const dy = nodoLat[i] - lat;
+    const d2 = dx * dx + dy * dy;
+    if (migliori.length < 4) {
+      migliori.push([d2, i]);
+      migliori.sort((a, b) => a[0] - b[0]);
+    } else if (d2 < migliori[3][0]) {
+      migliori[3] = [d2, i];
+      migliori.sort((a, b) => a[0] - b[0]);
+    }
+  }
+
+  const out = new Array(27).fill(0);
+  let pesi = 0;
+  for (const [d2, i] of migliori) {
+    const peso = 1 / Math.max(Math.sqrt(d2) * GRADI_KM, 1e-9);
+    pesi += peso;
+    for (let j = 0; j < 27; j++) out[j] += nodoVal[i][j] * peso;
+  }
+  return out.map((v) => v / pesi);
+}
+
+const B36 = '0123456789abcdefghijklmnopqrstuvwxyz';
+const b36 = (n) => {
+  let v = Math.abs(n) === n ? n : n; // già intero
+  if (v === 0) return '0';
+  let s = '';
+  while (v > 0) {
+    s = B36[v % 36] + s;
+    v = Math.floor(v / 36);
+  }
+  return s;
+};
+/** interi con segno → naturali, per non sprecare un carattere sul meno */
+const zigzag = (n) => (n >= 0 ? 2 * n : -2 * n - 1);
+
+// una riga per comune: 9 ag, 9 F0, 9 TC*, ciascun gruppo per differenze
+// successive (i valori crescono con TR, così restano numeri piccoli).
+// Quantizzazione alla terza cifra decimale, la stessa con cui i parametri
+// sono pubblicati: ag in millesimi di g, F0 in millesimi, TC* in millesimi di s.
+const righeSismiche = comuni.map((c) => {
+  const p = interpolaSito(c.lat, c.lon);
+  const pezzi = [];
+  for (let base = 0; base < 3; base++) {
+    let prec = 0;
+    for (let t = 0; t < 9; t++) {
+      const grezzo = p[3 * t + base];
+      const q = Math.round(base === 0 ? grezzo * 100 : grezzo * 1000);
+      pezzi.push(b36(zigzag(q - prec)));
+      prec = q;
+    }
+  }
+  return pezzi.join(',');
+});
+
+const sorgenteSismica = `/**
+ * Parametri sismici di sito dei comuni italiani — NTC2018 §3.2, All. A e B.
+ *
+ * FILE GENERATO — non modificare a mano: \`node scripts/genera-comuni.mjs\`.
+ *
+ * Per ogni comune di \`COMUNI\` (stesso ordine, chiave = \`Comune.indice\`) sono
+ * riportati ag, F0 e TC* per i ${TR.length} periodi di ritorno del reticolo di
+ * riferimento, ottenuti dalla media pesata con 1/d sui 4 nodi più vicini
+ * (${reticolo.length} nodi dell'Allegato B, file \`dati/spettri2008.csv\`).
+ *
+ * Impacchettamento: una riga per comune, 9 valori di ag + 9 di F0 + 9 di TC*,
+ * ogni gruppo per differenze successive, in base 36 con segno a zigzag.
+ * Quantizzazione: ag in millesimi di g, F0 in millesimi, TC* in millesimi di
+ * secondo — la stessa precisione con cui i parametri sono pubblicati.
+ */
+
+/** Periodi di ritorno tabellati nel reticolo, in anni. */
+export const TR_RETICOLO = [${TR.join(', ')}] as const;
+
+export interface ParametriSito {
+  /** ag/g per ciascun TR di TR_RETICOLO. */
+  ag: number[];
+  /** F0 per ciascun TR di TR_RETICOLO. */
+  F0: number[];
+  /** TC* in secondi per ciascun TR di TR_RETICOLO. */
+  TCstar: number[];
+}
+
+const DATI = \`
+${righeSismiche.join('\n')}\`;
+
+let righe: string[] | null = null;
+
+function decodifica(riga: string): ParametriSito {
+  const t = riga.split(',');
+  const gruppo = (base: number, scala: number) => {
+    const out: number[] = [];
+    let v = 0;
+    for (let i = 0; i < 9; i++) {
+      const z = parseInt(t[base * 9 + i], 36);
+      v += z % 2 === 0 ? z / 2 : -(z + 1) / 2;
+      out.push(v / scala);
+    }
+    return out;
+  };
+  return { ag: gruppo(0, 1000), F0: gruppo(1, 1000), TCstar: gruppo(2, 1000) };
+}
+
+/**
+ * Parametri del comune di indice dato; \`undefined\` se l'indice non esiste.
+ * La stringa è divisa in righe alla prima chiamata, poi si decodifica solo la
+ * riga che serve.
+ */
+export function parametriSito(indice: number): ParametriSito | undefined {
+  righe ??= DATI.split('\\n').filter(Boolean);
+  const riga = righe[indice];
+  return riga ? decodifica(riga) : undefined;
+}
+`;
+
+const destSismica = join(qui, '..', 'src', 'data', 'parametri-sismici.ts');
+writeFileSync(destSismica, sorgenteSismica, 'utf8');
+
+console.log(
+  `${destSismica}: ${righeSismiche.length} comuni × ${TR.length} periodi di ritorno ` +
+    `(${(Buffer.byteLength(sorgenteSismica) / 1024).toFixed(0)} kB)`,
 );
