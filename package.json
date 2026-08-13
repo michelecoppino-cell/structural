@@ -1,0 +1,37 @@
+{
+  "name": "structural",
+  "version": "0.1.0",
+  "description": "Web app per il predimensionamento strutturale secondo NTC2018",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b --noEmit && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc -b --noEmit"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/michelecoppino-cell/structural.git"
+  },
+  "bugs": {
+    "url": "https://github.com/michelecoppino-cell/structural/issues"
+  },
+  "homepage": "https://github.com/michelecoppino-cell/structural#readme",
+  "dependencies": {
+    "@phosphor-icons/react": "^2.1.10",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
+  },
+  "devDependencies": {
+    "@types/node": "^26.2.0",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
+    "@vitejs/plugin-react": "^6.0.5",
+    "typescript": "^7.0.2",
+    "vite": "^8.2.1",
+    "vitest": "^4.1.10"
+  },
+  "private": true,
+  "type": "module"
+}
