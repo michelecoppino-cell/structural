@@ -81,7 +81,7 @@ export const AZIONI_DEFAULT: InputAzioni = {
   cu: 'II (ordinaria) — 1.0',
   F0: '',
   TCstar: '',
-  q: '3.0',
+  q: '1.33',
   zneve: 'I — Alpina',
   as: '177',
   mu: '0.80',
@@ -116,6 +116,9 @@ export interface RisultatiAzioni {
     F0: number;
     q: number;
     Sd: number;
+    /** Accelerazione di plateau dello spettro elastico Se = ag·S·F0 (g e m/s²). */
+    SePlateau: number;
+    SePlateauMS2: number;
     VR: number;
     TR: number;
     /** Provenienza dei parametri e classificazione del comune. */
@@ -161,7 +164,8 @@ export function calcolaAzioni(inp: InputAzioni): RisultatiAzioni {
   const St = ST[inp.topo] ?? 1;
   const S = Ss * St;
   const q = num(inp.q) || 1;
-  const Sd = (ag * S * F0) / q;
+  const SePlateau = ag * S * F0;
+  const Sd = SePlateau / q;
   const Cc = coefficienteCC(inp.suolo, TCstar);
   const TC = Cc * TCstar;
   const TB = TC / 3;
@@ -222,6 +226,8 @@ export function calcolaAzioni(inp: InputAzioni): RisultatiAzioni {
       F0,
       q,
       Sd,
+      SePlateau,
+      SePlateauMS2: SePlateau * 9.81,
       VR,
       TR,
       fonte: sito.fonte,

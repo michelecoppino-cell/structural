@@ -284,9 +284,12 @@ export default function Azioni() {
                 unit="—"
                 errore={err.q}
                 dettaglio={{
-                  formula: `Sd(T1) = ag · S · F0 / q = ${fx(r.sisma.ag, 3)} · ${fx(r.sisma.S)} · ${fx(r.sisma.F0)} / ${fx(r.sisma.q)} = ${fx(r.sisma.Sd, 3)} g`,
+                  formula: `Se plateau = ag · S · F0 = ${fx(r.sisma.ag, 3)} · ${fx(r.sisma.S)} · ${fx(r.sisma.F0)} = ${fx(r.sisma.SePlateau, 3)} g;  Sd(T1) = Se plateau / q = ${fx(r.sisma.SePlateau, 3)} / ${fx(r.sisma.q)} = ${fx(r.sisma.Sd, 3)} g`,
                   ref: 'NTC2018 §7.3.1 — §3.2.3.5',
-                  coeffs: [{ k: 'Sd(T1)', v: `${fx(r.sisma.Sd, 3)} g` }],
+                  coeffs: [
+                    { k: 'Se plateau', v: `${fx(r.sisma.SePlateau, 3)} g` },
+                    { k: 'Sd(T1)', v: `${fx(r.sisma.Sd, 3)} g` },
+                  ],
                 }}
               >
                 <NumInput id="sisma_q" value={inp.q} errore={!!err.q} onChange={(v) => set({ q: v })} />
@@ -304,6 +307,26 @@ export default function Azioni() {
                 q={r.sisma.q}
               />
 
+              <div className="output" style={{ marginBottom: 4 }}>
+                <div className="kicker">Accelerazione di plateau — Se = ag · S · F0</div>
+                <div className="output-grid">
+                  <div className="output-item">
+                    <span className="k">Se plateau</span>
+                    <span className="v">
+                      {fx(r.sisma.SePlateau, 3)}
+                      <span className="u">g</span>
+                    </span>
+                  </div>
+                  <div className="output-item">
+                    <span className="k">Se plateau</span>
+                    <span className="v">
+                      {fx(r.sisma.SePlateauMS2, 2)}
+                      <span className="u">m/s²</span>
+                    </span>
+                  </div>
+                </div>
+              </div>
+
               <Output
                 voci={[
                   { k: 'Zona sismica', v: r.sisma.zonaLabel ?? '—' },
@@ -313,7 +336,8 @@ export default function Azioni() {
                   { k: 'SS', v: fx(r.sisma.Ss) },
                   { k: 'S = SS·ST', v: fx(r.sisma.S) },
                   { k: 'TC', v: fx(r.sisma.TC), u: 's' },
-                  { k: 'Sd(T1)', v: fx(r.sisma.Sd, 3), u: 'g' },
+                  { k: 'Se plateau', v: fx(r.sisma.SePlateau, 3), u: 'g' },
+                  { k: 'Sd(T1) = Se/q', v: fx(r.sisma.Sd, 3), u: 'g' },
                   { k: 'VR', v: fx(r.sisma.VR, 0), u: 'anni' },
                   { k: `TR (${inp.sl ?? 'SLV'})`, v: fx(r.sisma.TR, 0), u: 'anni' },
                 ]}
@@ -576,6 +600,11 @@ export default function Azioni() {
                   { k: 'Qk', v: `${fx(r.variabili.Qk)} kN` },
                   { k: 'Hk', v: `${fx(r.variabili.Hk)} kN/m` },
                 ],
+                tabella: {
+                  intestazioni: ['Categoria', 'qk kN/m²', 'Qk kN', 'Hk kN/m', 'ψ0', 'ψ1', 'ψ2'],
+                  righe: Object.entries(CAT).map(([nome, v]) => [nome, ...v]),
+                  evidenzia: Object.keys(CAT).indexOf(inp.cat),
+                },
               }}
             >
               <Select id="vari_cat" value={inp.cat} options={Object.keys(CAT)} onChange={(v) => set({ cat: v })} />

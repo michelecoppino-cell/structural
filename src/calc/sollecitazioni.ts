@@ -6,14 +6,18 @@
  * carico di linea sullo schema statico selezionato e risolve la trave.
  */
 
+import { CLS, ecmCLS } from '../data/materiali';
 import { GAMMA, PSI_AMBIENTALI } from '../data/ntc2018';
+import { proprietaProfilo, type TipoProfilo } from '../data/profili-acciaio';
 import type { RisultatiAzioni } from './azioni';
 import { num } from './azioni';
 import { risolviTrave, type RisultatoTrave, type SchemaId } from './trave';
 
-export type SorgenteId = 'PP' | 'G2' | 'Qk' | 'neve' | 'vento';
+export type SorgenteId = 'PP' | 'G2' | 'Qk' | 'neve' | 'vento' | 'terre';
 export type Orientamento = 'orizzontale' | 'verticale';
 export type Combinazione = 'SLU' | 'SLE-rara' | 'SLE-frequente' | 'SLE-qp';
+/** Provenienza del modulo elastico e del momento d'inerzia della sezione. */
+export type SezioneMateriale = 'manuale' | 'cls' | 'acciaio';
 
 export const COMBINAZIONI: { id: Combinazione; label: string; ref: string }[] = [
   { id: 'SLU', label: 'SLU (fondamentale)', ref: 'NTC2018 §2.5.3 — eq. 2.5.1' },
@@ -41,9 +45,18 @@ export interface InputSollecitazioni {
   /** Carico concentrato aggiuntivo (kN) e sua ascissa (m). */
   P: string;
   aP: string;
-  /** Modulo elastico (MPa) e momento d'inerzia (cm⁴) per la deformata. */
+  /** Modulo elastico (MPa) e momento d'inerzia (cm⁴) per la deformata — usati quando sezioneMateriale = 'manuale'. */
   E: string;
   J: string;
+  /** Provenienza di E e J: manuale, sezione rettangolare in c.a. o profilo in acciaio. */
+  sezioneMateriale: SezioneMateriale;
+  /** Sezione in c.a.: base × altezza (mm) e classe di calcestruzzo. */
+  sezioneB: string;
+  sezioneH: string;
+  sezioneCls: string;
+  /** Sezione in acciaio: tipo di profilo e taglia. */
+  sezioneTipoProfilo: TipoProfilo;
+  sezioneProfilo: string;
 }
 
 export const SOLLECITAZIONI_DEFAULT: InputSollecitazioni = {
@@ -51,7 +64,7 @@ export const SOLLECITAZIONI_DEFAULT: InputSollecitazioni = {
   orientamento: 'orizzontale',
   combinazione: 'SLU',
   // di default agisce il solo Qk variabile da tabella NTC
-  attive: { PP: false, G2: false, Qk: true, neve: false, vento: false },
+  attive: { PP: false, G2: false, Qk: true, neve: false, vento: false, terre: false },
   L: '5.00',
   interasse: '1.00',
   areaInfluenza: '10.00',
@@ -61,6 +74,12 @@ export const SOLLECITAZIONI_DEFAULT: InputSollecitazioni = {
   aP: '2.50',
   E: '31476',
   J: '540000',
+  sezioneMateriale: 'manuale',
+  sezioneB: '300',
+  sezioneH: '500',
+  sezioneCls: 'C25/30',
+  sezioneTipoProfilo: 'IPE',
+  sezioneProfilo: 'IPE 200',
 };
 
 export interface Sorgente {
@@ -77,6 +96,8 @@ export interface Sorgente {
   /** Da dove viene il valore. */
   origine: 'input' | 'azioni';
   ref: string;
+  /** true = qk è già una forza per metro (kN/m), non un carico per m² da moltiplicare per l'interasse. */
+  perMetro?: boolean;
 }
 
 export function sorgenti(inp: InputSollecitazioni, az: RisultatiAzioni): Sorgente[] {
@@ -141,6 +162,20 @@ export function sorgenti(inp: InputSollecitazioni, az: RisultatiAzioni): Sorgent
       ...PSI_AMBIENTALI.vento,
       origine: 'azioni',
       ref: 'NTC2018 §3.3',
+    },
+    {
+      id: 'terre',
+      label: 'Terre',
+      descr: 'Spinta delle terre Sa',
+      qk: az.terre.Sa,
+      tipo: 'G2',
+      direzione: 'orizzontale',
+      psi0: 1,
+      psi1: 1,
+      psi2: 1,
+      origine: 'azioni',
+      ref: 'NTC2018 §6.5.3',
+      perMetro: true,
     },
   ];
 }
@@ -218,6 +253,9 @@ export interface RisultatiSollecitazioni {
   N: number;
   /** Rigidezza flessionale EJ (kNm²). */
   EJ: number;
+  /** Modulo elastico (MPa) e momento d'inerzia (cm⁴) effettivamente usati. */
+  E: number;
+  J: number;
   L: number;
   trave: RisultatoTrave;
 }
@@ -241,11 +279,25 @@ export function calcolaSollecitazioni(
   let N = 0;
   for (const c of contributi) {
     if (verticale && c.sorgente.direzione === 'gravitazionale') N += c.qd * A;
-    else q += c.qd * i;
+    else q += c.qd * (c.sorgente.perMetro ? 1 : i);
+  }
+
+  // sezione: manuale = E/J inseriti a mano; c.a. = rettangolo b×h; acciaio = profilo scelto
+  let E = num(inp.E);
+  let J = num(inp.J);
+  if (inp.sezioneMateriale === 'cls') {
+    const { fck } = CLS[inp.sezioneCls] ?? CLS['C25/30'];
+    E = ecmCLS(fck);
+    const b = num(inp.sezioneB);
+    const h = num(inp.sezioneH);
+    J = (b * h ** 3) / 12 / 1e4; // mm⁴ → cm⁴
+  } else if (inp.sezioneMateriale === 'acciaio') {
+    E = 210000;
+    J = proprietaProfilo(inp.sezioneTipoProfilo, inp.sezioneProfilo)?.Ix ?? 0;
   }
 
   // E [MPa] → kN/m² (×1e3), J [cm⁴] → m⁴ (×1e-8)  ⇒  EJ [kNm²] = E·J·1e-5
-  const EJ = num(inp.E) * num(inp.J) * 1e-5;
+  const EJ = E * J * 1e-5;
   const L = num(inp.L);
   const P = num(inp.P);
 
@@ -257,5 +309,5 @@ export function calcolaSollecitazioni(
     P: P !== 0 ? [{ P, a: Math.min(Math.max(num(inp.aP), 0), L) }] : [],
   });
 
-  return { contributi, principale, q, N, EJ, L, trave };
+  return { contributi, principale, q, N, EJ, E, J, L, trave };
 }

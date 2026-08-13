@@ -2,7 +2,8 @@ import { Cube, Wrench, Tree, GridFour } from '@phosphor-icons/react';
 import { useCalcoli, useStore, inputVerifiche, type MaterialeId } from '../state/store';
 import { num } from '../calc/azioni';
 import { validaTaglioArmato, validaTaglioNonArmato, valido } from '../calc/validazione';
-import { CLS, DIAMETRI } from '../data/materiali';
+import { ACCIAIO_ARMATURA, ACCIAIO_STRUTTURALE, CLS, DIAMETRI } from '../data/materiali';
+import { TIPI_PROFILO, taglieDisponibili, type TipoProfilo } from '../data/profili-acciaio';
 import { Bar, Field, NumInput, Origine, Output, Select, Seg, Verdict } from '../components/ui';
 import { ComandiScheda } from '../components/ComandiScheda';
 import { SezioneTaglio } from '../components/Disegni';
@@ -25,15 +26,26 @@ const VERIFICHE: Record<MaterialeId, { id: string; label: string }[]> = {
   cls: [
     { id: 'taglio-non-armato', label: 'Taglio non armato' },
     { id: 'taglio-armato', label: 'Taglio armato' },
+    { id: 'flessione-ca', label: 'Flessione (SLU)' },
   ],
-  acciaio: [],
+  acciaio: [
+    { id: 'acciaio-flessione', label: 'Flessione elastica' },
+    { id: 'acciaio-compressione', label: 'Compressione elastica' },
+    { id: 'acciaio-taglio', label: 'Taglio elastico' },
+  ],
   legno: [],
   muratura: [],
 };
 
 export default function Verifiche() {
   const { state, dispatch } = useStore();
-  const { taglioNonArmato: na, taglioArmato: ar, VEdSollecitazioni } = useCalcoli();
+  const {
+    taglioNonArmato: na,
+    taglioArmato: ar,
+    flessioneCA: fl,
+    acciaio: ac,
+    VEdSollecitazioni,
+  } = useCalcoli();
   const v = state.verifiche;
 
   // VEd è un valore derivato quando il collegamento è attivo: non viene
@@ -48,6 +60,8 @@ export default function Verifiche() {
 
   const setNA = (patch: Partial<typeof inp.taglioNonArmato>) => dispatch({ type: 'taglioNonArmato', patch });
   const setAR = (patch: Partial<typeof inp.taglioArmato>) => dispatch({ type: 'taglioArmato', patch });
+  const setFL = (patch: Partial<typeof v.flessioneCA>) => dispatch({ type: 'flessioneCA', patch });
+  const setAC = (patch: Partial<typeof v.acciaio>) => dispatch({ type: 'acciaioSezione', patch });
   const scollega = () => dispatch({ type: 'verifiche', patch: { collegaSollecitazioni: false } });
 
   const lista = VERIFICHE[v.materiale];
@@ -65,14 +79,24 @@ export default function Verifiche() {
     <Origine testo="inserito a mano" />
   );
 
-  const sfruttamento = (id: string) =>
-    id === 'taglio-non-armato'
-      ? bloccoNA
-        ? '—'
-        : `${fx(na.esito.sfruttamento * 100, 0)}%`
-      : bloccoAR
-        ? '—'
-        : `${fx(ar.esito.sfruttamento * 100, 0)}%`;
+  const sfruttamento = (id: string) => {
+    switch (id) {
+      case 'taglio-non-armato':
+        return bloccoNA ? '—' : `${fx(na.esito.sfruttamento * 100, 0)}%`;
+      case 'taglio-armato':
+        return bloccoAR ? '—' : `${fx(ar.esito.sfruttamento * 100, 0)}%`;
+      case 'flessione-ca':
+        return `${fx(fl.esito.sfruttamento * 100, 0)}%`;
+      case 'acciaio-flessione':
+        return `${fx(ac.esitoFlessione.sfruttamento * 100, 0)}%`;
+      case 'acciaio-compressione':
+        return `${fx(ac.esitoCompressione.sfruttamento * 100, 0)}%`;
+      case 'acciaio-taglio':
+        return `${fx(ac.esitoTaglio.sfruttamento * 100, 0)}%`;
+      default:
+        return '—';
+    }
+  };
 
   return (
     <div className="stack">
@@ -591,15 +615,335 @@ export default function Verifiche() {
         </section>
       )}
 
-      {v.materiale !== 'cls' && (
+      {v.materiale === 'cls' && attiva?.id === 'flessione-ca' && (
+        <section className="panel" id="pannello-verifica" role="tabpanel" aria-labelledby="tab-flessione-ca">
+          <div className="panel-body" style={{ paddingTop: 14 }}>
+            <div className="esito-testa">
+              <Verdict ok={fl.esito.ok} margine={fl.esito.margine} />
+              <Bar sfruttamento={fl.esito.sfruttamento} />
+              <span className="note">
+                Flessione semplice (SLU) — sezione rettangolare, stress-block rettangolare · NTC2018
+                §4.1.2.1.2
+              </span>
+            </div>
+
+            <div className="panel-split">
+              <div className="fields">
+                <Field
+                  id="fl_MEd"
+                  tab="verifiche"
+                  label="Momento sollecitante MEd"
+                  unit="kNm"
+                  dettaglio={{
+                    formula: `MEd / MRd = ${fx(fl.esito.sfruttamento, 3)}`,
+                    ref: 'NTC2018 §4.1.2.1.2',
+                  }}
+                >
+                  <NumInput id="fl_MEd" value={v.flessioneCA.MEd} onChange={(x) => setFL({ MEd: x })} />
+                </Field>
+
+                <Field
+                  id="fl_cls"
+                  tab="verifiche"
+                  label="Classe di calcestruzzo"
+                  dettaglio={{
+                    formula: `fcd = 0.85 · fck / γc = ${fx(fl.fcd)} N/mm²`,
+                    ref: 'NTC2018 §4.1.2.1.1',
+                  }}
+                >
+                  <Select
+                    id="fl_cls"
+                    value={v.flessioneCA.cls}
+                    options={Object.keys(CLS)}
+                    onChange={(x) => setFL({ cls: x })}
+                  />
+                </Field>
+
+                <Field id="fl_gc" tab="verifiche" label="Coefficiente parziale γc" unit="—">
+                  <NumInput id="fl_gc" value={v.flessioneCA.gammaC} onChange={(x) => setFL({ gammaC: x })} />
+                </Field>
+
+                <Field
+                  id="fl_acciaio"
+                  tab="verifiche"
+                  label="Acciaio da armatura"
+                  dettaglio={{ formula: `fyd = fyk / γs = ${fx(fl.fyd)} N/mm²`, ref: 'NTC2018 §11.3.2' }}
+                >
+                  <Select
+                    id="fl_acciaio"
+                    value={v.flessioneCA.acciaio}
+                    options={Object.keys(ACCIAIO_ARMATURA)}
+                    onChange={(x) => setFL({ acciaio: x })}
+                  />
+                </Field>
+
+                <Field id="fl_gs" tab="verifiche" label="Coefficiente parziale γs" unit="—">
+                  <NumInput id="fl_gs" value={v.flessioneCA.gammaS} onChange={(x) => setFL({ gammaS: x })} />
+                </Field>
+
+                <Field id="fl_b" tab="verifiche" label="Base b" unit="mm">
+                  <NumInput id="fl_b" value={v.flessioneCA.b} onChange={(x) => setFL({ b: x })} />
+                </Field>
+
+                <Field id="fl_h" tab="verifiche" label="Altezza h" unit="mm">
+                  <NumInput id="fl_h" value={v.flessioneCA.h} onChange={(x) => setFL({ h: x })} />
+                </Field>
+
+                <Field
+                  id="fl_c"
+                  tab="verifiche"
+                  label="Copriferro lato teso c"
+                  unit="mm"
+                  dettaglio={{ formula: `d = h − c = ${fx(fl.d, 0)} mm`, ref: 'NTC2018 §4.1.6.1.3' }}
+                >
+                  <NumInput id="fl_c" value={v.flessioneCA.c} onChange={(x) => setFL({ c: x })} />
+                </Field>
+
+                <Field id="fl_n1" tab="verifiche" label="Armatura tesa — n. barre ⌀1" unit="n">
+                  <NumInput id="fl_n1" value={v.flessioneCA.n1} onChange={(x) => setFL({ n1: x })} />
+                </Field>
+                <Field id="fl_phi1" tab="verifiche" label="Diametro ⌀1" unit="mm">
+                  <Select
+                    id="fl_phi1"
+                    value={v.flessioneCA.phi1}
+                    options={DIAMETRI.map(String)}
+                    onChange={(x) => setFL({ phi1: x })}
+                  />
+                </Field>
+                <Field id="fl_n2" tab="verifiche" label="Armatura tesa — n. barre ⌀2" unit="n">
+                  <NumInput id="fl_n2" value={v.flessioneCA.n2} onChange={(x) => setFL({ n2: x })} />
+                </Field>
+                <Field id="fl_phi2" tab="verifiche" label="Diametro ⌀2" unit="mm">
+                  <Select
+                    id="fl_phi2"
+                    value={v.flessioneCA.phi2}
+                    options={DIAMETRI.map(String)}
+                    onChange={(x) => setFL({ phi2: x })}
+                  />
+                </Field>
+
+                <Field id="fl_c2" tab="verifiche" label="Copriferro lato compresso c'" unit="mm">
+                  <NumInput id="fl_c2" value={v.flessioneCA.c2} onChange={(x) => setFL({ c2: x })} />
+                </Field>
+                <Field id="fl_n1c" tab="verifiche" label="Armatura compressa — n. barre ⌀1" unit="n">
+                  <NumInput id="fl_n1c" value={v.flessioneCA.n1c} onChange={(x) => setFL({ n1c: x })} />
+                </Field>
+                <Field id="fl_phi1c" tab="verifiche" label="Diametro ⌀1 (compressa)" unit="mm">
+                  <Select
+                    id="fl_phi1c"
+                    value={v.flessioneCA.phi1c}
+                    options={DIAMETRI.map(String)}
+                    onChange={(x) => setFL({ phi1c: x })}
+                  />
+                </Field>
+              </div>
+
+              <div className="col-aside">
+                {fl.duttilitaScarsa && (
+                  <p className="note" style={{ color: 'var(--warn)' }}>
+                    x/d = {fx(fl.xSuD, 2)} &gt; 0.45 — sezione poco duttile, valutare un'armatura tesa
+                    inferiore o una compressa maggiore.
+                  </p>
+                )}
+                <Output
+                  voci={[
+                    { k: 'fcd', v: fx(fl.fcd), u: 'N/mm²' },
+                    { k: 'fyd', v: fx(fl.fyd, 0), u: 'N/mm²' },
+                    { k: 'd', v: fx(fl.d, 0), u: 'mm' },
+                    { k: 'As tesa', v: fx(fl.As, 0), u: 'mm²' },
+                    { k: 'As compressa', v: fx(fl.As2, 0), u: 'mm²' },
+                    { k: 'x', v: fx(fl.x, 1), u: 'mm' },
+                    { k: 'x/d', v: fx(fl.xSuD, 3) },
+                    { k: 'MRd', v: fx(fl.MRd, 1), u: 'kNm' },
+                    { k: 'MEd/MRd', v: fx(fl.esito.sfruttamento, 3) },
+                  ]}
+                />
+              </div>
+            </div>
+          </div>
+        </section>
+      )}
+
+      {v.materiale === 'acciaio' && attiva && attiva.id.startsWith('acciaio-') && (
+        <section className="panel" id="pannello-verifica" role="tabpanel" aria-labelledby={`tab-${attiva.id}`}>
+          <div className="panel-body" style={{ paddingTop: 14 }}>
+            {(() => {
+              const es =
+                attiva.id === 'acciaio-flessione'
+                  ? ac.esitoFlessione
+                  : attiva.id === 'acciaio-compressione'
+                    ? ac.esitoCompressione
+                    : ac.esitoTaglio;
+              const nota =
+                attiva.id === 'acciaio-flessione'
+                  ? 'Flessione elastica — MRd = Wel,x · fyd · NTC2018 §4.2.4.1.2'
+                  : attiva.id === 'acciaio-compressione'
+                    ? 'Compressione semplice elastica — NRd = A · fyd (instabilità non verificata) · NTC2018 §4.2.4.1.2'
+                    : 'Taglio elastico — VRd = Avz · fyd/√3 · NTC2018 §4.2.4.1.3';
+              return (
+                <div className="esito-testa">
+                  <Verdict ok={es.ok} margine={es.margine} />
+                  <Bar sfruttamento={es.sfruttamento} />
+                  <span className="note">{nota}</span>
+                </div>
+              );
+            })()}
+
+            <div className="panel-split">
+              <div className="fields">
+                <Field id="ac_tipo" tab="verifiche" label="Tipo di profilo">
+                  <select
+                    id="ac_tipo"
+                    className="input"
+                    value={v.acciaio.tipoProfilo}
+                    onChange={(e) => {
+                      const tipo = e.target.value as TipoProfilo;
+                      setAC({ tipoProfilo: tipo, profilo: taglieDisponibili(tipo)[0] ?? '' });
+                    }}
+                  >
+                    {TIPI_PROFILO.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.label}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+
+                <Field id="ac_profilo" tab="verifiche" label="Profilo">
+                  <Select
+                    id="ac_profilo"
+                    value={v.acciaio.profilo}
+                    options={taglieDisponibili(v.acciaio.tipoProfilo)}
+                    onChange={(x) => setAC({ profilo: x })}
+                  />
+                </Field>
+
+                <Field
+                  id="ac_grado"
+                  tab="verifiche"
+                  label="Classe di acciaio"
+                  dettaglio={{ formula: `fyd = fyk / γM0 = ${fx(ac.fyd, 0)} N/mm²`, ref: 'NTC2018 §11.3.4.1' }}
+                >
+                  <Select
+                    id="ac_grado"
+                    value={v.acciaio.acciaio}
+                    options={Object.keys(ACCIAIO_STRUTTURALE)}
+                    onChange={(x) => setAC({ acciaio: x })}
+                  />
+                </Field>
+
+                <Field id="ac_gm0" tab="verifiche" label="Coefficiente parziale γM0" unit="—">
+                  <NumInput id="ac_gm0" value={v.acciaio.gammaM0} onChange={(x) => setAC({ gammaM0: x })} />
+                </Field>
+
+                <Field
+                  id="ac_MEd"
+                  tab="verifiche"
+                  label="Momento sollecitante MEd"
+                  unit="kNm"
+                  dettaglio={{ formula: `σ = MEd/Wx = ${fx(ac.sigmaM)} N/mm²`, ref: 'NTC2018 §4.2.4.1.2' }}
+                >
+                  <NumInput id="ac_MEd" value={v.acciaio.MEd} onChange={(x) => setAC({ MEd: x })} />
+                </Field>
+
+                <Field
+                  id="ac_NEd"
+                  tab="verifiche"
+                  label="Sforzo normale NEd (compressione &gt; 0)"
+                  unit="kN"
+                  dettaglio={{ formula: `σ = NEd/A = ${fx(ac.sigmaN)} N/mm²`, ref: 'NTC2018 §4.2.4.1.2' }}
+                >
+                  <NumInput id="ac_NEd" value={v.acciaio.NEd} onChange={(x) => setAC({ NEd: x })} />
+                </Field>
+
+                <Field
+                  id="ac_VEd"
+                  tab="verifiche"
+                  label="Taglio sollecitante VEd"
+                  unit="kN"
+                  origine={origineVEd}
+                  dettaglio={{ formula: `τ = VEd/Avz = ${fx(ac.tau)} N/mm²`, ref: 'NTC2018 §4.2.4.1.3' }}
+                >
+                  <NumInput
+                    id="ac_VEd"
+                    value={collegato ? VEdSollecitazioni.toFixed(1) : v.acciaio.VEd}
+                    disabled={collegato}
+                    onChange={(x) => setAC({ VEd: x })}
+                  />
+                </Field>
+              </div>
+
+              <div className="col-aside">
+                {!ac.proprieta && (
+                  <p className="note" style={{ color: 'var(--warn)' }}>
+                    Profilo non riconosciuto: verificare la taglia selezionata.
+                  </p>
+                )}
+                <Output
+                  titolo="Proprietà della sezione"
+                  voci={[
+                    { k: 'A', v: fx(ac.proprieta?.A ?? 0, 1), u: 'cm²' },
+                    { k: 'h × b', v: `${fx(ac.proprieta?.h ?? 0, 0)} × ${fx(ac.proprieta?.b ?? 0, 0)}`, u: 'mm' },
+                    { k: 'Ix', v: fx(ac.proprieta?.Ix ?? 0, 0), u: 'cm⁴' },
+                    { k: 'Wx,el', v: fx(ac.proprieta?.Wx ?? 0, 1), u: 'cm³' },
+                    { k: 'Avz', v: fx(ac.proprieta?.Avz ?? 0, 2), u: 'cm²' },
+                    { k: 'fyd', v: fx(ac.fyd, 0), u: 'N/mm²' },
+                  ]}
+                />
+
+                <div className="table-scroll" style={{ marginTop: 12 }}>
+                  <table className="table">
+                    <thead>
+                      <tr>
+                        <th>Verifica</th>
+                        <th className="num">Domanda</th>
+                        <th className="num">Capacità</th>
+                        <th>Esito</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr style={attiva.id === 'acciaio-flessione' ? { color: 'var(--color-accent-300)' } : undefined}>
+                        <td>MEd ≤ MRd</td>
+                        <td className="num">{fx(num(v.acciaio.MEd), 1)} kNm</td>
+                        <td className="num">{fx(ac.MRd, 1)} kNm</td>
+                        <td>
+                          <Verdict ok={ac.esitoFlessione.ok} margine={ac.esitoFlessione.margine} />
+                        </td>
+                      </tr>
+                      <tr style={attiva.id === 'acciaio-compressione' ? { color: 'var(--color-accent-300)' } : undefined}>
+                        <td>NEd ≤ NRd</td>
+                        <td className="num">{fx(num(v.acciaio.NEd), 1)} kN</td>
+                        <td className="num">{fx(ac.NRd, 1)} kN</td>
+                        <td>
+                          <Verdict ok={ac.esitoCompressione.ok} margine={ac.esitoCompressione.margine} />
+                        </td>
+                      </tr>
+                      <tr style={attiva.id === 'acciaio-taglio' ? { color: 'var(--color-accent-300)' } : undefined}>
+                        <td>VEd ≤ VRd</td>
+                        <td className="num">
+                          {fx(collegato ? VEdSollecitazioni : num(v.acciaio.VEd), 1)} kN
+                        </td>
+                        <td className="num">{fx(ac.VRd, 1)} kN</td>
+                        <td>
+                          <Verdict ok={ac.esitoTaglio.ok} margine={ac.esitoTaglio.margine} />
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      )}
+
+      {(v.materiale === 'legno' || v.materiale === 'muratura') && (
         <div className="placeholder">
           <div className="t">{MATERIALI.find((m) => m.id === v.materiale)?.label}</div>
           <div className="d">
-            {v.materiale === 'acciaio'
-              ? 'Verifica di aste in acciaio (resistenza, instabilità, schiacciamento anima) — da trasporre dal foglio Verifica_aste_acciaio_rev01.xlsm, con il sagomario dei profili.'
-              : v.materiale === 'legno'
-                ? 'Verifiche di resistenza e deformabilità per elementi in legno secondo NTC2018 §4.4.'
-                : 'Verifiche di pareti in muratura secondo NTC2018 §4.5 — pressoflessione nel piano e fuori piano, taglio.'}
+            {v.materiale === 'legno'
+              ? 'Verifiche di resistenza e deformabilità per elementi in legno secondo NTC2018 §4.4.'
+              : 'Verifiche di pareti in muratura secondo NTC2018 §4.5 — pressoflessione nel piano e fuori piano, taglio.'}
           </div>
         </div>
       )}

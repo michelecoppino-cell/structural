@@ -61,3 +61,14 @@ export const MODULI_E: Record<string, number> = {
   'Legno GL24h (E0,mean 11500)': 11500,
   'Muratura (E 1500)': 1500,
 };
+
+/** Modulo elastico secante del calcestruzzo Ecm (MPa) — NTC2018 §11.2.10.3 / EC2. */
+export const ecmCLS = (fck: number): number => 22000 * ((fck + 8) / 10) ** 0.3;
+
+/** Acciaio da carpenteria — §11.3.4.1, Tab. 11.3.IX (valori di normativa). */
+export const ACCIAIO_STRUTTURALE: Record<string, { fyk: number; ftk: number }> = {
+  S235: { fyk: 235, ftk: 360 },
+  S275: { fyk: 275, ftk: 430 },
+  S355: { fyk: 355, ftk: 510 },
+  S450: { fyk: 440, ftk: 550 },
+};

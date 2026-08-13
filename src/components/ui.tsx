@@ -9,6 +9,8 @@ export interface Dettaglio {
   formula: string;
   ref: string;
   coeffs?: { k: string; v: string }[];
+  /** Tabella normativa completa, per campi che scelgono una riga da una tabella NTC. */
+  tabella?: { intestazioni: string[]; righe: (string | number)[][]; evidenzia?: number };
 }
 
 export function DettaglioPanel({ dettaglio }: { dettaglio: Dettaglio }) {
@@ -24,6 +26,32 @@ export function DettaglioPanel({ dettaglio }: { dettaglio: Dettaglio }) {
               <span className="v">{c.v}</span>
             </span>
           ))}
+        </div>
+      )}
+      {dettaglio.tabella && (
+        <div className="table-scroll" style={{ marginTop: 8 }}>
+          <table className="table">
+            <thead>
+              <tr>
+                {dettaglio.tabella.intestazioni.map((h) => (
+                  <th key={h} className={h === dettaglio.tabella!.intestazioni[0] ? undefined : 'num'}>
+                    {h}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {dettaglio.tabella.righe.map((riga, i) => (
+                <tr key={i} style={i === dettaglio.tabella!.evidenzia ? { color: 'var(--color-accent-300)' } : undefined}>
+                  {riga.map((cella, j) => (
+                    <td key={j} className={j === 0 ? undefined : 'num'}>
+                      {cella}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
       <div className="ref">

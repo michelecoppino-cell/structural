@@ -6,11 +6,14 @@ import {
   sorgenti,
   type Combinazione,
   type Orientamento,
+  type SezioneMateriale,
   type SorgenteId,
 } from '../calc/sollecitazioni';
 import { validaSollecitazioni } from '../calc/validazione';
 import { SCHEMI, SCHEMI_BY_ID, type SchemaId } from '../calc/trave';
-import { Field, NumInput, Output, Seg } from '../components/ui';
+import { CLS } from '../data/materiali';
+import { TIPI_PROFILO, taglieDisponibili, type TipoProfilo } from '../data/profili-acciaio';
+import { Field, NumInput, Output, Seg, Select } from '../components/ui';
 import { ComandiScheda } from '../components/ComandiScheda';
 import { DiagrammaCarichi, DiagrammaSerie } from '../components/Diagrammi';
 
@@ -184,7 +187,12 @@ export default function Sollecitazioni() {
                 { k: 'RA', v: fx(t.reazioni.A.R, 1), u: 'kN' },
                 { k: 'RB', v: fx(t.reazioni.B.R, 1), u: 'kN' },
                 { k: 'f max', v: fx(Math.abs(t.fmax.val) * 1000, 2), u: 'mm' },
-                { k: 'L / f', v: Number.isFinite(t.Lsuf) ? fx(t.Lsuf, 0) : '∞' },
+                {
+                  k: 'Deformabilità',
+                  v: Number.isFinite(t.Lsuf)
+                    ? `${verticale ? 'H' : 'L'}/${fx(t.Lsuf, 0)}`
+                    : '∞',
+                },
               ]}
             />
 
@@ -405,34 +413,127 @@ export default function Sollecitazioni() {
                 <NumInput id="soll_aP" value={inp.aP} errore={!!err.aP} onChange={(v) => set({ aP: v })} />
               </Field>
 
-              <Field
-                id="soll_E"
-                tab="sollecitazioni"
-                label="Modulo elastico E"
-                unit="MPa"
-                errore={err.E}
-                dettaglio={{
-                  formula: `EJ = E · J = ${fx(num(inp.E), 0)} MPa · ${fx(num(inp.J), 0)} cm⁴ = ${fx(r.EJ, 0)} kNm²`,
-                  ref: 'NTC2018 §4.1.1.1 (Ecm) / §4.2.1 (E acciaio)',
-                }}
-              >
-                <NumInput id="soll_E" value={inp.E} errore={!!err.E} onChange={(v) => set({ E: v })} />
-              </Field>
-
-              <Field
-                id="soll_J"
-                tab="sollecitazioni"
-                label="Momento d'inerzia J"
-                unit="cm⁴"
-                errore={err.J}
-                dettaglio={{
-                  formula: `f = ${fx(Math.abs(t.fmax.val) * 1000, 2)} mm  →  L/f = ${Number.isFinite(t.Lsuf) ? fx(t.Lsuf, 0) : '∞'}`,
-                  ref: 'NTC2018 §4.1.2.2.2 — limiti di deformabilità',
-                }}
-              >
-                <NumInput id="soll_J" value={inp.J} errore={!!err.J} onChange={(v) => set({ J: v })} />
-              </Field>
             </div>
+          </div>
+        </section>
+
+        <section className="panel">
+          <div className="panel-body" style={{ paddingTop: 12 }}>
+            <div className="section-title">Momento d'inerzia — sezione resistente</div>
+
+            <Seg<SezioneMateriale>
+              label="Supporto"
+              value={inp.sezioneMateriale}
+              onChange={(v) => set({ sezioneMateriale: v })}
+              options={[
+                { id: 'manuale', label: 'Manuale' },
+                { id: 'cls', label: 'C.a. — b×h' },
+                { id: 'acciaio', label: 'Acciaio — profilo' },
+              ]}
+            />
+
+            {inp.sezioneMateriale === 'manuale' && (
+              <div className="fields fields-fitti fields-compatti" style={{ marginTop: 10 }}>
+                <Field
+                  id="soll_E"
+                  tab="sollecitazioni"
+                  label="Modulo elastico E"
+                  unit="MPa"
+                  errore={err.E}
+                  dettaglio={{
+                    formula: `EJ = E · J = ${fx(num(inp.E), 0)} MPa · ${fx(num(inp.J), 0)} cm⁴ = ${fx(r.EJ, 0)} kNm²`,
+                    ref: 'NTC2018 §4.1.1.1 (Ecm) / §4.2.1 (E acciaio)',
+                  }}
+                >
+                  <NumInput id="soll_E" value={inp.E} errore={!!err.E} onChange={(v) => set({ E: v })} />
+                </Field>
+
+                <Field
+                  id="soll_J"
+                  tab="sollecitazioni"
+                  label="Momento d'inerzia J"
+                  unit="cm⁴"
+                  errore={err.J}
+                  dettaglio={{
+                    formula: `f = ${fx(Math.abs(t.fmax.val) * 1000, 2)} mm  →  deformabilità = ${verticale ? 'H' : 'L'}/${Number.isFinite(t.Lsuf) ? fx(t.Lsuf, 0) : '∞'}`,
+                    ref: 'NTC2018 §4.1.2.2.2 — limiti di deformabilità',
+                  }}
+                >
+                  <NumInput id="soll_J" value={inp.J} errore={!!err.J} onChange={(v) => set({ J: v })} />
+                </Field>
+              </div>
+            )}
+
+            {inp.sezioneMateriale === 'cls' && (
+              <div className="fields fields-fitti fields-compatti" style={{ marginTop: 10 }}>
+                <Field id="soll_sez_cls" tab="sollecitazioni" label="Classe di calcestruzzo">
+                  <Select
+                    id="soll_sez_cls"
+                    value={inp.sezioneCls}
+                    options={Object.keys(CLS)}
+                    onChange={(v) => set({ sezioneCls: v })}
+                  />
+                </Field>
+                <Field id="soll_sez_b" tab="sollecitazioni" label="Base b" unit="mm">
+                  <NumInput id="soll_sez_b" value={inp.sezioneB} onChange={(v) => set({ sezioneB: v })} />
+                </Field>
+                <Field id="soll_sez_h" tab="sollecitazioni" label="Altezza h" unit="mm">
+                  <NumInput id="soll_sez_h" value={inp.sezioneH} onChange={(v) => set({ sezioneH: v })} />
+                </Field>
+                <Field
+                  id="soll_sez_out"
+                  tab="sollecitazioni"
+                  label="E, J calcolati"
+                  dettaglio={{
+                    formula: `Ecm = 22000·((fck+8)/10)^0.3 = ${fx(r.E, 0)} MPa;  J = b·h³/12 = ${fx(r.J, 0)} cm⁴`,
+                    ref: 'NTC2018 §11.2.10.3 — sezione rettangolare non fessurata',
+                  }}
+                >
+                  <input className="input num" readOnly value={`E ${fx(r.E, 0)} · J ${fx(r.J, 0)}`} />
+                </Field>
+              </div>
+            )}
+
+            {inp.sezioneMateriale === 'acciaio' && (
+              <div className="fields fields-fitti fields-compatti" style={{ marginTop: 10 }}>
+                <Field id="soll_sez_tipo" tab="sollecitazioni" label="Tipo di profilo">
+                  <select
+                    id="soll_sez_tipo"
+                    className="input"
+                    value={inp.sezioneTipoProfilo}
+                    onChange={(e) => {
+                      const tipo = e.target.value as TipoProfilo;
+                      set({ sezioneTipoProfilo: tipo, sezioneProfilo: taglieDisponibili(tipo)[0] ?? '' });
+                    }}
+                  >
+                    {TIPI_PROFILO.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.label}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <Field id="soll_sez_profilo" tab="sollecitazioni" label="Profilo">
+                  <Select
+                    id="soll_sez_profilo"
+                    value={inp.sezioneProfilo}
+                    options={taglieDisponibili(inp.sezioneTipoProfilo)}
+                    onChange={(v) => set({ sezioneProfilo: v })}
+                  />
+                </Field>
+                <Field
+                  id="soll_sez_out2"
+                  tab="sollecitazioni"
+                  label="E, J del profilo"
+                  dettaglio={{
+                    formula: `E = 210000 MPa;  J = Ix = ${fx(r.J, 0)} cm⁴`,
+                    ref: 'NTC2018 §4.2.1 — profilo dal sagomario acciaio',
+                  }}
+                >
+                  <input className="input num" readOnly value={`E ${fx(r.E, 0)} · J ${fx(r.J, 0)}`} />
+                </Field>
+              </div>
+            )}
           </div>
         </section>
       </div>
