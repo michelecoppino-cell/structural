@@ -257,6 +257,8 @@ export interface RisultatiSollecitazioni {
   E: number;
   J: number;
   L: number;
+  /** Rampa triangolare della spinta delle terre (kN/m), se attiva in verticale. */
+  wTri?: { w0: number; w1: number };
   trave: RisultatoTrave;
 }
 
@@ -274,12 +276,26 @@ export function calcolaSollecitazioni(
 
   // In un elemento verticale i carichi gravitazionali diventano sforzo
   // normale sull'area di influenza, mentre solo le azioni orizzontali
-  // (vento) flettono l'elemento.
+  // (vento, terre) flettono l'elemento. La spinta delle terre, in verticale,
+  // non è uniforme: ha andamento triangolare (nullo in sommità, massimo alla
+  // base) e viene tenuta fuori da q per essere passata come rampa a parte.
+  const L0 = num(inp.L);
   let q = 0;
   let N = 0;
+  let wTri: { w0: number; w1: number } | undefined;
   for (const c of contributi) {
-    if (verticale && c.sorgente.direzione === 'gravitazionale') N += c.qd * A;
-    else q += c.qd * (c.sorgente.perMetro ? 1 : i);
+    if (verticale && c.sorgente.direzione === 'gravitazionale') {
+      N += c.qd * A;
+    } else if (verticale && c.sorgente.id === 'terre') {
+      // qd è la spinta risultante (kN/m di sviluppo del muro), già integrata
+      // sull'altezza: il picco del triangolo equivalente è 2·Sa/H, massimo
+      // alla base (x=0=A, tipicamente l'incastro) e nullo in sommità (x=L=B,
+      // il piano campagna da cui parte il cuneo di spinta).
+      const picco = L0 > 0 ? (2 * c.qd) / L0 : 0;
+      wTri = { w0: picco, w1: 0 };
+    } else {
+      q += c.qd * (c.sorgente.perMetro ? 1 : i);
+    }
   }
 
   // sezione: manuale = E/J inseriti a mano; c.a. = rettangolo b×h; acciaio = profilo scelto
@@ -306,8 +322,9 @@ export function calcolaSollecitazioni(
     L,
     q,
     EJ,
+    wTri,
     P: P !== 0 ? [{ P, a: Math.min(Math.max(num(inp.aP), 0), L) }] : [],
   });
 
-  return { contributi, principale, q, N, EJ, E, J, L, trave };
+  return { contributi, principale, q, N, EJ, E, J, L, wTri, trave };
 }

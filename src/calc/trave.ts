@@ -91,6 +91,11 @@ export interface InputTrave {
   q: number;
   /** Carichi concentrati. */
   P?: CaricoConcentrato[];
+  /**
+   * Carico linearmente variabile (kN/m) sovrapposto a q, da x=0 (w0) a x=L
+   * (w1) — usato per l'andamento triangolare della spinta delle terre.
+   */
+  wTri?: { w0: number; w1: number };
   /** Rigidezza flessionale EJ in kNm². */
   EJ: number;
   /** Numero di punti di campionamento dei diagrammi. */
@@ -146,6 +151,13 @@ export function risolviTrave(inp: InputTrave): RisultatoTrave {
   const carichi = (inp.P ?? []).filter((c) => c.P !== 0 && c.a >= 0 && c.a <= L);
   const nSample = Math.max(20, inp.n ?? 200);
 
+  // carico distribuito totale in x: uniforme q + rampa lineare wTri (0 se assente)
+  const w0Tri = inp.wTri?.w0 ?? 0;
+  const w1Tri = inp.wTri?.w1 ?? 0;
+  const wCost = q + w0Tri; // intensità a x = 0
+  const wSlope = w1Tri - w0Tri; // variazione lineare su tutta la luce
+  const wAt = (x: number) => wCost + (wSlope * x) / L;
+
   // ── nodi: mesh grossolana + ascisse dei carichi concentrati ───────────────
   // L'elemento di trave è esatto ai nodi per carichi uniformi e concentrati:
   // bastano pochi elementi, e una mesh fitta peggiorerebbe solo il
@@ -172,10 +184,20 @@ export function risolviTrave(inp: InputTrave): RisultatoTrave {
       [6 * le * c, 2 * le * le * c, -6 * le * c, 4 * le * le * c],
     ];
     const map = [2 * e, 2 * e + 1, 2 * e + 2, 2 * e + 3];
+    // carico distribuito, uniforme + rampa: vettore dei carichi nodali
+    // equivalenti per un carico linearmente variabile wa → wb sull'elemento
+    // (si riduce alle formule note qle/2, qle²/12 quando wa = wb).
+    const wa = wAt(nodi[e]);
+    const wb = wAt(nodi[e + 1]);
+    const fe = [
+      (le / 20) * (7 * wa + 3 * wb),
+      (le * le) / 60 * (3 * wa + 2 * wb),
+      (le / 20) * (3 * wa + 7 * wb),
+      -((le * le) / 60) * (2 * wa + 3 * wb),
+    ];
     for (let i = 0; i < 4; i++) {
       for (let j = 0; j < 4; j++) K[map[i]][map[j]] += ke[i][j];
-      // carico uniforme: vettore dei carichi nodali equivalenti
-      F[map[i]] += q * le * [0.5, le / 12, 0.5, -le / 12][i];
+      F[map[i]] += fe[i];
     }
   }
 
@@ -238,15 +260,19 @@ export function risolviTrave(inp: InputTrave): RisultatoTrave {
     const N2 = le * (s - 2 * s * s + s ** 3);
     const N3 = 3 * s * s - 2 * s ** 3;
     const N4 = le * (-s * s + s ** 3);
-    const part = ((q * le ** 4) / (24 * EJ)) * s * s * (1 - s) ** 2;
+    // correzione "trave incastrata alle estremità" per il carico distribuito
+    // sull'elemento: esatta per carico uniforme, approssimata sulla media
+    // dell'elemento quando il carico varia linearmente (rampa delle terre).
+    const wMed = (wAt(nodi[e]) + wAt(nodi[e + 1])) / 2;
+    const part = ((wMed * le ** 4) / (24 * EJ)) * s * s * (1 - s) ** 2;
     return N1 * v1 + N2 * t1 + N3 * v2 + N4 * t2 + part;
   };
 
   const punti: PuntoDiagramma[] = [...ascisse]
     .sort((a, b) => a - b)
     .map((x) => {
-      let V = RA - q * x;
-      let M = MA + RA * x - (q * x * x) / 2;
+      let V = RA - (wCost * x + (wSlope * x * x) / (2 * L));
+      let M = MA + RA * x - ((wCost * x * x) / 2 + (wSlope * x ** 3) / (6 * L));
       for (const c of carichi) {
         if (c.a < x - 1e-9) {
           V -= c.P;

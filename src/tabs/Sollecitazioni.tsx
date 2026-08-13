@@ -1,4 +1,5 @@
-import { ArrowsHorizontal, ArrowsVertical } from '@phosphor-icons/react';
+import { useState } from 'react';
+import { ArrowsHorizontal, ArrowsVertical, Info } from '@phosphor-icons/react';
 import { useCalcoli, useStore } from '../state/store';
 import { num } from '../calc/azioni';
 import {
@@ -13,7 +14,7 @@ import { validaSollecitazioni } from '../calc/validazione';
 import { SCHEMI, SCHEMI_BY_ID, type SchemaId } from '../calc/trave';
 import { CLS } from '../data/materiali';
 import { TIPI_PROFILO, taglieDisponibili, type TipoProfilo } from '../data/profili-acciaio';
-import { Field, NumInput, Output, Seg, Select } from '../components/ui';
+import { Accordion, DettaglioPanel, NumInput, Output, Seg, Select, type Dettaglio } from '../components/ui';
 import { ComandiScheda } from '../components/ComandiScheda';
 import { DiagrammaCarichi, DiagrammaSerie } from '../components/Diagrammi';
 
@@ -64,20 +65,36 @@ function MiniSchema({ id }: { id: SchemaId }) {
   );
 }
 
-/** Etichetta + controllo a tutta larghezza, per i menù della colonna comandi. */
-function Menu({
+/** Campo compatto — etichetta sopra, input stretto: per la fascia comandi a riga singola. */
+function MiniCampo({
   id,
   label,
-  children,
+  value,
+  onChange,
+  errore,
+  select,
 }: {
   id: string;
   label: string;
-  children: React.ReactNode;
+  value: string;
+  onChange: (v: string) => void;
+  errore?: string;
+  select?: string[];
 }) {
   return (
-    <div className="menu-blocco">
+    <div className={`mini-campo${errore ? ' is-error' : ''}`} title={errore}>
       <label htmlFor={id}>{label}</label>
-      {children}
+      {select ? (
+        <select id={id} className="input" value={value} onChange={(e) => onChange(e.target.value)}>
+          {select.map((o) => (
+            <option key={o} value={o}>
+              {o}
+            </option>
+          ))}
+        </select>
+      ) : (
+        <NumInput id={id} value={value} onChange={onChange} />
+      )}
     </div>
   );
 }
@@ -87,12 +104,23 @@ export default function Sollecitazioni() {
   const { azioni: az, sollecitazioni: r } = useCalcoli();
   const inp = state.sollecitazioni;
   const set = (patch: Partial<typeof inp>) => dispatch({ type: 'sollecitazioni', patch });
+  const [geomOpen, setGeomOpen] = useState(false);
 
   const err = validaSollecitazioni(inp);
   const tutte = sorgenti(inp, az);
   const verticale = inp.orientamento === 'verticale';
   const t = r.trave;
   const schema = SCHEMI_BY_ID[inp.schema];
+
+  /** Formule di tutta la fascia "geometria e carichi", riunite in un solo (i). */
+  const dettaglioGeom: Dettaglio = {
+    formula:
+      `Schema ${schema.label} su ${verticale ? 'H' : 'L'} = ${fx(r.L)} m` +
+      (verticale ? `; N = Σ(γ·ψ·qk)·A = ${fx(r.N, 1)} kN` : `; q = Σ(γ·ψ·qk)·i = ${fx(r.q)} kN/m`) +
+      `; P = ${fx(num(inp.P))} kN a x = ${fx(num(inp.aP))} m`,
+    ref: 'NTC2018 §2.5.3 — γG1 1.30, γG2 1.50, γQ 1.50 (Tab. 2.6.I, A1-STR)',
+    coeffs: r.contributi.map((c) => ({ k: c.sorgente.label, v: `${fx(c.qd)} kN/m²` })),
+  };
 
   return (
     <div className="soll-layout">
@@ -122,7 +150,7 @@ export default function Sollecitazioni() {
         />
       </ComandiScheda>
 
-      {/* ── diagrammi ─────────────────────────────────────────────────── */}
+      {/* ── diagrammi: prendono tutta l'altezza che avanza, una schermata sola ── */}
       <div className="soll-col soll-risultati">
         <section className="panel panel-diagrammi">
           <div className="panel-body" style={{ paddingTop: 10 }}>
@@ -131,6 +159,7 @@ export default function Sollecitazioni() {
                 schema={inp.schema}
                 L={r.L}
                 q={r.q}
+                qTri={r.wTri}
                 P={num(inp.P)}
                 aP={num(inp.aP)}
                 N={r.N}
@@ -173,330 +202,149 @@ export default function Sollecitazioni() {
         </section>
       </div>
 
-      {/* ── risultati numerici ────────────────────────────────────────── */}
-      <div className="soll-col soll-esiti">
-        <section className="panel">
-          <div className="panel-body" style={{ paddingTop: 12 }}>
-            <Output
-              titolo={`Sollecitazioni — ${COMBINAZIONI.find((c) => c.id === inp.combinazione)?.label}`}
-              voci={[
-                { k: 'q di progetto', v: fx(r.q), u: 'kN/m' },
-                ...(verticale ? [{ k: 'N di progetto', v: fx(r.N, 1), u: 'kN' }] : []),
-                { k: 'M max', v: fx(t.MmaxAbs.val, 1), u: 'kNm' },
-                { k: 'V max', v: fx(t.VmaxAbs.val, 1), u: 'kN' },
-                { k: 'RA', v: fx(t.reazioni.A.R, 1), u: 'kN' },
-                { k: 'RB', v: fx(t.reazioni.B.R, 1), u: 'kN' },
-                { k: 'f max', v: fx(Math.abs(t.fmax.val) * 1000, 2), u: 'mm' },
-                {
-                  k: 'Deformabilità',
-                  v: Number.isFinite(t.Lsuf)
-                    ? `${verticale ? 'H' : 'L'}/${fx(t.Lsuf, 0)}`
-                    : '∞',
-                },
-              ]}
-            />
+      {/* ── in alto a destra: risultati e sezione resistente, ad accordion ── */}
+      <div className="soll-side">
+        <Accordion
+          id="soll-risultati"
+          title="Sollecitazioni"
+          hint={`M ${fx(t.MmaxAbs.val, 1)} kNm · V ${fx(t.VmaxAbs.val, 1)} kN`}
+        >
+          <Output
+            titolo={COMBINAZIONI.find((c) => c.id === inp.combinazione)?.label ?? 'Output'}
+            voci={[
+              { k: 'q di progetto', v: fx(r.q), u: 'kN/m' },
+              ...(verticale ? [{ k: 'N di progetto', v: fx(r.N, 1), u: 'kN' }] : []),
+              { k: 'M max', v: fx(t.MmaxAbs.val, 1), u: 'kNm' },
+              { k: 'V max', v: fx(t.VmaxAbs.val, 1), u: 'kN' },
+              { k: 'RA', v: fx(t.reazioni.A.R, 1), u: 'kN' },
+              { k: 'RB', v: fx(t.reazioni.B.R, 1), u: 'kN' },
+              { k: 'f max', v: fx(Math.abs(t.fmax.val) * 1000, 2), u: 'mm' },
+              {
+                k: 'Deformabilità',
+                v: Number.isFinite(t.Lsuf) ? `${verticale ? 'H' : 'L'}/${fx(t.Lsuf, 0)}` : '∞',
+              },
+            ]}
+          />
 
-            <div className="table-scroll" style={{ marginTop: 12 }}>
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>Azione</th>
-                    <th>Ruolo</th>
-                    <th className="num">qk</th>
-                    <th className="num">γ</th>
-                    <th className="num">ψ</th>
-                    <th className="num">qd</th>
+          <div className="table-scroll" style={{ marginTop: 12 }}>
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Azione</th>
+                  <th>Ruolo</th>
+                  <th className="num">qk</th>
+                  <th className="num">γ</th>
+                  <th className="num">ψ</th>
+                  <th className="num">qd</th>
+                </tr>
+              </thead>
+              <tbody>
+                {r.contributi.map((c) => (
+                  <tr key={c.sorgente.id}>
+                    <td>{c.sorgente.descr}</td>
+                    <td className="faint">{c.ruolo}</td>
+                    <td className="num">{fx(c.sorgente.qk)}</td>
+                    <td className="num">{fx(c.gamma)}</td>
+                    <td className="num">{fx(c.psi)}</td>
+                    <td className="num">{fx(c.qd)}</td>
                   </tr>
-                </thead>
-                <tbody>
-                  {r.contributi.map((c) => (
-                    <tr key={c.sorgente.id}>
-                      <td>{c.sorgente.descr}</td>
-                      <td className="faint">{c.ruolo}</td>
-                      <td className="num">{fx(c.sorgente.qk)}</td>
-                      <td className="num">{fx(c.gamma)}</td>
-                      <td className="num">{fx(c.psi)}</td>
-                      <td className="num">{fx(c.qd)}</td>
-                    </tr>
-                  ))}
-                  {!r.contributi.length && (
-                    <tr>
-                      <td colSpan={6} className="faint">
-                        Nessun carico selezionato.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-                <tfoot>
-                  <tr>
-                    <td colSpan={5}>
-                      {verticale ? 'q trasversale (kN/m) · N (kN)' : 'q di progetto (kN/m)'}
-                    </td>
-                    <td className="num">{verticale ? `${fx(r.q)} · ${fx(r.N, 1)}` : fx(r.q)}</td>
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
-          </div>
-        </section>
-      </div>
-
-      {/* ── comandi: in fascia sotto i diagrammi su PC, in fondo su cellulare ─ */}
-      <div className="soll-col soll-comandi">
-        <section className="panel">
-          <div className="panel-body" style={{ paddingTop: 12 }}>
-            <div className="section-title">Schema di calcolo</div>
-
-            <Menu id="soll_schema" label="Schema statico">
-              <select
-                id="soll_schema"
-                className="input"
-                value={inp.schema}
-                onChange={(e) => set({ schema: e.target.value as SchemaId })}
-              >
-                {SCHEMI.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.label}
-                  </option>
                 ))}
-              </select>
-            </Menu>
-            <div className="schema-preview" title={schema.note}>
-              <MiniSchema id={inp.schema} />
-              <span className="nota">{schema.note}</span>
-            </div>
+                {!r.contributi.length && (
+                  <tr>
+                    <td colSpan={6} className="faint">
+                      Nessun carico selezionato.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+              <tfoot>
+                <tr>
+                  <td colSpan={5}>{verticale ? 'q trasversale (kN/m) · N (kN)' : 'q di progetto (kN/m)'}</td>
+                  <td className="num">{verticale ? `${fx(r.q)} · ${fx(r.N, 1)}` : fx(r.q)}</td>
+                </tr>
+              </tfoot>
+            </table>
           </div>
-        </section>
+        </Accordion>
 
-        <section className="panel">
-          <div className="panel-body" style={{ paddingTop: 12 }}>
-            <div className="section-title">Carichi applicati</div>
-            <div className="row-wrap">
-              {tutte.map((s) => (
-                <button
-                  key={s.id}
-                  type="button"
-                  className="chip-toggle"
-                  aria-pressed={!!inp.attive[s.id]}
-                  title={`${s.descr} — ${s.ref}`}
-                  onClick={() =>
-                    set({ attive: { ...inp.attive, [s.id]: !inp.attive[s.id] } as Record<SorgenteId, boolean> })
-                  }
-                >
-                  {s.label}
-                  <span className="val">
-                    {fx(s.qk)} kN/m²{s.origine === 'azioni' ? ' ↩' : ''}
-                  </span>
-                </button>
-              ))}
-            </div>
-            <p className="note" style={{ marginTop: 6 }}>
-              ↩ = valore ripreso dalla scheda Azioni.
-              {verticale
-                ? ' In verticale i carichi gravitazionali diventano sforzo normale sull’area di influenza.'
-                : ' In orizzontale tutti i carichi agiscono trasversalmente sull’interasse.'}
-            </p>
-          </div>
-        </section>
+        <Accordion
+          id="soll-inerzia"
+          title="Momento d'inerzia — sezione resistente"
+          hint={`${inp.sezioneMateriale === 'manuale' ? 'manuale' : inp.sezioneMateriale === 'cls' ? 'c.a.' : 'acciaio'} · J ${fx(r.J, 0)} cm⁴`}
+        >
+          <Seg<SezioneMateriale>
+            label="Supporto"
+            value={inp.sezioneMateriale}
+            onChange={(v) => set({ sezioneMateriale: v })}
+            options={[
+              { id: 'manuale', label: 'Manuale' },
+              { id: 'cls', label: 'C.a. — b×h' },
+              { id: 'acciaio', label: 'Acciaio — profilo' },
+            ]}
+          />
 
-        <section className="panel">
-          <div className="panel-body" style={{ paddingTop: 12 }}>
-            <div className="section-title">Geometria e carichi</div>
-            <div className="fields fields-fitti fields-compatti">
-              <Field
-                id="soll_L"
-                tab="sollecitazioni"
-                label={verticale ? 'Altezza H' : 'Luce di calcolo L'}
-                unit="m"
-                errore={err.L}
-                dettaglio={{
-                  formula: `Schema ${schema.label} su luce L = ${fx(r.L)} m`,
-                  ref: 'Soluzioni di travi elementari variamente caricate',
-                }}
-              >
-                <NumInput id="soll_L" value={inp.L} errore={!!err.L} onChange={(v) => set({ L: v })} />
-              </Field>
-
-              <Field
-                id="soll_i"
-                tab="sollecitazioni"
-                label="Interasse"
-                unit="m"
-                errore={err.interasse}
-                dettaglio={{
-                  formula: `q = Σ (γ · ψ · qk) · i = ${fx(r.q)} kN/m — larghezza di influenza`,
-                  ref: 'NTC2018 §2.5.3 — γG1 1.30, γG2 1.50, γQ 1.50 (Tab. 2.6.I, A1-STR)',
-                  coeffs: r.contributi.map((c) => ({
-                    k: c.sorgente.label,
-                    v: `${fx(c.qd)} kN/m²`,
-                  })),
-                }}
-              >
-                <NumInput
-                  id="soll_i"
-                  value={inp.interasse}
-                  errore={!!err.interasse}
-                  onChange={(v) => set({ interasse: v })}
-                />
-              </Field>
-
-              {verticale && (
-                <Field
-                  id="soll_A"
-                  tab="sollecitazioni"
-                  label="Area di influenza"
-                  unit="m²"
-                  errore={err.areaInfluenza}
-                  dettaglio={{
-                    formula: `N = Σ (γ · ψ · qk) · A = ${fx(r.N, 1)} kN`,
-                    ref: 'NTC2018 §2.5.3',
-                  }}
-                >
-                  <NumInput
-                    id="soll_A"
-                    value={inp.areaInfluenza}
-                    errore={!!err.areaInfluenza}
-                    onChange={(v) => set({ areaInfluenza: v })}
-                  />
-                </Field>
-              )}
-
-              <Field
-                id="soll_pp"
-                tab="sollecitazioni"
-                label="Peso proprio G1"
-                unit="kN/m²"
-                errore={err.pp}
-                dettaglio={{
-                  formula: `γG1 = 1.30 in combinazione SLU sfavorevole`,
-                  ref: 'NTC2018 §2.6.1 — Tab. 2.6.I',
-                }}
-              >
-                <NumInput id="soll_pp" value={inp.pp} errore={!!err.pp} onChange={(v) => set({ pp: v })} />
-              </Field>
-
-              <Field
-                id="soll_g2"
-                tab="sollecitazioni"
-                label="Permanenti G2"
-                unit="kN/m²"
-                errore={err.g2}
-                dettaglio={{
-                  formula: `γG2 = 1.50 in combinazione SLU sfavorevole`,
-                  ref: 'NTC2018 §2.6.1 — Tab. 2.6.I',
-                }}
-              >
-                <NumInput id="soll_g2" value={inp.g2} errore={!!err.g2} onChange={(v) => set({ g2: v })} />
-              </Field>
-
-              <Field
-                id="soll_P"
-                tab="sollecitazioni"
-                label="Carico concentrato P"
-                unit="kN"
-                dettaglio={{
-                  formula: `P applicato a x = ${fx(num(inp.aP))} m dall’estremo A`,
-                  ref: 'NTC2018 §3.1.4 — Qk da Tab. 3.1.II',
-                  coeffs: [{ k: 'Qk tabellare', v: `${fx(az.variabili.Qk)} kN` }],
-                }}
-              >
-                <NumInput id="soll_P" value={inp.P} onChange={(v) => set({ P: v })} />
-              </Field>
-
-              <Field
-                id="soll_aP"
-                tab="sollecitazioni"
-                label="Ascissa di P"
-                unit="m"
-                errore={err.aP}
-              >
-                <NumInput id="soll_aP" value={inp.aP} errore={!!err.aP} onChange={(v) => set({ aP: v })} />
-              </Field>
-
-            </div>
-          </div>
-        </section>
-
-        <section className="panel">
-          <div className="panel-body" style={{ paddingTop: 12 }}>
-            <div className="section-title">Momento d'inerzia — sezione resistente</div>
-
-            <Seg<SezioneMateriale>
-              label="Supporto"
-              value={inp.sezioneMateriale}
-              onChange={(v) => set({ sezioneMateriale: v })}
-              options={[
-                { id: 'manuale', label: 'Manuale' },
-                { id: 'cls', label: 'C.a. — b×h' },
-                { id: 'acciaio', label: 'Acciaio — profilo' },
-              ]}
-            />
-
-            {inp.sezioneMateriale === 'manuale' && (
-              <div className="fields fields-fitti fields-compatti" style={{ marginTop: 10 }}>
-                <Field
-                  id="soll_E"
-                  tab="sollecitazioni"
-                  label="Modulo elastico E"
-                  unit="MPa"
-                  errore={err.E}
-                  dettaglio={{
-                    formula: `EJ = E · J = ${fx(num(inp.E), 0)} MPa · ${fx(num(inp.J), 0)} cm⁴ = ${fx(r.EJ, 0)} kNm²`,
-                    ref: 'NTC2018 §4.1.1.1 (Ecm) / §4.2.1 (E acciaio)',
-                  }}
-                >
-                  <NumInput id="soll_E" value={inp.E} errore={!!err.E} onChange={(v) => set({ E: v })} />
-                </Field>
-
-                <Field
-                  id="soll_J"
-                  tab="sollecitazioni"
-                  label="Momento d'inerzia J"
-                  unit="cm⁴"
-                  errore={err.J}
-                  dettaglio={{
-                    formula: `f = ${fx(Math.abs(t.fmax.val) * 1000, 2)} mm  →  deformabilità = ${verticale ? 'H' : 'L'}/${Number.isFinite(t.Lsuf) ? fx(t.Lsuf, 0) : '∞'}`,
-                    ref: 'NTC2018 §4.1.2.2.2 — limiti di deformabilità',
-                  }}
-                >
-                  <NumInput id="soll_J" value={inp.J} errore={!!err.J} onChange={(v) => set({ J: v })} />
-                </Field>
+          {inp.sezioneMateriale === 'manuale' && (
+            <div className="fields fields-fitti fields-compatti" style={{ marginTop: 10 }}>
+              <div>
+                <div className="field-row">
+                  <label htmlFor="soll_E">Modulo elastico E</label>
+                  <div className="field-control">
+                    <NumInput id="soll_E" value={inp.E} errore={!!err.E} onChange={(v) => set({ E: v })} />
+                    <span className="field-unit">MPa</span>
+                  </div>
+                </div>
               </div>
-            )}
+              <div>
+                <div className="field-row">
+                  <label htmlFor="soll_J">Momento d'inerzia J</label>
+                  <div className="field-control">
+                    <NumInput id="soll_J" value={inp.J} errore={!!err.J} onChange={(v) => set({ J: v })} />
+                    <span className="field-unit">cm⁴</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
-            {inp.sezioneMateriale === 'cls' && (
-              <div className="fields fields-fitti fields-compatti" style={{ marginTop: 10 }}>
-                <Field id="soll_sez_cls" tab="sollecitazioni" label="Classe di calcestruzzo">
+          {inp.sezioneMateriale === 'cls' && (
+            <div className="fields fields-fitti fields-compatti" style={{ marginTop: 10 }}>
+              <div>
+                <div className="field-row">
+                  <label htmlFor="soll_sez_cls">Classe di calcestruzzo</label>
                   <Select
                     id="soll_sez_cls"
                     value={inp.sezioneCls}
                     options={Object.keys(CLS)}
                     onChange={(v) => set({ sezioneCls: v })}
                   />
-                </Field>
-                <Field id="soll_sez_b" tab="sollecitazioni" label="Base b" unit="mm">
-                  <NumInput id="soll_sez_b" value={inp.sezioneB} onChange={(v) => set({ sezioneB: v })} />
-                </Field>
-                <Field id="soll_sez_h" tab="sollecitazioni" label="Altezza h" unit="mm">
-                  <NumInput id="soll_sez_h" value={inp.sezioneH} onChange={(v) => set({ sezioneH: v })} />
-                </Field>
-                <Field
-                  id="soll_sez_out"
-                  tab="sollecitazioni"
-                  label="E, J calcolati"
-                  dettaglio={{
-                    formula: `Ecm = 22000·((fck+8)/10)^0.3 = ${fx(r.E, 0)} MPa;  J = b·h³/12 = ${fx(r.J, 0)} cm⁴`,
-                    ref: 'NTC2018 §11.2.10.3 — sezione rettangolare non fessurata',
-                  }}
-                >
-                  <input className="input num" readOnly value={`E ${fx(r.E, 0)} · J ${fx(r.J, 0)}`} />
-                </Field>
+                </div>
               </div>
-            )}
+              <div>
+                <div className="field-row">
+                  <label htmlFor="soll_sez_b">Base b</label>
+                  <div className="field-control">
+                    <NumInput id="soll_sez_b" value={inp.sezioneB} onChange={(v) => set({ sezioneB: v })} />
+                    <span className="field-unit">mm</span>
+                  </div>
+                </div>
+              </div>
+              <div>
+                <div className="field-row">
+                  <label htmlFor="soll_sez_h">Altezza h</label>
+                  <div className="field-control">
+                    <NumInput id="soll_sez_h" value={inp.sezioneH} onChange={(v) => set({ sezioneH: v })} />
+                    <span className="field-unit">mm</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
-            {inp.sezioneMateriale === 'acciaio' && (
-              <div className="fields fields-fitti fields-compatti" style={{ marginTop: 10 }}>
-                <Field id="soll_sez_tipo" tab="sollecitazioni" label="Tipo di profilo">
+          {inp.sezioneMateriale === 'acciaio' && (
+            <div className="fields fields-fitti fields-compatti" style={{ marginTop: 10 }}>
+              <div>
+                <div className="field-row">
+                  <label htmlFor="soll_sez_tipo">Tipo di profilo</label>
                   <select
                     id="soll_sez_tipo"
                     className="input"
@@ -506,32 +354,161 @@ export default function Sollecitazioni() {
                       set({ sezioneTipoProfilo: tipo, sezioneProfilo: taglieDisponibili(tipo)[0] ?? '' });
                     }}
                   >
-                    {TIPI_PROFILO.map((t) => (
-                      <option key={t.id} value={t.id}>
-                        {t.label}
+                    {TIPI_PROFILO.map((tp) => (
+                      <option key={tp.id} value={tp.id}>
+                        {tp.label}
                       </option>
                     ))}
                   </select>
-                </Field>
-                <Field id="soll_sez_profilo" tab="sollecitazioni" label="Profilo">
+                </div>
+              </div>
+              <div>
+                <div className="field-row">
+                  <label htmlFor="soll_sez_profilo">Profilo</label>
                   <Select
                     id="soll_sez_profilo"
                     value={inp.sezioneProfilo}
                     options={taglieDisponibili(inp.sezioneTipoProfilo)}
                     onChange={(v) => set({ sezioneProfilo: v })}
                   />
-                </Field>
-                <Field
-                  id="soll_sez_out2"
-                  tab="sollecitazioni"
-                  label="E, J del profilo"
-                  dettaglio={{
-                    formula: `E = 210000 MPa;  J = Ix = ${fx(r.J, 0)} cm⁴`,
-                    ref: 'NTC2018 §4.2.1 — profilo dal sagomario acciaio',
-                  }}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {inp.sezioneMateriale !== 'manuale' && (
+            <Output voci={[{ k: 'E', v: fx(r.E, 0), u: 'MPa' }, { k: 'J', v: fx(r.J, 0), u: 'cm⁴' }]} />
+          )}
+        </Accordion>
+      </div>
+
+      {/* ── fascia comandi: una riga sola sotto i diagrammi ─────────────── */}
+      <div className="soll-col soll-comandi">
+        <section className="panel">
+          <div className="panel-body" style={{ paddingTop: 12 }}>
+            <div className="soll-riga-body">
+              <div className="soll-blocco">
+                <span className="kicker">Schema statico</span>
+                <select
+                  id="soll_schema"
+                  className="input"
+                  style={{ width: 200 }}
+                  value={inp.schema}
+                  onChange={(e) => set({ schema: e.target.value as SchemaId })}
                 >
-                  <input className="input num" readOnly value={`E ${fx(r.E, 0)} · J ${fx(r.J, 0)}`} />
-                </Field>
+                  {SCHEMI.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="soll-blocco">
+                <span className="kicker">&nbsp;</span>
+                <div className="schema-preview" title={schema.note}>
+                  <MiniSchema id={inp.schema} />
+                </div>
+              </div>
+
+              <div className="soll-blocco">
+                <span className="kicker">Carichi applicati</span>
+                <div className="row-wrap">
+                  {tutte.map((s) => (
+                    <button
+                      key={s.id}
+                      type="button"
+                      className="chip-toggle"
+                      aria-pressed={!!inp.attive[s.id]}
+                      title={`${s.descr} — ${s.ref}`}
+                      onClick={() =>
+                        set({
+                          attive: { ...inp.attive, [s.id]: !inp.attive[s.id] } as Record<SorgenteId, boolean>,
+                        })
+                      }
+                    >
+                      {s.label}
+                      <span className="val">
+                        {fx(s.qk)} {s.perMetro ? 'kN/m' : 'kN/m²'}
+                        {s.origine === 'azioni' ? ' ↩' : ''}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="soll-blocco">
+                <span className="kicker">
+                  Geometria e carichi
+                  <button
+                    type="button"
+                    className="field-info"
+                    aria-expanded={geomOpen}
+                    title="Formule e riferimenti"
+                    onClick={() => setGeomOpen((v) => !v)}
+                  >
+                    <Info size={14} />
+                  </button>
+                </span>
+                <div className="soll-geom-grid">
+                  <MiniCampo
+                    id="soll_L"
+                    label={verticale ? 'H (m)' : 'L (m)'}
+                    value={inp.L}
+                    errore={err.L}
+                    onChange={(v) => set({ L: v })}
+                  />
+                  <MiniCampo
+                    id="soll_i"
+                    label="Interasse (m)"
+                    value={inp.interasse}
+                    errore={err.interasse}
+                    onChange={(v) => set({ interasse: v })}
+                  />
+                  {verticale && (
+                    <MiniCampo
+                      id="soll_A"
+                      label="Area infl. (m²)"
+                      value={inp.areaInfluenza}
+                      errore={err.areaInfluenza}
+                      onChange={(v) => set({ areaInfluenza: v })}
+                    />
+                  )}
+                  <MiniCampo
+                    id="soll_pp"
+                    label="G1 (kN/m²)"
+                    value={inp.pp}
+                    errore={err.pp}
+                    onChange={(v) => set({ pp: v })}
+                  />
+                  <MiniCampo
+                    id="soll_g2"
+                    label="G2 (kN/m²)"
+                    value={inp.g2}
+                    errore={err.g2}
+                    onChange={(v) => set({ g2: v })}
+                  />
+                  <MiniCampo id="soll_P" label="P (kN)" value={inp.P} onChange={(v) => set({ P: v })} />
+                  <MiniCampo
+                    id="soll_aP"
+                    label="x di P (m)"
+                    value={inp.aP}
+                    errore={err.aP}
+                    onChange={(v) => set({ aP: v })}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {geomOpen && (
+              <div style={{ marginTop: 10 }}>
+                <DettaglioPanel dettaglio={dettaglioGeom} />
+                <p className="note" style={{ marginTop: 6 }}>
+                  ↩ = valore ripreso dalla scheda Azioni.
+                  {verticale
+                    ? ' In verticale i carichi gravitazionali diventano sforzo normale sull’area di influenza; la spinta delle terre ha andamento triangolare lungo H.'
+                    : ' In orizzontale tutti i carichi agiscono trasversalmente sull’interasse.'}
+                </p>
               </div>
             )}
           </div>
