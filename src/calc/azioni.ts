@@ -5,16 +5,39 @@
  * Riferimenti: NTC2018 (DM 17/01/2018) cap. 3.
  */
 
-import { AG, SS, ST, CU, ZONE_NEVE, VB0, ESPOSIZIONE, CAT } from '../data/ntc2018';
+import { ST, CU, ZONE_NEVE, VB0, ESPOSIZIONE, CAT } from '../data/ntc2018';
+import {
+  PVR,
+  coefficienteCC,
+  coefficienteSS,
+  interpolaTR,
+  periodoRitorno,
+  risolviSito,
+  STATI_LIMITE,
+  type FonteSito,
+  type StatoLimite,
+} from './sismica';
+import type { ZonaSismica } from '../data/comuni';
+import { parametriSito } from '../data/parametri-sismici';
 
 export interface InputAzioni {
-  // sisma
-  loc: string;
+  // sisma — sito
+  regione: string;
+  /** Sigla della provincia (es. "AQ"). */
+  prov: string;
+  comune: string;
+  /** Stato limite di riferimento per l'azione sismica. */
+  sl: StatoLimite;
+  /** ag/g imposto a mano; vuoto = dal reticolo di riferimento. */
+  agManuale: string;
   suolo: string;
   topo: string;
   vn: string;
   cu: string;
+  /** F0 imposto a mano; vuoto = dal reticolo. */
   F0: string;
+  /** TC* del sito (s) imposto a mano; vuoto = dal reticolo. */
+  TCstar: string;
   q: string;
   // neve
   zneve: string;
@@ -38,12 +61,17 @@ export interface InputAzioni {
 }
 
 export const AZIONI_DEFAULT: InputAzioni = {
-  loc: "L'Aquila",
+  regione: 'Abruzzo',
+  prov: 'AQ',
+  comune: "L'Aquila",
+  sl: 'SLV',
+  agManuale: '',
   suolo: 'C',
   topo: 'T1',
   vn: '50',
   cu: 'II (ordinaria) — 1.0',
-  F0: '2.42',
+  F0: '',
+  TCstar: '',
   q: '3.0',
   zneve: 'II — Mediterranea',
   as: '714',
@@ -70,7 +98,33 @@ export const num = (v: string | number | undefined): number => {
 };
 
 export interface RisultatiAzioni {
-  sisma: { ag: number; Ss: number; St: number; S: number; cu: number; F0: number; q: number; Sd: number; VR: number; TR: number };
+  sisma: {
+    ag: number;
+    Ss: number;
+    St: number;
+    S: number;
+    cu: number;
+    F0: number;
+    q: number;
+    Sd: number;
+    VR: number;
+    TR: number;
+    /** Provenienza dei parametri e classificazione del comune. */
+    fonte: FonteSito;
+    nota: string;
+    manuali: { ag: boolean; F0: boolean; TCstar: boolean };
+    zona?: ZonaSismica;
+    zonaLabel?: string;
+    sito: string;
+    /** Periodi caratteristici dello spettro orizzontale — §3.2.3.2.1. */
+    Cc: number;
+    TCstar: number;
+    TB: number;
+    TC: number;
+    TD: number;
+    /** ag, F0 e TC* del sito per i quattro stati limite — Tab. 3.2.I. */
+    statiLimite: { id: StatoLimite; label: string; TR: number; ag: number; F0: number; TCstar: number }[];
+  };
   neve: { qsk: number; qs: number; mu: number; ce: number; ct: number };
   vento: { vb: number; qb: number; ce: number; cp: number; cd: number; p: number; pSotto: number };
   variabili: { qk: number; Qk: number; Hk: number; psi0: number; psi1: number; psi2: number; categoria: string };
@@ -79,17 +133,44 @@ export interface RisultatiAzioni {
 
 export function calcolaAzioni(inp: InputAzioni): RisultatiAzioni {
   // ── azione sismica — §3.2 ──────────────────────────────────────────────
-  const ag = AG[inp.loc] ?? 0.15;
-  const Ss = SS[inp.suolo] ?? 1;
-  const St = ST[inp.topo] ?? 1;
-  const S = Ss * St;
   const cu = CU[inp.cu] ?? 1;
-  const F0 = num(inp.F0) || 2.42;
-  const q = num(inp.q) || 1;
-  const Sd = (ag * S * F0) / q;
   const VN = num(inp.vn);
   const VR = Math.max(VN * cu, 35); // §2.4.3: VR ≥ 35 anni
-  const TR = -VR / Math.log(1 - 0.1); // SLV, PVR = 10%
+  const sl: StatoLimite = inp.sl ?? 'SLV';
+  const TR = periodoRitorno(VR, PVR[sl] ?? PVR.SLV);
+
+  // i campi possono arrivare vuoti, o assenti da un JSON di una versione precedente
+  const forzato = (v: string | undefined) => (String(v ?? '').trim() ? num(v) : undefined);
+  const sito = risolviSito(inp.regione, inp.prov, inp.comune, TR, {
+    ag: forzato(inp.agManuale),
+    F0: forzato(inp.F0),
+    TCstar: forzato(inp.TCstar),
+  });
+
+  const { ag, F0, TCstar } = sito;
+  const Ss = coefficienteSS(inp.suolo, ag, F0);
+  const St = ST[inp.topo] ?? 1;
+  const S = Ss * St;
+  const q = num(inp.q) || 1;
+  const Sd = (ag * S * F0) / q;
+  const Cc = coefficienteCC(inp.suolo, TCstar);
+  const TC = Cc * TCstar;
+  const TB = TC / 3;
+  const TD = 4 * ag + 1.6;
+
+  // quadro dei quattro stati limite sullo stesso VR
+  const tabellaSito = sito.comune ? parametriSito(sito.comune.indice) : undefined;
+  const statiLimite = STATI_LIMITE.map((s) => {
+    const tr = periodoRitorno(VR, s.PVR);
+    return {
+      id: s.id,
+      label: s.label,
+      TR: tr,
+      ag: tabellaSito ? interpolaTR(tabellaSito.ag, tr) : ag,
+      F0: tabellaSito ? interpolaTR(tabellaSito.F0, tr) : F0,
+      TCstar: tabellaSito ? interpolaTR(tabellaSito.TCstar, tr) : TCstar,
+    };
+  });
 
   // ── carico neve — §3.4 ─────────────────────────────────────────────────
   const zn = ZONE_NEVE[inp.zneve] ?? ZONE_NEVE['II — Mediterranea'];
@@ -123,7 +204,30 @@ export function calcolaAzioni(inp: InputAzioni): RisultatiAzioni {
   const za = H / 3;
 
   return {
-    sisma: { ag, Ss, St, S, cu, F0, q, Sd, VR, TR },
+    sisma: {
+      ag,
+      Ss,
+      St,
+      S,
+      cu,
+      F0,
+      q,
+      Sd,
+      VR,
+      TR,
+      fonte: sito.fonte,
+      nota: sito.nota,
+      manuali: sito.manuali,
+      zona: sito.zona,
+      zonaLabel: sito.zonaLabel,
+      sito: sito.comune ? `${sito.comune.nome} (${sito.comune.sigla})` : '—',
+      Cc,
+      TCstar,
+      TB,
+      TC,
+      TD,
+      statiLimite,
+    },
     neve: { qsk, qs, mu, ce: ceN, ct },
     vento: { vb, qb, ce, cp, cd, p, pSotto: -p * 0.5 },
     variabili: {

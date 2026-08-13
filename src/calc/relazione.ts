@@ -24,10 +24,17 @@ export function testoRelazione(state: AppState, tab: TabId): string {
     return [
       ...intestazione,
       'AZIONE SISMICA — NTC2018 §3.2',
-      `  Località: ${state.azioni.loc}; sottosuolo ${state.azioni.suolo}; topografia ${state.azioni.topo}`,
-      `  ag/g = ${fx(az.sisma.ag, 3)}; S = SS·ST = ${fx(az.sisma.S)}; F0 = ${fx(az.sisma.F0)}; q = ${fx(az.sisma.q)}`,
-      `  Sd(T1) = ag·S·F0/q = ${fx(az.sisma.Sd, 3)} g`,
-      `  VR = VN·CU = ${fx(az.sisma.VR, 0)} anni; TR (SLV) = ${fx(az.sisma.TR, 0)} anni`,
+      `  Sito: ${az.sisma.sito}, ${state.azioni.regione} — zona sismica ${az.sisma.zonaLabel ?? '—'}`,
+      `  Sottosuolo ${state.azioni.suolo}; topografia ${state.azioni.topo}`,
+      `  ${az.sisma.nota}`,
+      `  VR = VN·CU = ${fx(az.sisma.VR, 0)} anni; stato limite ${state.azioni.sl ?? 'SLV'}; TR = ${fx(az.sisma.TR, 0)} anni`,
+      ...az.sisma.statiLimite.map(
+        (s) =>
+          `    ${s.id}: TR = ${fx(s.TR, 0)} anni; ag/g = ${fx(s.ag, 3)}; F0 = ${fx(s.F0, 3)}; TC* = ${fx(s.TCstar, 3)} s`,
+      ),
+      `  ag/g = ${fx(az.sisma.ag, 3)}; SS = ${fx(az.sisma.Ss)}; ST = ${fx(az.sisma.St)}; S = SS·ST = ${fx(az.sisma.S)}`,
+      `  F0 = ${fx(az.sisma.F0, 3)}; TC* = ${fx(az.sisma.TCstar, 3)} s; CC = ${fx(az.sisma.Cc)} → TB = ${fx(az.sisma.TB)} s; TC = ${fx(az.sisma.TC)} s; TD = ${fx(az.sisma.TD)} s`,
+      `  q = ${fx(az.sisma.q)}; Sd(T1) = ag·S·F0/q = ${fx(az.sisma.Sd, 3)} g`,
       '',
       'CARICO NEVE — NTC2018 §3.4',
       `  Zona ${state.azioni.zneve}; as = ${fx(num(state.azioni.as), 0)} m`,
