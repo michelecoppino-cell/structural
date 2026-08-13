@@ -1,0 +1,73 @@
+/* Design system "Nocturne" — accento ridefinito su ocra.
+   Fonte: design_handoff_calcoli_strutturali (Design Tokens). */
+
+:root {
+  /* — accento ocra — */
+  --color-accent: #c9932e;
+  --color-accent-100: #fdf7ea;
+  --color-accent-200: #f8e8c4;
+  --color-accent-300: #f0d296;
+  --color-accent-400: #e0b25e;
+  --color-accent-500: #c9932e;
+  --color-accent-600: #a5761d;
+  --color-accent-700: #7d5915;
+  --color-accent-800: #4e370f;
+  --color-accent-900: #33240a;
+
+  /* — superfici — */
+  --ground: #12141c;
+  --chrome: #171923;
+  --surface: #1b1d29;
+  --control: #232532;
+  --nested: #161826;
+
+  /* — testo — */
+  --text: #e9e9ed;
+  --text-tint: #e4e7f5;
+  --text-2: #b2b6ca;
+  --text-muted: #9397ab;
+  --text-faint: #75798c;
+
+  /* — bordi — */
+  --divider: rgba(233, 233, 237, 0.12);
+  --divider-strong: rgba(233, 233, 237, 0.16);
+  --divider-soft: rgba(233, 233, 237, 0.1);
+  --border-faint: rgba(233, 233, 237, 0.08);
+
+  /* — stati (unico uso ammesso del colore oltre l'accento) — */
+  --ok: #56a978;
+  --ok-bg: rgba(86, 169, 120, 0.1);
+  --warn: #d08a3c;
+  --err: #cf5c5c;
+  --err-bg: rgba(207, 92, 92, 0.1);
+
+  /* — scala spaziature (densità 0.70x) — */
+  --space-1: 2.8px;
+  --space-2: 5.6px;
+  --space-3: 8.4px;
+  --space-4: 11.2px;
+  --space-6: 16.8px;
+  --space-8: 22.4px;
+
+  --radius-sm: 5px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+
+  --shadow-sm: 0 0 0 1px #3f424d;
+  --shadow-md: 0 0 0 1px #595d6c, 0 6px 18px rgba(0, 0, 0, 0.55);
+  --shadow-lg: 0 0 0 1px #9397ab, 0 16px 40px rgba(0, 0, 0, 0.65);
+
+  --font: Inter, system-ui, -apple-system, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+@keyframes fadein {
+  from {
+    opacity: 0;
+    transform: translateY(-3px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
