@@ -157,6 +157,7 @@ export function DiagrammaCarichi({
   schema,
   L,
   q,
+  qTri,
   P,
   aP,
   N,
@@ -167,6 +168,8 @@ export function DiagrammaCarichi({
   schema: SchemaId;
   L: number;
   q: number;
+  /** Rampa triangolare (kN/m) da x=0 a x=L, sovrapposta a q — es. spinta delle terre. */
+  qTri?: { w0: number; w1: number };
   P: number;
   aP: number;
   /** Sforzo normale di progetto (kN), disegnato solo in verticale. */
@@ -185,18 +188,27 @@ export function DiagrammaCarichi({
 
     const el: React.ReactNode[] = [];
 
-    // ── carico distribuito: frecce verso l'asta ──────────────────────────
-    if (Math.abs(q) > 1e-9) {
+    // ── carico distribuito: frecce verso l'asta (uniformi o a rampa) ──────
+    const haTri = !!qTri && (Math.abs(qTri.w0) > 1e-9 || Math.abs(qTri.w1) > 1e-9);
+    if (Math.abs(q) > 1e-9 || haTri) {
       const n = verticale ? 9 : 13;
+      const wMax = Math.max(Math.abs(q + (qTri?.w0 ?? 0)), Math.abs(q + (qTri?.w1 ?? 0)), 1e-9);
+      const altezza = (a: number) => {
+        if (!haTri) return hCar;
+        const t = len > 0 ? a / len : 0;
+        const wi = q + qTri!.w0 + (qTri!.w1 - qTri!.w0) * t;
+        return Math.max(6, (Math.abs(wi) / wMax) * hCar);
+      };
       for (let i = 0; i < n; i++) {
         const a = (len * i) / (n - 1);
+        const hi = altezza(a);
         el.push(
           <path
             key={`q${i}`}
             className="dg-carico"
             strokeWidth={1}
             d={
-              seg('M', ax, a, -hCar) +
+              seg('M', ax, a, -hi) +
               seg('L', ax, a, -4) +
               seg('M', ax, a - 3.5, -10) +
               seg('L', ax, a, -3) +
@@ -210,7 +222,7 @@ export function DiagrammaCarichi({
           key="qline"
           className="dg-carico"
           strokeWidth={1}
-          d={seg('M', ax, 0, -hCar) + seg('L', ax, len, -hCar)}
+          d={haTri ? seg('M', ax, 0, -altezza(0)) + seg('L', ax, len, -altezza(len)) : seg('M', ax, 0, -hCar) + seg('L', ax, len, -hCar)}
         />,
       );
     }

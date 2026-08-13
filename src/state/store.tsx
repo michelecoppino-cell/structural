@@ -107,7 +107,7 @@ export const STATO_INIZIALE: AppState = {
     { id: 'c5', categoria: 'Opere provvisionali', descrizione: 'Ponteggio di servizio', um: 'm²', quantita: '260', prezzo: '14.00' },
   ],
   ui: {
-    open: { sisma: true, vari: true },
+    open: { sisma: true, vari: true, 'soll-risultati': true, 'soll-inerzia': false },
     exp: {},
     allDetails: { azioni: false, sollecitazioni: false, verifiche: false, costi: false },
     verifica: 'taglio-non-armato',

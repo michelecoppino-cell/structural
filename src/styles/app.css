@@ -1173,7 +1173,7 @@ button.field-origin:hover {
 
 .soll-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) clamp(310px, 26vw, 390px);
+  grid-template-columns: minmax(0, 1fr) clamp(300px, 26vw, 380px);
   grid-template-rows: minmax(0, 1fr) auto;
   gap: 10px;
   min-height: 0;
@@ -1193,18 +1193,20 @@ button.field-origin:hover {
   grid-row: 1;
 }
 
-.soll-esiti {
-  grid-column: 1;
-  grid-row: 2;
-}
-
-.soll-comandi {
+/* colonna in alto a destra: pannelli "Sollecitazioni" e "Momento d'inerzia",
+   entrambi ad accordion — si scorre la colonna, non la pagina */
+.soll-side {
   grid-column: 2;
-  grid-row: 1 / -1;
-  /* fallback su desktop stretto: la colonna scorre da sola, la pagina resta ferma */
+  grid-row: 1;
   overflow-y: auto;
   overscroll-behavior: contain;
   padding-right: 2px;
+}
+
+/* fascia sotto i diagrammi: una riga sola di comandi, a tutta larghezza */
+.soll-comandi {
+  grid-column: 1 / -1;
+  grid-row: 2;
 }
 
 /* i pannelli tengono la loro altezza: a scorrere è la colonna */
@@ -1284,37 +1286,75 @@ button.field-origin:hover {
   line-height: 1.35;
 }
 
+/* ─────────────── fascia comandi: una riga sola sotto i diagrammi ────────── */
+
+.soll-riga-body {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: flex-end;
+  gap: 22px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  padding-bottom: 2px;
+}
+
+.soll-blocco {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: none;
+}
+
+.soll-blocco > .kicker {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.soll-blocco .schema-preview {
+  margin: 0;
+}
+
+.soll-blocco .row-wrap {
+  flex-wrap: nowrap;
+}
+
+.soll-geom-grid {
+  display: flex;
+  gap: 8px;
+}
+
+.mini-campo {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 74px;
+  flex: none;
+}
+
+.mini-campo > label {
+  font-size: 11px;
+  color: var(--text-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mini-campo .input {
+  width: 100%;
+  padding-inline: 6px;
+}
+
+.mini-campo.is-error .input {
+  border-color: var(--err);
+}
+
 /* ───────────── ≥ 1200px: due colonne per i pannelli impilati ───────────── */
 
 @media (min-width: 1200px) {
   .stack-2col {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-/* ───────── ≥ 1400px: i comandi passano in fascia sotto i diagrammi ──────── */
-
-@media (min-width: 1400px) {
-  .soll-layout {
-    grid-template-columns: minmax(0, 1fr) clamp(330px, 23vw, 440px);
-  }
-
-  .soll-esiti {
-    grid-column: 2;
-    grid-row: 1;
-  }
-
-  /* i comandi passano in fascia sotto i diagrammi: tre colonne, la terza più
-     larga perché ospita gli otto campi di geometria */
-  .soll-comandi {
-    grid-column: 1 / -1;
-    grid-row: 2;
-    display: grid;
-    grid-template-columns: minmax(0, 0.8fr) minmax(0, 1fr) minmax(0, 1.6fr);
-    gap: 10px;
-    align-items: start;
-    overflow: visible;
-    padding-right: 0;
   }
 }
 
@@ -1443,14 +1483,20 @@ button.field-origin:hover {
   }
 
   .soll-risultati,
-  .soll-esiti,
+  .soll-side,
   .soll-comandi {
     grid-column: 1;
     grid-row: auto;
   }
 
-  .soll-comandi {
+  .soll-comandi,
+  .soll-side {
     overflow: visible;
+  }
+
+  .soll-riga-body {
+    flex-wrap: wrap;
+    overflow-x: visible;
   }
 
   .panel-diagrammi {
