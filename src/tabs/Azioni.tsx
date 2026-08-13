@@ -1,16 +1,43 @@
 import { Waveform, Snowflake, Wind, Stack, Mountains } from '@phosphor-icons/react';
 import { useStore } from '../state/store';
 import { calcolaAzioni, num } from '../calc/azioni';
-import { AG, SS, ST, CU, ZONE_NEVE, VB0, ESPOSIZIONE, CAT } from '../data/ntc2018';
+import { SUOLI } from '../calc/sismica';
+import { ST, CU, ZONE_NEVE, VB0, ESPOSIZIONE, CAT } from '../data/ntc2018';
+import { REGIONI, comuniDi, provinceDi } from '../data/comuni';
 import { Accordion, Field, NumInput, Output, Select } from '../components/ui';
 
 const fx = (v: number, d = 2) => (Number.isFinite(v) ? v.toFixed(d) : '—');
+
+const FONTE_AG: Record<string, string> = {
+  manuale: 'valore inserito a mano',
+  tabella: 'reticolo di riferimento',
+  zona: 'zona sismica del comune',
+};
 
 export default function Azioni() {
   const { state, dispatch } = useStore();
   const inp = state.azioni;
   const r = calcolaAzioni(inp);
   const set = (patch: Partial<typeof inp>) => dispatch({ type: 'azioni', patch });
+
+  const province = provinceDi(inp.regione);
+  const comuni = comuniDi(inp.regione, inp.prov);
+
+  /** Cambio di regione o provincia: si riparte dal primo comune disponibile. */
+  const setRegione = (regione: string) => {
+    const prov = provinceDi(regione)[0]?.sigla ?? '';
+    setComune(regione, prov, comuniDi(regione, prov)[0]?.nome ?? '');
+  };
+
+  const setProvincia = (prov: string) => {
+    setComune(inp.regione, prov, comuniDi(inp.regione, prov)[0]?.nome ?? '');
+  };
+
+  /** Il comune scelto è anche la località riportata in testata e in relazione. */
+  const setComune = (regione: string, prov: string, comune: string) => {
+    set({ regione, prov, comune });
+    dispatch({ type: 'progetto', patch: { localita: `${comune} (${prov})` } });
+  };
 
   return (
     <div className="stack">
@@ -19,20 +46,82 @@ export default function Azioni() {
         id="sisma"
         title="Azione sismica"
         icon={<Waveform size={18} />}
-        hint={`ag ${fx(r.sisma.ag, 3)}g · S ${fx(r.sisma.S)} · Sd(T1) ${fx(r.sisma.Sd, 3)}g`}
+        hint={`${r.sisma.sito} · zona ${r.sisma.zonaLabel ?? '—'} · ag ${fx(r.sisma.ag, 3)}g · Sd(T1) ${fx(r.sisma.Sd, 3)}g`}
       >
         <div className="fields">
           <Field
-            id="sisma_loc"
+            id="sisma_regione"
             tab="azioni"
-            label="Località"
+            label="Regione"
             dettaglio={{
-              formula: 'ag, F0, TC* interpolati dal reticolo di riferimento sui 4 nodi più vicini',
-              ref: 'NTC2018 §3.2.3 — All. B',
-              coeffs: [{ k: 'ag/g', v: fx(r.sisma.ag, 3) }],
+              formula: 'Sito individuato per regione → provincia → comune sull’elenco ISTAT',
+              ref: 'Classificazione sismica nazionale — DPC, agg. 2024 (OPCM 3519/2006)',
+              coeffs: [{ k: 'comuni in provincia', v: String(comuni.length) }],
             }}
           >
-            <Select id="sisma_loc" value={inp.loc} options={Object.keys(AG)} onChange={(v) => set({ loc: v })} />
+            <Select
+              id="sisma_regione"
+              value={inp.regione}
+              options={REGIONI}
+              onChange={(v) => setRegione(v)}
+            />
+          </Field>
+
+          <Field id="sisma_prov" tab="azioni" label="Provincia">
+            <select
+              id="sisma_prov"
+              className="input"
+              value={inp.prov}
+              onChange={(e) => setProvincia(e.target.value)}
+            >
+              {province.map((p) => (
+                <option key={p.sigla} value={p.sigla}>
+                  {p.nome} ({p.sigla})
+                </option>
+              ))}
+            </select>
+          </Field>
+
+          <Field
+            id="sisma_comune"
+            tab="azioni"
+            label="Comune"
+            dettaglio={{
+              formula: r.sisma.notaAg,
+              ref: 'NTC2018 §3.2 — pericolosità sismica di base',
+              coeffs: [
+                { k: 'zona sismica', v: r.sisma.zonaLabel ?? '—' },
+                { k: 'ag/g', v: fx(r.sisma.ag, 3) },
+                { k: 'fonte', v: FONTE_AG[r.sisma.fonteAg] },
+              ],
+            }}
+          >
+            <Select
+              id="sisma_comune"
+              value={inp.comune}
+              options={comuni.map((c) => c.nome)}
+              onChange={(v) => setComune(inp.regione, inp.prov, v)}
+            />
+          </Field>
+
+          <Field
+            id="sisma_ag"
+            tab="azioni"
+            label="ag/g del sito — vuoto = da mappatura"
+            unit="g"
+            dettaglio={{
+              formula: r.sisma.notaAg,
+              ref:
+                r.sisma.fonteAg === 'zona'
+                  ? 'OPCM 3519/2006, all. 1b — limite superiore di zona'
+                  : 'NTC2018 §3.2.3 — All. B, reticolo di riferimento',
+              coeffs: [
+                { k: 'ag/g in uso', v: fx(r.sisma.ag, 3) },
+                { k: 'fonte', v: FONTE_AG[r.sisma.fonteAg] },
+              ],
+            }}
+          >
+            <NumInput id="sisma_ag" value={inp.agManuale} onChange={(v) => set({ agManuale: v })} />
           </Field>
 
           <Field
@@ -41,12 +130,21 @@ export default function Azioni() {
             label="Categoria di sottosuolo"
             unit="SS"
             dettaglio={{
-              formula: `SS = ${fx(r.sisma.Ss)} da tabella, in funzione di Vs,eq`,
+              formula: `SS = ${fx(r.sisma.Ss)} e CC = ${fx(r.sisma.Cc)} calcolati con ag = ${fx(r.sisma.ag, 3)} g e F0 = ${fx(r.sisma.F0)}`,
               ref: 'NTC2018 §3.2.3.2.1 — Tab. 3.2.IV',
-              coeffs: [{ k: 'SS', v: fx(r.sisma.Ss) }],
+              coeffs: [
+                { k: 'SS', v: fx(r.sisma.Ss) },
+                { k: 'CC', v: fx(r.sisma.Cc) },
+                { k: 'sottosuolo', v: SUOLI[inp.suolo]?.descr ?? '—' },
+              ],
             }}
           >
-            <Select id="sisma_suolo" value={inp.suolo} options={Object.keys(SS)} onChange={(v) => set({ suolo: v })} />
+            <Select
+              id="sisma_suolo"
+              value={inp.suolo}
+              options={Object.keys(SUOLI)}
+              onChange={(v) => set({ suolo: v })}
+            />
           </Field>
 
           <Field
@@ -111,6 +209,24 @@ export default function Azioni() {
           </Field>
 
           <Field
+            id="sisma_tcstar"
+            tab="azioni"
+            label="Periodo di riferimento TC*"
+            unit="s"
+            dettaglio={{
+              formula: `TC = CC · TC* = ${fx(r.sisma.Cc)} · ${fx(r.sisma.TCstar)} = ${fx(r.sisma.TC)} s; TB = TC/3 = ${fx(r.sisma.TB)} s; TD = 4.0·ag/g + 1.6 = ${fx(r.sisma.TD)} s`,
+              ref: 'NTC2018 §3.2.3.2.1 — eq. 3.2.5 ÷ 3.2.7',
+              coeffs: [
+                { k: 'TB', v: `${fx(r.sisma.TB)} s` },
+                { k: 'TC', v: `${fx(r.sisma.TC)} s` },
+                { k: 'TD', v: `${fx(r.sisma.TD)} s` },
+              ],
+            }}
+          >
+            <NumInput id="sisma_tcstar" value={inp.TCstar} onChange={(v) => set({ TCstar: v })} />
+          </Field>
+
+          <Field
             id="sisma_q"
             tab="azioni"
             label="Fattore di comportamento q"
@@ -127,13 +243,21 @@ export default function Azioni() {
 
         <Output
           voci={[
+            { k: 'Zona sismica', v: r.sisma.zonaLabel ?? '—' },
             { k: 'ag/g', v: fx(r.sisma.ag, 3) },
+            { k: 'SS', v: fx(r.sisma.Ss) },
             { k: 'S = SS·ST', v: fx(r.sisma.S) },
+            { k: 'TC', v: fx(r.sisma.TC), u: 's' },
             { k: 'Sd(T1)', v: fx(r.sisma.Sd, 3), u: 'g' },
             { k: 'VR', v: fx(r.sisma.VR, 0), u: 'anni' },
             { k: 'TR (SLV)', v: fx(r.sisma.TR, 0), u: 'anni' },
           ]}
         />
+        <p className="note" style={{ marginTop: 8 }}>
+          {r.sisma.notaAg}.{' '}
+          {r.sisma.fonteAg === 'zona' &&
+            'Per il calcolo definitivo inserire ag del sito dal reticolo di riferimento (All. B) nel campo ag/g.'}
+        </p>
       </Accordion>
 
       {/* ── neve ───────────────────────────────────────────────────────── */}

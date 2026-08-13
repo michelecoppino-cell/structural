@@ -5,16 +5,25 @@
  * Riferimenti: NTC2018 (DM 17/01/2018) cap. 3.
  */
 
-import { AG, SS, ST, CU, ZONE_NEVE, VB0, ESPOSIZIONE, CAT } from '../data/ntc2018';
+import { ST, CU, ZONE_NEVE, VB0, ESPOSIZIONE, CAT } from '../data/ntc2018';
+import { coefficienteCC, coefficienteSS, risolviSito, type FonteAg } from './sismica';
+import type { ZonaSismica } from '../data/comuni';
 
 export interface InputAzioni {
-  // sisma
-  loc: string;
+  // sisma — sito
+  regione: string;
+  /** Sigla della provincia (es. "AQ"). */
+  prov: string;
+  comune: string;
+  /** ag/g inserito a mano; vuoto = ricavato dalla mappatura nazionale. */
+  agManuale: string;
   suolo: string;
   topo: string;
   vn: string;
   cu: string;
   F0: string;
+  /** TC* del sito (s) — periodo di inizio del tratto a velocità costante. */
+  TCstar: string;
   q: string;
   // neve
   zneve: string;
@@ -38,12 +47,16 @@ export interface InputAzioni {
 }
 
 export const AZIONI_DEFAULT: InputAzioni = {
-  loc: "L'Aquila",
+  regione: 'Abruzzo',
+  prov: 'AQ',
+  comune: "L'Aquila",
+  agManuale: '',
   suolo: 'C',
   topo: 'T1',
   vn: '50',
   cu: 'II (ordinaria) — 1.0',
   F0: '2.42',
+  TCstar: '0.35',
   q: '3.0',
   zneve: 'II — Mediterranea',
   as: '714',
@@ -70,7 +83,30 @@ export const num = (v: string | number | undefined): number => {
 };
 
 export interface RisultatiAzioni {
-  sisma: { ag: number; Ss: number; St: number; S: number; cu: number; F0: number; q: number; Sd: number; VR: number; TR: number };
+  sisma: {
+    ag: number;
+    Ss: number;
+    St: number;
+    S: number;
+    cu: number;
+    F0: number;
+    q: number;
+    Sd: number;
+    VR: number;
+    TR: number;
+    /** Provenienza di ag e classificazione del comune. */
+    fonteAg: FonteAg;
+    notaAg: string;
+    zona?: ZonaSismica;
+    zonaLabel?: string;
+    sito: string;
+    /** Periodi caratteristici dello spettro orizzontale — §3.2.3.2.1. */
+    Cc: number;
+    TCstar: number;
+    TB: number;
+    TC: number;
+    TD: number;
+  };
   neve: { qsk: number; qs: number; mu: number; ce: number; ct: number };
   vento: { vb: number; qb: number; ce: number; cp: number; cd: number; p: number; pSotto: number };
   variabili: { qk: number; Qk: number; Hk: number; psi0: number; psi1: number; psi2: number; categoria: string };
@@ -79,17 +115,25 @@ export interface RisultatiAzioni {
 
 export function calcolaAzioni(inp: InputAzioni): RisultatiAzioni {
   // ── azione sismica — §3.2 ──────────────────────────────────────────────
-  const ag = AG[inp.loc] ?? 0.15;
-  const Ss = SS[inp.suolo] ?? 1;
+  // il campo può arrivare vuoto o assente da un JSON salvato prima di questa versione
+  const agIns = String(inp.agManuale ?? '').trim() ? num(inp.agManuale) : undefined;
+  const sito = risolviSito(inp.regione, inp.prov, inp.comune, agIns);
+  const ag = sito.ag;
+  const F0 = num(inp.F0) || 2.42;
+  const Ss = coefficienteSS(inp.suolo, ag, F0);
   const St = ST[inp.topo] ?? 1;
   const S = Ss * St;
   const cu = CU[inp.cu] ?? 1;
-  const F0 = num(inp.F0) || 2.42;
   const q = num(inp.q) || 1;
   const Sd = (ag * S * F0) / q;
   const VN = num(inp.vn);
   const VR = Math.max(VN * cu, 35); // §2.4.3: VR ≥ 35 anni
   const TR = -VR / Math.log(1 - 0.1); // SLV, PVR = 10%
+  const TCstar = num(inp.TCstar) || 0.35;
+  const Cc = coefficienteCC(inp.suolo, TCstar);
+  const TC = Cc * TCstar;
+  const TB = TC / 3;
+  const TD = 4 * ag + 1.6;
 
   // ── carico neve — §3.4 ─────────────────────────────────────────────────
   const zn = ZONE_NEVE[inp.zneve] ?? ZONE_NEVE['II — Mediterranea'];
@@ -123,7 +167,28 @@ export function calcolaAzioni(inp: InputAzioni): RisultatiAzioni {
   const za = H / 3;
 
   return {
-    sisma: { ag, Ss, St, S, cu, F0, q, Sd, VR, TR },
+    sisma: {
+      ag,
+      Ss,
+      St,
+      S,
+      cu,
+      F0,
+      q,
+      Sd,
+      VR,
+      TR,
+      fonteAg: sito.fonte,
+      notaAg: sito.nota,
+      zona: sito.zona,
+      zonaLabel: sito.comune?.zonaLabel,
+      sito: sito.comune ? `${sito.comune.nome} (${sito.comune.sigla})` : '—',
+      Cc,
+      TCstar,
+      TB,
+      TC,
+      TD,
+    },
     neve: { qsk, qs, mu, ce: ceN, ct },
     vento: { vb, qb, ce, cp, cd, p, pSotto: -p * 0.5 },
     variabili: {

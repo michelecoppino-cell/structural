@@ -71,6 +71,12 @@ button {
   position: relative;
 }
 
+/* schermata a misura di finestra: l'altezza è quella del viewport, non del contenuto */
+.app.is-fit {
+  height: 100%;
+  min-height: 0;
+}
+
 .app-header {
   display: flex;
   align-items: center;
@@ -229,6 +235,23 @@ button {
   min-width: 0;
   padding: 18px 24px 30px;
   overflow-y: auto;
+}
+
+/* schede che stanno in una schermata sola: scorre l'interno, non la pagina */
+.app-main.is-fit {
+  display: flex;
+  flex-direction: column;
+  padding-bottom: 18px;
+  overflow: hidden;
+}
+
+.app-main.is-fit > .tab-toolbar {
+  flex: none;
+}
+
+.app-main.is-fit > .soll-layout {
+  flex: 1;
+  min-height: 0;
 }
 
 .bottom-bar {
@@ -835,44 +858,130 @@ select.input {
   z-index: 40;
 }
 
-.scheme-grid {
+/* ───────────────── scheda Sollecitazioni: grafico + comandi a lato ──────── */
+
+.soll-layout {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
-  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) clamp(310px, 26vw, 390px);
+  gap: 10px;
+  min-height: 0;
+  padding-bottom: 6px;
 }
 
-.scheme-card {
+.soll-col {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+  min-width: 0;
+}
+
+/* la colonna dei comandi scorre da sola, la pagina resta ferma */
+.soll-comandi {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 2px;
+}
+
+/* i pannelli tengono la loro altezza: a scorrere è la colonna */
+.soll-col > .panel {
+  flex: none;
+}
+
+/* il pannello dei diagrammi prende invece tutta l'altezza che avanza */
+.soll-col > .panel-diagrammi {
+  flex: 1;
+  min-height: 200px;
+  display: flex;
+  flex-direction: column;
+}
+
+.panel-diagrammi > .panel-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.panel-diagrammi .diagrams {
+  flex: 1;
+  min-height: 0;
+}
+
+.panel-diagrammi .diagram {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1 1 0;
+}
+
+/* allo schema statico serve un po' più di respiro: ci stanno vincoli e frecce */
+.panel-diagrammi .diagram:first-child {
+  flex: 1.35 1 0;
+}
+
+.panel-diagrammi .diagram svg {
+  flex: 1;
+  height: auto;
+  min-height: 54px;
+}
+
+/* campi più stretti nella colonna comandi */
+.soll-comandi .field-row {
+  grid-template-columns: minmax(0, 1fr) 152px;
+  gap: 10px;
+}
+
+.soll-comandi .field-control {
+  gap: 5px;
+}
+
+.soll-comandi .field-unit {
+  width: 32px;
+}
+
+.soll-comandi .field-info {
+  width: 24px;
+  height: 24px;
+}
+
+.soll-comandi .input {
+  min-width: 0;
+}
+
+.menu-blocco {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  padding: 8px;
-  border-radius: var(--radius-lg);
-  border: 1px solid var(--divider);
-  background: transparent;
-  cursor: pointer;
+  margin-bottom: 10px;
+}
+
+.menu-blocco > label,
+.menu-blocco > span {
+  font-size: 12.5px;
   color: var(--text-2);
-  text-align: left;
 }
 
-.scheme-card:hover {
-  background: rgba(233, 233, 237, 0.05);
-}
-
-.scheme-card[aria-pressed='true'] {
-  border-color: rgba(201, 147, 46, 0.55);
-  background: rgba(201, 147, 46, 0.08);
+.schema-preview {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: -4px 0 12px;
+  padding: 6px 10px;
+  border-radius: var(--radius-md);
+  background: var(--nested);
   color: var(--color-accent-300);
 }
 
-.scheme-card .nm {
-  font-size: 11.5px;
-  line-height: 1.25;
+.schema-preview svg {
+  width: 108px;
+  flex: none;
 }
 
-.scheme-card svg {
-  display: block;
-  width: 100%;
-  height: auto;
+.schema-preview .nota {
+  font-size: 11px;
+  color: var(--text-faint);
+  line-height: 1.35;
 }
 
 /* ─────────────────────────── mobile < 900px ─────────────────────────── */
@@ -902,6 +1011,38 @@ select.input {
   .app-main {
     padding: 12px 12px 18px;
     overflow: visible;
+  }
+
+  /* su cellulare si torna a una colonna sola: grafico in alto, comandi sotto */
+  .app-main.is-fit {
+    display: block;
+    overflow: visible;
+  }
+
+  .soll-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .soll-comandi {
+    overflow: visible;
+  }
+
+  .panel-diagrammi {
+    flex: none;
+  }
+
+  .panel-diagrammi .diagram {
+    flex: none;
+  }
+
+  .panel-diagrammi .diagram svg {
+    flex: none;
+    height: 120px;
+  }
+
+  .soll-comandi .field-row {
+    grid-template-columns: 1fr;
+    gap: 5px;
   }
 
   .bottom-bar {

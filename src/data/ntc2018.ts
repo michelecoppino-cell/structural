@@ -2,27 +2,9 @@
  * Tabelle normative NTC2018 (DM 17/01/2018).
  *
  * NOTA: i valori qui riportati sono un estratto ridotto, sufficiente al
- * predimensionamento. Il reticolo sismico completo (ag, F0, TC* per i 10751
- * nodi dell'Allegato B) va caricato da file dati in una fase successiva:
- * qui sono elencate poche località di riferimento.
+ * predimensionamento. La pericolosità sismica di base sta in `calc/sismica.ts`
+ * (zona sismica per comune + formule di Tab. 3.2.IV).
  */
-
-/** ag/g su suolo rigido, TR = 475 anni (estratto Allegato B). */
-export const AG: Record<string, number> = {
-  "L'Aquila": 0.261,
-  Roma: 0.128,
-  Milano: 0.05,
-  Napoli: 0.168,
-  Firenze: 0.131,
-  Torino: 0.055,
-  Bologna: 0.157,
-  Palermo: 0.163,
-  Venezia: 0.065,
-  Bari: 0.049,
-};
-
-/** Coefficiente di amplificazione stratigrafica SS — Tab. 3.2.IV. */
-export const SS: Record<string, number> = { A: 1.0, B: 1.2, C: 1.45, D: 1.7, E: 1.55 };
 
 /** Coefficiente di amplificazione topografica ST — Tab. 3.2.V. */
 export const ST: Record<string, number> = { T1: 1.0, T2: 1.2, T3: 1.2, T4: 1.4 };

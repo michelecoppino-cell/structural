@@ -83,8 +83,11 @@ export default function App() {
     }
   };
 
+  /** La scheda Sollecitazioni sta in una schermata sola: niente scroll di pagina. */
+  const fit = state.tab === 'sollecitazioni';
+
   return (
-    <div className="app">
+    <div className={`app${fit ? ' is-fit' : ''}`}>
       <header className="app-header">
         <div className="brand">
           <span className="brand-mark">
@@ -166,7 +169,7 @@ export default function App() {
           </div>
         </nav>
 
-        <main className="app-main">
+        <main className={`app-main${fit ? ' is-fit' : ''}`}>
           <div className="tab-toolbar">
             <div style={{ minWidth: 0 }}>
               <h4>{attiva.label}</h4>

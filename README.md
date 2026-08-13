@@ -95,7 +95,32 @@ terre. Ogni campo è compatto (etichetta, valore, unità) ed espandibile con il 
 che mostra **formula con i numeri sostituiti**, coefficienti intermedi e riferimento
 normativo. Il ricalcolo è immediato a ogni modifica: non c'è nessun pulsante "Calcola".
 
+Il **sito sismico** si sceglie con tre menù a tendina in cascata — **regione → provincia →
+comune** — su tutti i 7899 comuni italiani (107 province, 20 regioni). Il comune scelto
+diventa anche la località riportata in testata e nella relazione, e porta con sé:
+
+- la **zona sismica** della classificazione nazionale del Dipartimento della Protezione
+  Civile (aggiornamento 2024, OPCM 3519/2006), sottozone comprese (`2A`, `3S`, …);
+- le **coordinate** del municipio (WGS84);
+- il valore di **ag** usato nel calcolo, con la fonte sempre dichiarata in scheda:
+
+  | Fonte | Quando | Valore |
+  |---|---|---|
+  | valore inserito a mano | il campo `ag/g` non è vuoto | quello scritto |
+  | reticolo di riferimento | comune fra le località tabellate | ag dell'All. B, TR 475 anni |
+  | zona sismica | tutti gli altri comuni | limite superiore della zona (cautelativo) |
+
+SS e CC **non** sono più coefficienti fissi per categoria di sottosuolo: si calcolano con le
+formule di Tab. 3.2.IV, che dipendono da ag, F0 e TC*. Da lì escono S = SS·ST e i periodi
+TB, TC, TD dello spettro.
+
 ### 2. Sollecitazioni
+Su desktop la scheda **sta tutta in una schermata**, senza scroll di pagina: i diagrammi
+occupano la colonna di sinistra e si allungano per riempire l'altezza disponibile, con
+sotto i risultati e la tabella dei contributi; i comandi (menù a tendina e campi) stanno
+nella colonna di destra, che scorre per conto suo. Su cellulare tutto torna in colonna
+unica, con i **grafici in alto e i comandi in fondo**.
+
 - **Selettore dei carichi da applicare**: PP (G1), G2 e le azioni calcolate nella scheda
   Azioni (Qk da tabella NTC, Neve, Vento). I valori marcati `↩` arrivano dalla scheda
   precedente. **All'avvio è attivo il solo Qk variabile da tabella NTC.**
@@ -105,7 +130,8 @@ normativo. Il ricalcolo è immediato a ogni modifica: non c'è nessun pulsante "
   l'elemento. L'orientamento cambia anche la disposizione dei diagrammi: carichi in alto e
   sollecitazioni in basso in orizzontale, carichi a sinistra e sollecitazioni a destra in
   verticale.
-- **Schema statico** (card illustrate). **Di default: trave appoggio–appoggio.**
+- **Schema statico**: menù a tendina con anteprima dei vincoli. **Di default: trave
+  appoggio–appoggio.**
   1. Appoggio — appoggio
   2. Incastro (mensola)
   3. Doppio incastro — *PDF schemi statici, tav. 1*
@@ -148,14 +174,18 @@ e torta di incidenza per macrocategoria.
 ## Struttura del codice
 
 ```
+scripts/
+  genera-comuni.mjs  rigenera src/data/comuni.ts dalle sorgenti pubbliche
 src/
   calc/            motore di calcolo — funzioni pure, testabili, senza React
     trave.ts       solutore di trave a campata unica (FEM Eulero–Bernoulli)
     azioni.ts      azioni NTC2018 cap. 3
+    sismica.ts     pericolosità sismica di base: ag del sito, SS, CC (§3.2)
     sollecitazioni.ts  combinazioni di carico e collegamento con il solutore
     verifiche.ts   verifiche a taglio (dai fogli Excel)
     relazione.ts   generazione del testo per la relazione
   data/            tabelle normative e di materiali (ntc2018.ts, materiali.ts)
+    comuni.ts      FILE GENERATO: comuni, zona sismica, coordinate
   components/      pattern di UI riusabili e diagrammi SVG
   tabs/            una scheda per file
   state/           stato dell'app (useReducer + context, persistenza locale)
@@ -164,6 +194,24 @@ src/
 
 Il calcolo è tenuto **separato dai componenti**: `src/calc/` non importa nulla da React,
 così le formule restano verificabili con i test.
+
+### I dati dei comuni
+
+`src/data/comuni.ts` è generato e committato: l'app non fa nessuna chiamata di rete. Per
+aggiornarlo dopo una revisione della classificazione o dell'elenco ISTAT:
+
+```bash
+node scripts/genera-comuni.mjs
+```
+
+Lo script scarica la **classificazione sismica DPC** (mirror
+[ferdi2005/zonasismica](https://github.com/ferdi2005/zonasismica)) e le **coordinate dei
+comuni** ([opendatasicilia/comuni-italiani](https://github.com/opendatasicilia/comuni-italiani),
+su base ISTAT), le incrocia sul codice ISTAT e riscrive il file. Le poche coordinate
+malformate nella sorgente (separatore decimale perso) vengono risanate e conteggiate a
+video; se un comune restasse senza coordinate lo script si ferma con errore invece di
+scrivere dati incompleti.
+
 
 ### Il solutore di trave
 
@@ -183,8 +231,11 @@ npm test
 
 ## Note sulle formule
 
-- Il **reticolo sismico** dell'Allegato B non è caricato: `ag` è tabellato per poche
-  località di riferimento. Va sostituito con il file dati completo (10751 nodi).
+- Il **reticolo sismico** dell'Allegato B (10751 nodi) non è caricato: `ag` è esatto solo
+  per le località di riferimento tabellate, per gli altri comuni si usa il limite superiore
+  della zona sismica — cautelativo, ma grossolano (per Roma, zona 2, dà 0.25 g contro i
+  0.128 g del reticolo). Per un calcolo definitivo va scritto nel campo `ag/g` il valore
+  del sito; caricando il file dell'Allegato B si potrà interpolare sui 4 nodi più vicini.
 - Nel foglio `01 - Verifica a taglio elementi non armati.xlsx` il limite su σcp è scritto
   come `≤ 0.02·fcd` nella cella di controllo, mentre le NTC (§4.1.2.3.5.1) prescrivono
   `σcp ≤ 0.2·fcd`. **L'app applica il limite di normativa, 0.2·fcd.**
@@ -198,5 +249,7 @@ npm test
    come step a sé.
 2. Verifiche a flessione e pressoflessione per il calcestruzzo.
 3. Legno e muratura.
-4. Reticolo sismico completo da file dati.
+4. Reticolo sismico completo (All. B, 10751 nodi) da file dati, con interpolazione sui 4
+   nodi più vicini alle coordinate del comune: la scheda è già pronta a riceverlo, oggi ag
+   arriva dalla zona sismica o dal valore inserito a mano.
 5. Salvataggio su OneDrive con Microsoft Graph.
