@@ -107,6 +107,8 @@ export default function Sollecitazioni() {
   const [geomOpen, setGeomOpen] = useState(false);
   /** Il dettaglio della combinazione sta sotto il riepilogo, a scomparsa. */
   const combOpen = !!state.ui.exp['soll-combinazione'];
+  /** I campi di geometria e carichi restano chiusi finché non servono. */
+  const geomFieldsOpen = !!state.ui.exp['soll-geometria'];
 
   const err = validaSollecitazioni(inp);
   const tutte = sorgenti(inp, az);
@@ -126,30 +128,31 @@ export default function Sollecitazioni() {
 
   return (
     <div className="soll-layout">
-      {/* ── comandi che stanno bene in testa: combinazione e orientamento ── */}
+      {/* ── comandi che stanno bene in testa: combinazione e orientamento, in una riga sola ── */}
       <ComandiScheda>
-        <select
-          className="input"
-          style={{ width: 'auto', minWidth: 190 }}
-          aria-label="Combinazione di carico"
-          value={inp.combinazione}
-          onChange={(e) => set({ combinazione: e.target.value as Combinazione })}
-        >
-          {COMBINAZIONI.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.label}
-            </option>
-          ))}
-        </select>
-        <Seg<Orientamento>
-          label="Orientamento dell'elemento"
-          value={inp.orientamento}
-          onChange={(v) => set({ orientamento: v })}
-          options={[
-            { id: 'orizzontale', label: 'Orizzontale', icon: <ArrowsHorizontal size={14} /> },
-            { id: 'verticale', label: 'Verticale', icon: <ArrowsVertical size={14} /> },
-          ]}
-        />
+        <div className="soll-toolbar-row">
+          <select
+            className="input soll-combinazione-select"
+            aria-label="Combinazione di carico"
+            value={inp.combinazione}
+            onChange={(e) => set({ combinazione: e.target.value as Combinazione })}
+          >
+            {COMBINAZIONI.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.label}
+              </option>
+            ))}
+          </select>
+          <Seg<Orientamento>
+            label="Orientamento dell'elemento"
+            value={inp.orientamento}
+            onChange={(v) => set({ orientamento: v })}
+            options={[
+              { id: 'orizzontale', label: 'Orizzontale', icon: <ArrowsHorizontal size={14} /> },
+              { id: 'verticale', label: 'Verticale', icon: <ArrowsVertical size={14} /> },
+            ]}
+          />
+        </div>
       </ComandiScheda>
 
       {/* ── diagrammi: prendono tutta l'altezza che avanza, una schermata sola ── */}
@@ -407,20 +410,22 @@ export default function Sollecitazioni() {
             <div className="soll-riga-body">
               <div className="soll-blocco soll-blocco-schema">
                 <span className="kicker">Schema statico</span>
-                <select
-                  id="soll_schema"
-                  className="input"
-                  value={inp.schema}
-                  onChange={(e) => set({ schema: e.target.value as SchemaId })}
-                >
-                  {SCHEMI.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.label}
-                    </option>
-                  ))}
-                </select>
-                <div className="schema-preview" title={schema.note}>
-                  <MiniSchema id={inp.schema} />
+                <div className="schema-riga">
+                  <select
+                    id="soll_schema"
+                    className="input"
+                    value={inp.schema}
+                    onChange={(e) => set({ schema: e.target.value as SchemaId })}
+                  >
+                    {SCHEMI.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.label}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="schema-preview" title={schema.note}>
+                    <MiniSchema id={inp.schema} />
+                  </div>
                 </div>
               </div>
 
@@ -451,8 +456,20 @@ export default function Sollecitazioni() {
               </div>
 
               <div className="soll-blocco soll-blocco-geom">
-                <span className="kicker">
-                  Geometria e carichi
+                <div className="geom-head">
+                  <button
+                    type="button"
+                    className="sub-toggle"
+                    aria-expanded={geomFieldsOpen}
+                    aria-controls="soll-geom-grid"
+                    onClick={() => dispatch({ type: 'toggleExp', id: 'soll-geometria' })}
+                  >
+                    {geomFieldsOpen ? <CaretUp size={13} /> : <CaretDown size={13} />}
+                    <span className="t">Geometria e carichi</span>
+                    <span className="n">
+                      {verticale ? 'H' : 'L'} {fx(r.L)} m
+                    </span>
+                  </button>
                   <button
                     type="button"
                     className="field-info"
@@ -462,54 +479,56 @@ export default function Sollecitazioni() {
                   >
                     <Info size={14} />
                   </button>
-                </span>
-                <div className="soll-geom-grid">
-                  <MiniCampo
-                    id="soll_L"
-                    label={verticale ? 'H (m)' : 'L (m)'}
-                    value={inp.L}
-                    errore={err.L}
-                    onChange={(v) => set({ L: v })}
-                  />
-                  <MiniCampo
-                    id="soll_i"
-                    label="Interasse (m)"
-                    value={inp.interasse}
-                    errore={err.interasse}
-                    onChange={(v) => set({ interasse: v })}
-                  />
-                  {verticale && (
-                    <MiniCampo
-                      id="soll_A"
-                      label="Area infl. (m²)"
-                      value={inp.areaInfluenza}
-                      errore={err.areaInfluenza}
-                      onChange={(v) => set({ areaInfluenza: v })}
-                    />
-                  )}
-                  <MiniCampo
-                    id="soll_pp"
-                    label="G1 (kN/m²)"
-                    value={inp.pp}
-                    errore={err.pp}
-                    onChange={(v) => set({ pp: v })}
-                  />
-                  <MiniCampo
-                    id="soll_g2"
-                    label="G2 (kN/m²)"
-                    value={inp.g2}
-                    errore={err.g2}
-                    onChange={(v) => set({ g2: v })}
-                  />
-                  <MiniCampo id="soll_P" label="P (kN)" value={inp.P} onChange={(v) => set({ P: v })} />
-                  <MiniCampo
-                    id="soll_aP"
-                    label="x di P (m)"
-                    value={inp.aP}
-                    errore={err.aP}
-                    onChange={(v) => set({ aP: v })}
-                  />
                 </div>
+                {geomFieldsOpen && (
+                  <div className="soll-geom-grid" id="soll-geom-grid">
+                    <MiniCampo
+                      id="soll_L"
+                      label={verticale ? 'H (m)' : 'L (m)'}
+                      value={inp.L}
+                      errore={err.L}
+                      onChange={(v) => set({ L: v })}
+                    />
+                    <MiniCampo
+                      id="soll_i"
+                      label="Interasse (m)"
+                      value={inp.interasse}
+                      errore={err.interasse}
+                      onChange={(v) => set({ interasse: v })}
+                    />
+                    {verticale && (
+                      <MiniCampo
+                        id="soll_A"
+                        label="Area infl. (m²)"
+                        value={inp.areaInfluenza}
+                        errore={err.areaInfluenza}
+                        onChange={(v) => set({ areaInfluenza: v })}
+                      />
+                    )}
+                    <MiniCampo
+                      id="soll_pp"
+                      label="G1 (kN/m²)"
+                      value={inp.pp}
+                      errore={err.pp}
+                      onChange={(v) => set({ pp: v })}
+                    />
+                    <MiniCampo
+                      id="soll_g2"
+                      label="G2 (kN/m²)"
+                      value={inp.g2}
+                      errore={err.g2}
+                      onChange={(v) => set({ g2: v })}
+                    />
+                    <MiniCampo id="soll_P" label="P (kN)" value={inp.P} onChange={(v) => set({ P: v })} />
+                    <MiniCampo
+                      id="soll_aP"
+                      label="x di P (m)"
+                      value={inp.aP}
+                      errore={err.aP}
+                      onChange={(v) => set({ aP: v })}
+                    />
+                  </div>
+                )}
               </div>
             </div>
 

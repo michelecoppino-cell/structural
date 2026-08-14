@@ -307,6 +307,26 @@ button {
   flex: none;
 }
 
+/* combinazione + orientamento della scheda Sollecitazioni: sempre una riga
+   sola — né il menù né il selettore si comprimono, altrimenti l'orientamento
+   va a capo su due righe invece di restare affiancato */
+.soll-toolbar-row {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 8px 12px;
+  min-width: 0;
+}
+
+.soll-toolbar-row > * {
+  flex: none;
+}
+
+.soll-combinazione-select {
+  width: auto;
+  min-width: 190px;
+}
+
 .toolbar-actions {
   display: flex;
   gap: 6px;
@@ -1348,12 +1368,19 @@ button.field-origin:hover {
   white-space: nowrap;
 }
 
-/* schema statico: menù sopra, icona del vincolo sotto — due righe */
+/* schema statico: menù sopra, icona del vincolo sotto — su cellulare invece
+   stanno affiancati in una riga sola (vedi media query più sotto) */
 .soll-blocco-schema {
   width: 200px;
 }
 
-.soll-blocco-schema > .input {
+.schema-riga {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.schema-riga > .input {
   width: 100%;
 }
 
@@ -1375,17 +1402,35 @@ button.field-origin:hover {
   flex-wrap: wrap;
 }
 
-/* geometria e carichi: griglia fissa a quattro colonne, due righe, allineata
-   al bordo destro della fascia */
+/* geometria e carichi: chiusa a tendina di default, allineata al bordo
+   destro della fascia; aperta, i campi stanno su una griglia fissa a
+   quattro colonne */
 .soll-blocco-geom {
   flex: none;
   margin-left: auto;
+}
+
+.geom-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.geom-head .sub-toggle {
+  flex: 1;
+  min-width: 0;
+  margin-top: 0;
+}
+
+.geom-head .field-info {
+  flex: none;
 }
 
 .soll-geom-grid {
   display: grid;
   grid-template-columns: repeat(4, 88px);
   gap: 8px;
+  margin-top: 8px;
 }
 
 .mini-campo {
@@ -1553,6 +1598,21 @@ button.field-origin:hover {
     grid-row: auto;
   }
 
+  /* su cellulare i comandi vengono prima: schema, carichi e geometria,
+     poi i grafici, e in fondo sollecitazioni e inerzia (che scorrono
+     meno spesso una volta impostati i comandi) */
+  .soll-comandi {
+    order: 1;
+  }
+
+  .soll-risultati {
+    order: 2;
+  }
+
+  .soll-side {
+    order: 3;
+  }
+
   .soll-comandi,
   .soll-side {
     overflow: visible;
@@ -1562,12 +1622,46 @@ button.field-origin:hover {
     width: 100%;
   }
 
+  /* select e icona del vincolo affiancati, in una riga sola */
+  .schema-riga {
+    flex-direction: row;
+    align-items: center;
+  }
+
+  .schema-riga > .input {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .soll-blocco .schema-preview {
+    padding: 6px 8px;
+  }
+
+  .soll-blocco .schema-preview svg {
+    width: 76px;
+  }
+
   .soll-blocco-carichi {
     flex-basis: 100%;
   }
 
+  /* geometria e carichi: a tutta larghezza, così la griglia dei campi
+     (chiusa di default) può disporsi su più colonne invece che una sotto
+     l'altra */
+  .soll-blocco-geom {
+    flex-basis: 100%;
+    margin-left: 0;
+  }
+
   .soll-geom-grid {
-    grid-template-columns: repeat(auto-fit, 88px);
+    grid-template-columns: repeat(auto-fit, minmax(84px, 1fr));
+  }
+
+  /* combinazione + orientamento: il menù si restringe un po', l'orientamento
+     resta leggibile — la riga scorre di lato solo se proprio non basta */
+  .soll-combinazione-select {
+    width: 150px;
+    min-width: 0;
   }
 
   .panel-diagrammi {
