@@ -2030,7 +2030,31 @@ button.field-origin:hover {
   justify-content: space-between;
   gap: 12px;
   flex-wrap: wrap;
-  margin-bottom: 10px;
+}
+
+/* testata del documento: è il pulsante che apre l'elenco dei capitoli */
+.norma-doc-testa {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  padding: 0;
+}
+
+.norma-doc-testa .caret {
+  color: var(--text-faint);
+  display: grid;
+  padding-top: 2px;
+}
+
+.norma-doc-testa:hover .caret {
+  color: var(--color-accent-400);
 }
 
 .norma-sigla {
@@ -2044,6 +2068,7 @@ button.field-origin:hover {
 }
 
 .norma-titolo {
+  display: block;
   font-size: 13.5px;
   color: var(--text);
   margin-top: 3px;
@@ -2051,25 +2076,117 @@ button.field-origin:hover {
 }
 
 .norma-estremi {
+  display: block;
   font-size: 11.5px;
   color: var(--text-faint);
   margin-top: 2px;
   max-width: var(--reading-max);
 }
 
-.norma-indice {
+.norma-capitoli,
+.norma-voci {
   list-style: none;
   margin: 0;
   padding: 0;
+}
+
+.norma-capitoli {
+  margin-top: 10px;
   border-top: 1px solid var(--border-faint);
 }
 
+.norma-cap-riga {
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+  border-bottom: 1px solid var(--border-faint);
+}
+
+.norma-cap-testa {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-2);
+  text-align: left;
+  cursor: pointer;
+  padding: 8px 6px;
+  border-radius: var(--radius-sm);
+}
+
+.norma-cap-testa {
+  text-decoration: none;
+}
+
+.norma-cap-testa:hover {
+  background: var(--hover-soft);
+  color: var(--text);
+}
+
+.norma-cap-testa .caret {
+  display: grid;
+  place-items: center;
+  width: 13px;
+  color: var(--text-faint);
+  flex: none;
+}
+
+.norma-cap-testa .codice {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--color-accent-400);
+  flex: none;
+  min-width: 52px;
+}
+
+.norma-cap-testa .titolo {
+  font-size: 13px;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* quanti paragrafi ci sono sotto, senza doverlo aprire */
+.norma-cap-testa .conta {
+  font-size: 10.5px;
+  color: var(--text-faint);
+  border: 1px solid var(--border-faint);
+  border-radius: 999px;
+  padding: 0 6px;
+  flex: none;
+}
+
+.norma-cap-link {
+  display: grid;
+  place-items: center;
+  width: var(--control-h-sm);
+  color: var(--text-faint);
+  border-radius: var(--radius-sm);
+  flex: none;
+}
+
+.norma-cap-link:hover {
+  background: var(--hover-soft);
+  color: var(--color-accent-400);
+}
+
+/* i paragrafi stanno dentro il capitolo: filo verticale e rientro crescente */
+.norma-voci {
+  margin: 2px 0 6px 12px;
+  border-left: 1px solid var(--divider-soft);
+}
+
 .norma-voce {
+  --norma-step: 16px;
   display: flex;
   align-items: baseline;
   gap: 10px;
-  padding: 7px 8px;
-  border-bottom: 1px solid var(--border-faint);
+  padding: 6px 8px 6px calc(10px + var(--liv, 0) * var(--norma-step));
   color: var(--text-2);
   text-decoration: none;
   border-radius: var(--radius-sm);
@@ -2085,7 +2202,7 @@ button.field-origin:hover {
   font-size: 11.5px;
   color: var(--color-accent-300);
   flex: none;
-  min-width: 104px;
+  min-width: 88px;
 }
 
 .norma-voce .titolo {
@@ -2166,10 +2283,22 @@ button.field-origin:hover {
     max-width: none;
   }
 
+  .norma-cap-testa {
+    padding: 11px 4px;
+  }
+
+  .norma-cap-testa .titolo {
+    white-space: normal;
+  }
+
+  /* su 390 px il rientro pesa: passo più stretto, e la riga sta in due righe
+     — codice sopra, titolo sotto — senza l'icona di uscita, che qui è muta
+     (tutta la riga è già il link) */
   .norma-voce {
+    --norma-step: 9px;
     flex-wrap: wrap;
-    gap: 2px 8px;
-    padding: 9px 6px;
+    gap: 0 8px;
+    padding-block: 8px;
   }
 
   .norma-voce .codice {
@@ -2178,6 +2307,10 @@ button.field-origin:hover {
 
   .norma-voce .titolo {
     flex-basis: 100%;
+  }
+
+  .norma-voce > svg {
+    display: none;
   }
 
   /* sei voci in fondo: le etichette si stringono un filo per starci */
