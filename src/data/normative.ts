@@ -45,6 +45,20 @@ export interface Documento {
   nota?: string;
 }
 
+/**
+ * Norma o link aggiunto a mano dall'utente, dalla scheda Normativa: ha la
+ * stessa testata dei documenti di serie (sigla ocra, titolo bianco) ma sta
+ * nello stato dell'app, non in questo file.
+ */
+export interface LinkUtente {
+  id: string;
+  /** Sigla breve — è la riga ocra (es. "CNR-DT 207"). */
+  sigla: string;
+  /** Titolo esteso — è la riga bianca. */
+  titolo: string;
+  url: string;
+}
+
 export interface VoceNorma {
   /** Numero di paragrafo come lo scrive la norma: i punti danno il rientro. */
   codice: string;

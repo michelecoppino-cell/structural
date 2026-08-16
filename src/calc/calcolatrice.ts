@@ -19,6 +19,19 @@
  * ambito gli angoli si scrivono in gradi — α delle staffe, φ′ del terreno.
  */
 
+import {
+  UNITA_DEFAULT,
+  adimensionale,
+  divDim,
+  leggiUnita,
+  mulDim,
+  powDim,
+  scriviUnita,
+  ugualiDim,
+  unitaInElenco,
+  type Dim,
+} from './unita';
+
 const GRADI = Math.PI / 180;
 
 /** Funzioni disponibili, con il numero di argomenti ammessi. */
@@ -154,6 +167,19 @@ function tokenizza(src: string): Token[] {
 /* ─────────────────────────── analisi sintattica ─────────────────────────── */
 
 /**
+ * L'espressione non si calcola durante la lettura: se ne costruisce l'albero.
+ * Sullo stesso albero passano due volte, il calcolo del valore e quello
+ * dell'unità di misura, e le due cose non possono divergere.
+ */
+export type Nodo =
+  | { t: 'num'; v: number }
+  | { t: 'var'; nome: string }
+  | { t: 'bin'; op: '+' | '-' | '*' | '/' | '^'; a: Nodo; b: Nodo }
+  | { t: 'neg'; a: Nodo }
+  | { t: 'pct'; a: Nodo }
+  | { t: 'fn'; nome: string; args: Nodo[] };
+
+/**
  * Discesa ricorsiva sulla grammatica:
  *   somma   := prodotto (('+'|'-') prodotto)*
  *   prodotto:= unario (('*'|'/') unario)*
@@ -169,6 +195,7 @@ class Parser {
 
   constructor(
     private readonly tk: Token[],
+    /** Nomi definiti: servono già qui, per distinguere una variabile da un errore. */
     private readonly vars: Record<string, number>,
   ) {}
 
@@ -182,86 +209,84 @@ class Parser {
     return !!t && (t.t === 'num' || t.t === 'nome' || (t.t === 'par' && t.v === '('));
   }
 
-  valuta(): number {
-    const v = this.somma();
+  analizza(): Nodo {
+    const n = this.somma();
     if (this.i < this.tk.length) throw new ErroreCalcolo('espressione incompleta o parentesi di troppo');
-    return v;
+    return n;
   }
 
-  private somma(): number {
-    let v = this.prodotto();
+  private somma(): Nodo {
+    let a = this.prodotto();
     for (;;) {
       const t = this.guarda();
       if (t?.t === 'op' && (t.v === '+' || t.v === '-')) {
         this.i += 1;
-        const b = this.prodotto();
-        v = t.v === '+' ? v + b : v - b;
-      } else return v;
+        a = { t: 'bin', op: t.v, a, b: this.prodotto() };
+      } else return a;
     }
   }
 
-  private prodotto(): number {
-    let v = this.unario();
+  private prodotto(): Nodo {
+    let a = this.unario();
     for (;;) {
       const t = this.guarda();
       if (t?.t === 'op' && (t.v === '*' || t.v === '/')) {
         this.i += 1;
-        const b = this.unario();
-        v = t.v === '*' ? v * b : v / b;
+        a = { t: 'bin', op: t.v, a, b: this.unario() };
       } else if (this.iniziaValore()) {
         // prodotto implicito: 2(3+4), 3area, 2pi
-        v *= this.unario();
-      } else return v;
+        a = { t: 'bin', op: '*', a, b: this.unario() };
+      } else return a;
     }
   }
 
-  private unario(): number {
+  private unario(): Nodo {
     const t = this.guarda();
     if (t?.t === 'op' && (t.v === '-' || t.v === '+')) {
       this.i += 1;
-      const v = this.unario();
-      return t.v === '-' ? -v : v;
+      const a = this.unario();
+      return t.v === '-' ? { t: 'neg', a } : a;
     }
     return this.potenza();
   }
 
-  private potenza(): number {
+  private potenza(): Nodo {
     const base = this.postfisso();
     const t = this.guarda();
     if (t?.t === 'op' && t.v === '^') {
       this.i += 1;
-      return base ** this.unario();
+      return { t: 'bin', op: '^', a: base, b: this.unario() };
     }
     return base;
   }
 
-  private postfisso(): number {
-    let v = this.primario();
+  private postfisso(): Nodo {
+    let a = this.primario();
     for (;;) {
       const t = this.guarda();
       if (t?.t === 'op' && t.v === '%') {
         this.i += 1;
-        v /= 100;
-      } else return v;
+        a = { t: 'pct', a };
+      } else return a;
     }
   }
 
-  private primario(): number {
+  private primario(): Nodo {
     const t = this.guarda();
     if (!t) throw new ErroreCalcolo('manca un valore alla fine dell’espressione');
 
     if (t.t === 'num') {
       this.i += 1;
-      return t.v;
+      return { t: 'num', v: t.v };
     }
 
     if (t.t === 'par' && t.v === '(') {
       this.i += 1;
-      const v = this.somma();
+      const n = this.somma();
       const chiusa = this.guarda();
       if (!(chiusa?.t === 'par' && chiusa.v === ')')) throw new ErroreCalcolo('manca una parentesi chiusa');
       this.i += 1;
-      return v;
+      return n;
     }
 
     if (t.t === 'nome') {
@@ -272,7 +297,7 @@ class Parser {
 
       if (dopo?.t === 'par' && dopo.v === '(' && fn) {
         this.i += 1;
-        const args: number[] = [];
+        const args: Nodo[] = [];
         if (!(this.guarda()?.t === 'par' && (this.guarda() as { v: string }).v === ')')) {
           args.push(this.somma());
           while (this.guarda()?.t === 'sep') {
@@ -285,13 +310,14 @@ class Parser {
         this.i += 1;
         if (!fn.arieta.includes(args.length))
           throw new ErroreCalcolo(`${nome}() non accetta ${args.length} argomenti`);
-        return fn.f(...args);
+        return { t: 'fn', nome: nome.toLowerCase(), args };
       }
 
-      if (nome in this.vars) return this.vars[nome];
-      if (nome in COSTANTI) return COSTANTI[nome];
+      if (nome in this.vars) return { t: 'var', nome };
+      if (nome in COSTANTI) return { t: 'num', v: COSTANTI[nome] };
       // funzione a un argomento senza parentesi, come sul tastierino: √81, sin 30
-      if (fn && fn.arieta.includes(1) && this.iniziaValore()) return fn.f(this.unario());
+      if (fn && fn.arieta.includes(1) && this.iniziaValore())
+        return { t: 'fn', nome: nome.toLowerCase(), args: [this.unario()] };
       if (fn) throw new ErroreCalcolo(`a ${nome}() manca l’argomento fra parentesi`);
       throw new ErroreCalcolo(`nome sconosciuto: ${nome}`);
     }
@@ -300,18 +326,126 @@ class Parser {
   }
 }
 
+/* ─────────────────────────── valore dell'albero ─────────────────────────── */
+
+function valoreDi(n: Nodo, vars: Record<string, number>): number {
+  switch (n.t) {
+    case 'num':
+      return n.v;
+    case 'var':
+      return vars[n.nome];
+    case 'neg':
+      return -valoreDi(n.a, vars);
+    case 'pct':
+      return valoreDi(n.a, vars) / 100;
+    case 'fn':
+      return FUNZIONI[n.nome].f(...n.args.map((a) => valoreDi(a, vars)));
+    case 'bin': {
+      const a = valoreDi(n.a, vars);
+      const b = valoreDi(n.b, vars);
+      switch (n.op) {
+        case '+':
+          return a + b;
+        case '-':
+          return a - b;
+        case '*':
+          return a * b;
+        case '/':
+          return a / b;
+        case '^':
+          return a ** b;
+      }
+    }
+  }
+}
+
+/* ─────────────────────────── unità dell'albero ─────────────────────────── */
+
+/**
+ * Unità del risultato, ricavata da quelle delle operazioni richiamate per
+ * nome: `null` vuol dire «non determinabile» — di solito una somma fra unità
+ * diverse, o un esponente che non è un numero puro. Non è un errore di
+ * calcolo: si smette solo di proporre l'unità.
+ */
+function dimDi(n: Nodo, vars: Record<string, number>, unita: Record<string, Dim>): Dim | null {
+  switch (n.t) {
+    case 'num':
+      return {};
+    case 'var':
+      return unita[n.nome] ?? {};
+    case 'neg':
+    case 'pct':
+      return dimDi(n.a, vars, unita);
+    case 'fn': {
+      const args = n.args.map((a) => dimDi(a, vars, unita));
+      if (args.some((a) => a === null)) return null;
+      const d = args as Dim[];
+      // sqrt dimezza gli esponenti: sqrt(mq) = m
+      if (n.nome === 'sqrt') return powDim(d[0], 0.5);
+      // queste tornano un valore omogeneo agli argomenti
+      if (['abs', 'round', 'floor', 'ceil', 'min', 'max'].includes(n.nome)) {
+        const primo = d[0];
+        // round(x; 2): il secondo argomento è il numero di decimali, non un valore
+        const daConfrontare = n.nome === 'round' ? d.slice(0, 1) : d;
+        return daConfrontare.every((x) => ugualiDim(x, primo)) ? primo : null;
+      }
+      // logaritmi, esponenziale e trigonometria vogliono e danno numeri puri
+      return {};
+    }
+    case 'bin': {
+      const a = dimDi(n.a, vars, unita);
+      if (a === null) return null;
+      if (n.op === '^') {
+        const esp = valoreDi(n.b, vars);
+        if (!Number.isFinite(esp) || !adimensionale(dimDi(n.b, vars, unita) ?? { x: 1 })) return null;
+        return powDim(a, esp);
+      }
+      const b = dimDi(n.b, vars, unita);
+      if (b === null) return null;
+      if (n.op === '*') return mulDim(a, b);
+      if (n.op === '/') return divDim(a, b);
+      // somma e differenza: le unità devono coincidere; un numero puro (una
+      // costante, un coefficiente) si somma a qualunque cosa senza lamentarsi
+      if (ugualiDim(a, b)) return a;
+      if (adimensionale(a)) return b;
+      if (adimensionale(b)) return a;
+      return null;
+    }
+  }
+}
+
 /* ─────────────────────────── interfaccia pubblica ─────────────────────────── */
 
 export type Esito = { ok: true; valore: number } | { ok: false; errore: string };
 
+/** Come `Esito`, ma porta anche l'unità ricavata dai nomi richiamati. */
+export type EsitoUnita =
+  | { ok: true; valore: number; dim: Dim | null }
+  | { ok: false; errore: string };
+
 /** Valuta un'espressione con le variabili date. Non solleva mai: torna l'errore. */
 export function valuta(espressione: string, vars: Record<string, number> = {}): Esito {
+  const e = valutaConUnita(espressione, vars);
+  return e.ok ? { ok: true, valore: e.valore } : e;
+}
+
+/**
+ * Valuta l'espressione e, insieme, ne ricava l'unità di misura dalle unità
+ * delle operazioni richiamate per nome: `b*h` in metri dà mq, `area*gCLS` con
+ * gCLS in kN/mc dà kN/m.
+ */
+export function valutaConUnita(
+  espressione: string,
+  vars: Record<string, number> = {},
+  unita: Record<string, Dim> = {},
+): EsitoUnita {
   const src = espressione.trim();
   if (!src) return { ok: false, errore: 'espressione vuota' };
   try {
-    const valore = new Parser(tokenizza(src), vars).valuta();
+    const albero = new Parser(tokenizza(src), vars).analizza();
+    const valore = valoreDi(albero, vars);
     if (!Number.isFinite(valore)) return { ok: false, errore: 'risultato non finito (divisione per zero?)' };
-    return { ok: true, valore };
+    return { ok: true, valore, dim: dimDi(albero, vars, unita) };
   } catch (e) {
     return { ok: false, errore: e instanceof ErroreCalcolo ? e.message : 'espressione non valida' };
   }
@@ -329,40 +463,77 @@ export interface VoceCalcolo {
   um: string;
 }
 
+/**
+ * Voci di partenza: le grandezze che in un predimensionamento si scrivono
+ * sempre. Partono **vuote** — nome, nota e unità sono già pronti, il valore lo
+ * mette chi calcola — così le espressioni successive possono richiamarle per
+ * nome senza doverle inventare ogni volta.
+ */
+export const VOCI_DEFAULT: VoceCalcolo[] = [
+  { id: 'calc-b', nome: 'b', espressione: '', nota: 'base', um: 'm' },
+  { id: 'calc-l', nome: 'l', espressione: '', nota: 'larghezza', um: 'm' },
+  { id: 'calc-h', nome: 'h', espressione: '', nota: 'altezza', um: 'm' },
+  { id: 'calc-gcls', nome: 'gCLS', espressione: '', nota: 'peso di volume del calcestruzzo', um: 'kN/mc' },
+  { id: 'calc-gacc', nome: 'gACC', espressione: '', nota: 'peso di volume dell’acciaio', um: 'kN/mc' },
+  { id: 'calc-gterra', nome: 'gTERRA', espressione: '', nota: 'peso di volume del terreno', um: 'kN/mc' },
+];
+
 export interface VoceCalcolata extends VoceCalcolo {
   valore: number;
   errore: string;
   /** Nome valido e non già usato prima: solo allora la voce è richiamabile. */
   nomeValido: boolean;
+  /** Unità ricavata dall'operazione ('' se non determinabile o non serve). */
+  umCalcolata: string;
+  /** Quella che si vede: la scritta a mano se c'è, altrimenti la calcolata. */
+  umEffettiva: string;
+  /** true = l'unità scritta a mano non è fra quelle in elenco. */
+  umFuoriElenco: boolean;
 }
 
 /**
  * Ricalcola l'intera sequenza: ogni voce vede le variabili definite dalle voci
  * che la precedono, così correggere l'area a monte aggiorna tutto quello che
- * ne discende senza doverlo riscrivere.
+ * ne discende senza doverlo riscrivere. Insieme al valore si porta dietro
+ * l'unità di misura, che l'operazione successiva riusa.
+ *
+ * Un'espressione vuota non è un errore: è una voce ancora da compilare.
  */
-export function ricalcola(voci: VoceCalcolo[]): VoceCalcolata[] {
+export function ricalcola(voci: VoceCalcolo[], elenco: string[] = UNITA_DEFAULT): VoceCalcolata[] {
   const vars: Record<string, number> = {};
+  const unita: Record<string, Dim> = {};
   const usati = new Set<string>();
 
   return voci.map((v) => {
-    const esito = valuta(v.espressione, vars);
+    const vuota = !v.espressione.trim();
+    const esito = vuota ? null : valutaConUnita(v.espressione, vars, unita);
     const nome = v.nome.trim();
     const nomeValido =
       !!nome && nomeAmmesso(nome) && !usati.has(nome) && !(nome in COSTANTI) && !(nome.toLowerCase() in FUNZIONI);
 
-    if (esito.ok && nomeValido) {
+    const scritta = v.um.trim();
+    const calcolata = esito?.ok && esito.dim ? scriviUnita(esito.dim, elenco) : '';
+    const umEffettiva = scritta || calcolata;
+
+    if (esito?.ok && nomeValido) {
       vars[nome] = esito.valore;
+      unita[nome] = leggiUnita(umEffettiva);
       usati.add(nome);
     }
     // `ans` è sempre l'ultimo risultato utile della sequenza
-    if (esito.ok) vars.ans = esito.valore;
+    if (esito?.ok) {
+      vars.ans = esito.valore;
+      unita.ans = leggiUnita(umEffettiva);
+    }
 
     return {
       ...v,
-      valore: esito.ok ? esito.valore : NaN,
-      errore: esito.ok ? '' : esito.errore,
+      valore: esito?.ok ? esito.valore : NaN,
+      errore: !esito || esito.ok ? '' : esito.errore,
       nomeValido,
+      umCalcolata: calcolata,
+      umEffettiva,
+      umFuoriElenco: !!scritta && !unitaInElenco(scritta, elenco),
     };
   });
 }
@@ -374,6 +545,17 @@ export function variabili(voci: VoceCalcolata[]): Record<string, number> {
   const ultima = [...voci].reverse().find((v) => Number.isFinite(v.valore));
   if (ultima) vars.ans = ultima.valore;
   return vars;
+}
+
+/** Unità delle variabili disponibili a valle della sequenza (nome → unità). */
+export function unitaVariabili(voci: VoceCalcolata[]): Record<string, Dim> {
+  const out: Record<string, Dim> = {};
+  for (const v of voci) {
+    if (v.nomeValido && Number.isFinite(v.valore)) out[v.nome.trim()] = leggiUnita(v.umEffettiva);
+  }
+  const ultima = [...voci].reverse().find((v) => Number.isFinite(v.valore));
+  if (ultima) out.ans = leggiUnita(ultima.umEffettiva);
+  return out;
 }
 
 export function nomeAmmesso(nome: string): boolean {
@@ -398,8 +580,9 @@ export function formatta(v: number): string {
 /** Riga estesa «nome = espressione = risultato», per la relazione e l'export. */
 export function testoVoce(v: VoceCalcolata): string {
   const testa = v.nome.trim() ? `${v.nome.trim()} = ` : '';
-  const um = v.um.trim() ? ` ${v.um.trim()}` : '';
-  const valore = v.errore ? `errore: ${v.errore}` : `${formatta(v.valore)}${um}`;
+  const um = v.umEffettiva ? ` ${v.umEffettiva}` : '';
   const nota = v.nota.trim() ? `   — ${v.nota.trim()}` : '';
+  if (!v.espressione.trim()) return `${testa}(da compilare)${nota}`;
+  const valore = v.errore ? `errore: ${v.errore}` : `${formatta(v.valore)}${um}`;
   return `${testa}${v.espressione} = ${valore}${nota}`;
 }

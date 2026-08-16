@@ -1,4 +1,4 @@
-import { useMemo, useRef } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import {
   ArrowDown,
   ArrowUp,
@@ -7,21 +7,27 @@ import {
   Copy,
   Equals,
   Keyboard,
+  Plus,
+  Ruler,
   Trash,
   WarningCircle,
+  X,
 } from '@phosphor-icons/react';
 import { useStore } from '../state/store';
 import { ComandiScheda } from '../components/ComandiScheda';
 import {
   FUNZIONI,
+  VOCI_DEFAULT,
   formatta,
   nomeAmmesso,
   ricalcola,
   testoVoce,
-  valuta,
+  unitaVariabili,
+  valutaConUnita,
   variabili,
   type VoceCalcolo,
 } from '../calc/calcolatrice';
+import { UNITA_DEFAULT, normalizzaElenco, scriviUnita, unitaInElenco } from '../calc/unita';
 
 /** Tasti del tastierino: quattro colonne, come una calcolatrice. */
 const TASTI: { t: string; ins?: string; azione?: 'canc' | 'backspace' | 'salva'; classe?: string }[] = [
@@ -51,14 +57,69 @@ const TASTI: { t: string; ins?: string; azione?: 'canc' | 'backspace' | 'salva';
   { t: '⌫', azione: 'backspace', classe: 'is-canc' },
 ];
 
+/**
+ * Campo dell'unità di misura: si scrive a mano, ma con i suggerimenti
+ * dell'elenco mentre si digita e con l'errore se quello che si è scritto in
+ * elenco non c'è. Vuoto vuol dire «la calcolo io dall'operazione».
+ */
+function CampoUnita({
+  id,
+  label,
+  value,
+  auto,
+  elenco,
+  onChange,
+}: {
+  id: string;
+  label?: string;
+  value: string;
+  /** Unità ricavata dall'operazione, usata come segnaposto. */
+  auto: string;
+  elenco: string[];
+  onChange: (v: string) => void;
+}) {
+  const fuori = !!value.trim() && !unitaInElenco(value, elenco);
+  return (
+    <div className="mini-campo">
+      {label && (
+        <label htmlFor={id}>
+          {label}
+          {!value.trim() && auto && <span className="calc-um-auto">auto</span>}
+        </label>
+      )}
+      <input
+        id={id}
+        className={`input${fuori ? ' is-error' : ''}`}
+        value={value}
+        list="calc-elenco-unita"
+        placeholder={auto || 'kN/mq'}
+        autoComplete="off"
+        spellCheck={false}
+        aria-invalid={fuori || undefined}
+        title={fuori ? 'Unità non in elenco' : auto ? `Dall’operazione: ${auto}` : undefined}
+        onChange={(e) => onChange(e.target.value)}
+      />
+    </div>
+  );
+}
+
 export default function Calcolatrice() {
   const { state, dispatch } = useStore();
   const calc = state.calcolatrice;
   const input = useRef<HTMLInputElement>(null);
+  const [apriUnita, setApriUnita] = useState(false);
+  const [nuovaUnita, setNuovaUnita] = useState('');
 
-  const voci = useMemo(() => ricalcola(calc.voci), [calc.voci]);
+  const voci = useMemo(() => ricalcola(calc.voci, calc.unita), [calc.voci, calc.unita]);
   const vars = useMemo(() => variabili(voci), [voci]);
-  const anteprima = useMemo(() => valuta(calc.espressione, vars), [calc.espressione, vars]);
+  const unitaVars = useMemo(() => unitaVariabili(voci), [voci]);
+  const anteprima = useMemo(
+    () => valutaConUnita(calc.espressione, vars, unitaVars),
+    [calc.espressione, vars, unitaVars],
+  );
+  /** Unità del risultato in corso, ricavata dai nomi che compaiono. */
+  const umAuto = anteprima.ok && anteprima.dim ? scriviUnita(anteprima.dim, calc.unita) : '';
+  const umFuoriElenco = !!calc.um.trim() && !unitaInElenco(calc.um, calc.unita);
 
   const set = (patch: Partial<typeof calc>) => dispatch({ type: 'calcolatrice', patch });
   const setVoci = (v: VoceCalcolo[]) => set({ voci: v });
@@ -92,7 +153,7 @@ export default function Calcolatrice() {
   };
 
   const salva = () => {
-    if (!calc.espressione.trim()) return;
+    if (!calc.espressione.trim() || umFuoriElenco) return;
     setVoci([
       ...calc.voci,
       {
@@ -122,8 +183,24 @@ export default function Calcolatrice() {
   const nomeGiaUsato = voci.some((v) => v.nomeValido && v.nome.trim() === calc.nome.trim());
   const nomeErrato = !!calc.nome.trim() && (!nomeAmmesso(calc.nome) || nomeGiaUsato);
 
+  const setUnita = (u: string[]) => set({ unita: normalizzaElenco(u) });
+
+  const aggiungiUnita = () => {
+    if (!nuovaUnita.trim()) return;
+    setUnita([...calc.unita, nuovaUnita.trim()]);
+    setNuovaUnita('');
+  };
+
   return (
     <div className="stack">
+      {/* elenco dei suggerimenti: uno solo per tutta la scheda, lo vedono sia il
+          campo in scrittura sia quelli delle operazioni già salvate */}
+      <datalist id="calc-elenco-unita">
+        {calc.unita.map((u) => (
+          <option key={u} value={u} />
+        ))}
+      </datalist>
+
       <ComandiScheda>
         <button
           type="button"
@@ -135,10 +212,79 @@ export default function Calcolatrice() {
           <Keyboard size={14} />
           Tastierino
         </button>
+        <button
+          type="button"
+          className="btn btn-secondary"
+          aria-pressed={apriUnita}
+          title="Cambia le unità di misura proposte"
+          onClick={() => setApriUnita((v) => !v)}
+        >
+          <Ruler size={14} />
+          Unità
+        </button>
         <span className="calc-conteggio">
           {voci.length} {voci.length === 1 ? 'operazione salvata' : 'operazioni salvate'}
         </span>
       </ComandiScheda>
+
+      {apriUnita && (
+        <section className="panel">
+          <div className="panel-body" style={{ paddingTop: 12 }}>
+            <div className="section-title">Unità di misura proposte</div>
+            <p className="note" style={{ marginTop: 0 }}>
+              Sono le uniche ammesse nei campi «Unità»: scrivendo compaiono come suggerimento e quello
+              che non è in elenco viene segnato come errore. Il prodotto e il rapporto fra operazioni
+              con nome ricavano l’unità da soli — <code>b*h</code> in m dà mq, <code>b*h*gCLS</code>{' '}
+              con gCLS in kN/mc dà kN/m.
+            </p>
+
+            <div className="calc-unita-aggiungi">
+              <input
+                className="input"
+                value={nuovaUnita}
+                placeholder="kg/ml"
+                aria-label="Nuova unità di misura"
+                autoComplete="off"
+                spellCheck={false}
+                onChange={(e) => setNuovaUnita(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    aggiungiUnita();
+                  }
+                }}
+              />
+              <button type="button" className="btn btn-primary" disabled={!nuovaUnita.trim()} onClick={aggiungiUnita}>
+                <Plus size={14} />
+                Aggiungi
+              </button>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                title="Torna all’elenco di serie"
+                onClick={() => setUnita(UNITA_DEFAULT)}
+              >
+                Ripristina
+              </button>
+            </div>
+
+            <div className="calc-unita-elenco">
+              {calc.unita.map((u) => (
+                <span className="calc-unita-chip" key={u}>
+                  {u}
+                  <button
+                    type="button"
+                    title={`Togli ${u} dall’elenco`}
+                    onClick={() => setUnita(calc.unita.filter((x) => x !== u))}
+                  >
+                    <X size={11} weight="bold" />
+                  </button>
+                </span>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
 
       <section className="panel">
         <div className="panel-body" style={{ paddingTop: 12 }}>
@@ -170,7 +316,11 @@ export default function Calcolatrice() {
                 <>
                   <Equals size={16} />
                   <strong>{formatta(anteprima.valore)}</strong>
-                  {calc.um.trim() && <span className="um">{calc.um.trim()}</span>}
+                  {(calc.um.trim() || umAuto) && (
+                    <span className={`um${calc.um.trim() ? '' : ' is-auto'}`}>
+                      {calc.um.trim() || umAuto}
+                    </span>
+                  )}
                 </>
               ) : (
                 <>
@@ -212,17 +362,14 @@ export default function Calcolatrice() {
                 onChange={(e) => set({ nome: e.target.value })}
               />
             </div>
-            <div className="mini-campo">
-              <label htmlFor="calc-um">Unità</label>
-              <input
-                id="calc-um"
-                className="input"
-                value={calc.um}
-                placeholder="m²"
-                autoComplete="off"
-                onChange={(e) => set({ um: e.target.value })}
-              />
-            </div>
+            <CampoUnita
+              id="calc-um"
+              label="Unità"
+              value={calc.um}
+              auto={umAuto}
+              elenco={calc.unita}
+              onChange={(v) => set({ um: v })}
+            />
             <div className="mini-campo calc-campo-nota">
               <label htmlFor="calc-nota">Nota</label>
               <input
@@ -237,7 +384,7 @@ export default function Calcolatrice() {
             <button
               type="button"
               className="btn btn-primary calc-btn-salva"
-              disabled={!calc.espressione.trim()}
+              disabled={!calc.espressione.trim() || umFuoriElenco}
               title="Salva l’operazione estesa (operazione = risultato) con la sua nota"
               onClick={salva}
             >
@@ -251,6 +398,13 @@ export default function Calcolatrice() {
               {nomeGiaUsato
                 ? 'Nome già usato da un’altra operazione: il richiamo per nome resterebbe ambiguo.'
                 : 'Il nome deve iniziare per lettera e contenere solo lettere, cifre o «_».'}
+            </div>
+          )}
+
+          {umFuoriElenco && (
+            <div className="field-error">
+              «{calc.um.trim()}» non è fra le unità proposte: scegline una dall’elenco, oppure
+              aggiungila con il pulsante «Unità» in testa alla scheda.
             </div>
           )}
 
@@ -274,8 +428,18 @@ export default function Calcolatrice() {
               <div className="d">
                 Salva i passaggi del predimensionamento con un nome — area, incidenza, carico — e riusali
                 nelle operazioni successive scrivendone il nome. Le operazioni salvate viaggiano con il
-                progetto: sono nell’Esporta JSON e nel Copia per relazione.
+                progetto: sono nell’Esporta JSON e nel Copia txt.
               </div>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                style={{ marginTop: 10 }}
+                title="Rimette b, l, h, gCLS, gACC e gTERRA, vuote da compilare"
+                onClick={() => setVoci(VOCI_DEFAULT)}
+              >
+                <Plus size={14} />
+                Rimetti le grandezze di base
+              </button>
             </div>
           ) : (
             <ul className="calc-lista">
@@ -298,15 +462,21 @@ export default function Calcolatrice() {
                         )}
                       </span>
                       <span className="calc-voce-valore">
-                        {aperta && <span className="calc-espressione">{v.espressione} =</span>}
+                        {aperta && v.espressione.trim() && (
+                          <span className="calc-espressione">{v.espressione} =</span>
+                        )}
                         {v.errore ? (
                           <span className="calc-voce-errore">
                             <WarningCircle size={13} /> {v.errore}
                           </span>
+                        ) : !v.espressione.trim() ? (
+                          <span className="calc-da-compilare">da compilare</span>
                         ) : (
                           <>
                             <strong>{formatta(v.valore)}</strong>
-                            {v.um.trim() && <span className="um">{v.um.trim()}</span>}
+                            {v.umEffettiva && (
+                              <span className={`um${v.um.trim() ? '' : ' is-auto'}`}>{v.umEffettiva}</span>
+                            )}
                           </>
                         )}
                       </span>
@@ -376,16 +546,14 @@ export default function Calcolatrice() {
                             onChange={(e) => aggiorna(v.id, { espressione: e.target.value })}
                           />
                         </div>
-                        <div className="mini-campo">
-                          <label htmlFor={`u-${v.id}`}>Unità</label>
-                          <input
-                            id={`u-${v.id}`}
-                            className="input"
-                            value={v.um}
-                            autoComplete="off"
-                            onChange={(e) => aggiorna(v.id, { um: e.target.value })}
-                          />
-                        </div>
+                        <CampoUnita
+                          id={`u-${v.id}`}
+                          label="Unità"
+                          value={v.um}
+                          auto={v.umCalcolata}
+                          elenco={calc.unita}
+                          onChange={(um) => aggiorna(v.id, { um })}
+                        />
                         <div className="mini-campo calc-campo-nota">
                           <label htmlFor={`t-${v.id}`}>Nota</label>
                           <input

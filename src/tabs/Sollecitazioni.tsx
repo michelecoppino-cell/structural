@@ -1,5 +1,4 @@
-import { useState } from 'react';
-import { ArrowsHorizontal, ArrowsVertical, CaretDown, CaretUp, Info } from '@phosphor-icons/react';
+import { ArrowsHorizontal, ArrowsVertical, CaretDown, CaretUp } from '@phosphor-icons/react';
 import { useCalcoli, useStore } from '../state/store';
 import { num } from '../calc/azioni';
 import {
@@ -104,7 +103,8 @@ export default function Sollecitazioni() {
   const { azioni: az, sollecitazioni: r } = useCalcoli();
   const inp = state.sollecitazioni;
   const set = (patch: Partial<typeof inp>) => dispatch({ type: 'sollecitazioni', patch });
-  const [geomOpen, setGeomOpen] = useState(false);
+  /** Le formule della fascia geometria seguono l'(i) della barra di scheda. */
+  const geomOpen = state.ui.allDetails.sollecitazioni;
   /** Il dettaglio della combinazione sta sotto il riepilogo, a scomparsa. */
   const combOpen = !!state.ui.exp['soll-combinazione'];
   /** I campi di geometria e carichi restano chiusi finché non servono. */
@@ -469,15 +469,6 @@ export default function Sollecitazioni() {
                     <span className="n">
                       {verticale ? 'H' : 'L'} {fx(r.L)} m
                     </span>
-                  </button>
-                  <button
-                    type="button"
-                    className="field-info"
-                    aria-expanded={geomOpen}
-                    title="Formule e riferimenti"
-                    onClick={() => setGeomOpen((v) => !v)}
-                  >
-                    <Info size={14} />
                   </button>
                 </div>
                 {geomFieldsOpen && (
