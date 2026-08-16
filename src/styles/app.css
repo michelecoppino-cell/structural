@@ -12,6 +12,12 @@ body,
   height: 100%;
 }
 
+/* la barra di stato e la zona del gesto di casa restano del colore della
+   cornice: senza questo, su cellulare si vedono due bande nere */
+html {
+  background: var(--chrome);
+}
+
 body {
   margin: 0;
   background: var(--ground);
@@ -67,8 +73,9 @@ button {
 .app {
   display: flex;
   flex-direction: column;
-  min-height: 100%;
+  min-height: 100dvh;
   position: relative;
+  background: var(--ground);
 }
 
 /* schermata a misura di finestra: l'altezza è quella del viewport, non del contenuto */
@@ -82,7 +89,10 @@ button {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 11px 20px;
+  /* viewport-fit=cover: il contenuto della testata scende sotto l'orologio
+     e la tacca invece di finirci sotto */
+  padding: calc(11px + env(safe-area-inset-top)) max(20px, env(safe-area-inset-right)) 11px
+    max(20px, env(safe-area-inset-left));
   border-bottom: 1px solid var(--divider);
   background: var(--chrome);
   flex: none;
@@ -276,6 +286,11 @@ button {
 }
 
 /* ─────────────────── toolbar di scheda (sticky in tutte le schede) ────────── */
+
+/* senza comandi propri la barra non esiste: non deve rubare altezza */
+.tab-toolbar:has(> .toolbar-slot:empty) {
+  display: none;
+}
 
 .tab-toolbar {
   position: sticky;
@@ -1572,11 +1587,18 @@ button.field-origin:hover {
   }
 
   .app-header {
-    padding: 10px 12px;
+    padding: calc(8px + env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) 8px
+      max(12px, env(safe-area-inset-left));
   }
 
   .header-actions .btn span {
     display: none;
+  }
+
+  /* la copia della scheda è il comando che si usa più spesso: qui l'etichetta
+     resta, è corta e vale la larghezza che occupa */
+  .header-actions .btn-copia span {
+    display: inline;
   }
 
   .header-actions .btn {
@@ -1886,6 +1908,12 @@ button.field-origin:hover {
   color: var(--text-muted);
 }
 
+/* ans occupa due colonne: è l'unico tasto con una parola sopra */
+.calc-tasto.is-largo {
+  grid-column: span 2;
+  font-size: 14px;
+}
+
 .calc-salva {
   display: flex;
   flex-wrap: wrap;
@@ -1992,52 +2020,84 @@ button.field-origin:hover {
   color: var(--color-accent-300);
 }
 
-.calc-lista {
+/* le grandezze stanno in pastiglie piccole: su cellulare almeno tre per riga,
+   così l'elenco si legge tutto senza scorrere */
+.calc-griglia {
   list-style: none;
-  margin: 0;
+  margin: 0 0 10px;
   padding: 0;
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
   gap: 6px;
+  align-items: start;
 }
 
-.calc-voce {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 8px 6px 10px;
+.calc-gr {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 5px 6px 4px;
   border: 1px solid var(--border-faint);
   border-radius: var(--radius-md);
   background: var(--nested);
+  min-width: 0;
 }
 
-.calc-voce.is-errore {
+.calc-gr.is-errore {
   border-color: color-mix(in srgb, var(--err) 45%, transparent);
 }
 
-/* la riga mostra il risultato; cliccandola compare l'operazione estesa */
-.calc-voce-testa {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-  min-width: 0;
-  border: 0;
-  background: transparent;
-  color: inherit;
-  text-align: left;
-  cursor: pointer;
-  padding: 4px 0;
+/* aperta per la modifica: prende tutta la riga della griglia */
+.calc-gr.is-aperta {
+  grid-column: 1 / -1;
 }
 
-.calc-voce-nome {
-  font-size: 12.5px;
-  color: var(--text-2);
-  flex: none;
-  max-width: 34%;
+.calc-gr-nome {
+  display: block;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--color-accent-300);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.calc-gr-nome:hover {
+  color: var(--color-accent-400);
+}
+
+.calc-gr-valore.input {
+  height: 30px;
+  padding: 0 6px;
+  font-family: var(--font-mono);
+  font-size: 13.5px;
+  text-align: right;
+  width: 100%;
+  min-width: 0;
+}
+
+.calc-gr-esito {
+  display: flex;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: 4px;
+  min-height: 14px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--color-accent-300);
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.calc-gr-esito .um {
+  font-size: 10.5px;
+  color: var(--text-muted);
 }
 
 .calc-senza-nome {
@@ -2045,59 +2105,29 @@ button.field-origin:hover {
   font-style: italic;
 }
 
-.calc-voce-valore {
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
-  min-width: 0;
-  font-family: var(--font-mono);
-  font-size: 14px;
-  color: var(--color-accent-300);
-}
-
-.calc-voce-valore .um {
-  font-size: 11px;
-  color: var(--text-muted);
-}
-
-.calc-espressione {
-  color: var(--text-2);
-  font-size: 12.5px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .calc-voce-errore {
   display: inline-flex;
   align-items: center;
   gap: 4px;
   font-family: var(--font);
-  font-size: 11.5px;
+  font-size: 11px;
   color: var(--err);
-}
-
-.calc-voce-nota {
-  font-size: 11.5px;
-  color: var(--text-faint);
-  margin-left: auto;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  min-width: 0;
 }
 
 .calc-voce-azioni {
   display: flex;
   gap: 4px;
   flex: none;
+  align-items: flex-end;
 }
 
 .calc-voce-modifica {
-  grid-column: 1 / -1;
+  width: 100%;
   display: flex;
   flex-wrap: wrap;
+  align-items: flex-end;
   gap: 8px;
+  margin-top: 4px;
   padding-top: 6px;
   border-top: 1px solid var(--border-faint);
 }
@@ -2116,6 +2146,169 @@ button.field-origin:hover {
 }
 
 .calc-voce-modifica .calc-campo-nota {
+  flex: 1 1 200px;
+  width: auto;
+}
+
+/* catalogo: le grandezze che si possono aggiungere, una per pastiglia */
+.calc-catalogo {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.calc-catalogo-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 9px;
+  min-height: 28px;
+  font-size: 11.5px;
+  font-family: var(--font-mono);
+  color: var(--text-2);
+  background: transparent;
+  border: 1px dashed var(--divider);
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.calc-catalogo-chip:hover {
+  color: var(--color-accent-300);
+  border-color: var(--color-accent);
+  background: var(--hover-soft);
+}
+
+.calc-catalogo-chip.is-vuota {
+  font-family: var(--font);
+  color: var(--text-faint);
+}
+
+/* ── operazioni preimpostate ── */
+
+.calc-preset-lista {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.calc-preset {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px 4px 10px;
+  border: 1px solid var(--border-faint);
+  border-radius: var(--radius-md);
+  background: var(--nested);
+}
+
+/* pronta = tutte le grandezze che le servono sono compilate */
+.calc-preset.is-pronta {
+  border-color: color-mix(in srgb, var(--color-accent) 40%, transparent);
+}
+
+.calc-preset-usa {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  padding: 5px 0;
+  cursor: pointer;
+}
+
+.calc-preset-usa:disabled {
+  cursor: default;
+  opacity: 0.75;
+}
+
+.calc-preset-nome {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  color: var(--text-2);
+  flex: none;
+  min-width: 22px;
+}
+
+.calc-preset.is-pronta .calc-preset-nome {
+  color: var(--color-accent-300);
+}
+
+.calc-preset-espr {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  color: var(--text-2);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.calc-preset-esito {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  margin-left: auto;
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--color-accent-300);
+}
+
+.calc-preset-esito .um {
+  font-size: 10.5px;
+  color: var(--text-muted);
+}
+
+.calc-preset-mancanti {
+  font-family: var(--font);
+  font-size: 11px;
+  color: var(--text-faint);
+}
+
+.calc-preset-nota {
+  grid-column: 1 / -1;
+  font-size: 11px;
+  color: var(--text-faint);
+  padding-bottom: 3px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.calc-preset-azioni {
+  display: flex;
+  gap: 4px;
+  flex: none;
+}
+
+.calc-preset-aggiungi {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.calc-preset-aggiungi .mini-campo {
+  width: 96px;
+}
+
+.calc-preset-aggiungi .calc-campo-espr {
+  flex: 1 1 200px;
+  width: auto;
+}
+
+.calc-preset-aggiungi .calc-campo-espr .input {
+  font-family: var(--font-mono);
+}
+
+.calc-preset-aggiungi .calc-campo-nota {
   flex: 1 1 200px;
   width: auto;
 }
@@ -2399,26 +2592,39 @@ button.field-origin:hover {
     height: var(--control-h);
   }
 
-  .calc-voce {
-    grid-template-columns: minmax(0, 1fr);
+  /* tre pastiglie per riga anche sullo schermo più stretto */
+  .calc-griglia {
+    grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
+    gap: 5px;
   }
 
-  .calc-voce-testa {
-    flex-wrap: wrap;
-    gap: 4px 10px;
-  }
-
-  .calc-voce-nome {
-    max-width: 100%;
-  }
-
-  .calc-voce-nota {
-    margin-left: 0;
-    flex-basis: 100%;
+  .calc-gr-valore.input {
+    height: 32px;
   }
 
   .calc-voce-azioni {
     justify-content: flex-end;
+    flex: 1 1 100%;
+  }
+
+  .calc-preset {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .calc-preset-usa {
+    flex-wrap: wrap;
+    gap: 2px 8px;
+  }
+
+  .calc-preset-esito {
+    margin-left: 0;
+  }
+
+  .calc-preset-aggiungi .mini-campo,
+  .calc-preset-aggiungi .calc-campo-espr,
+  .calc-preset-aggiungi .calc-campo-nota {
+    flex: 1 1 100%;
+    width: 100%;
   }
 
   .norma-aggiungi .mini-campo,

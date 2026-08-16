@@ -7,6 +7,7 @@ import {
   Copy,
   Equals,
   Keyboard,
+  PencilSimple,
   Plus,
   Ruler,
   Trash,
@@ -17,20 +18,30 @@ import { useStore } from '../state/store';
 import { ComandiScheda } from '../components/ComandiScheda';
 import {
   FUNZIONI,
+  GRANDEZZE_CATALOGO,
+  PREIMPOSTATE_DEFAULT,
   VOCI_DEFAULT,
   formatta,
   nomeAmmesso,
+  nomiMancanti,
   ricalcola,
   testoVoce,
   unitaVariabili,
   valutaConUnita,
   variabili,
+  type Preimpostata,
   type VoceCalcolo,
 } from '../calc/calcolatrice';
 import { UNITA_DEFAULT, normalizzaElenco, scriviUnita, unitaInElenco } from '../calc/unita';
 
 /** Tasti del tastierino: quattro colonne, come una calcolatrice. */
-const TASTI: { t: string; ins?: string; azione?: 'canc' | 'backspace' | 'salva'; classe?: string }[] = [
+const TASTI: {
+  t: string;
+  ins?: string;
+  azione?: 'canc' | 'backspace';
+  classe?: string;
+  titolo?: string;
+}[] = [
   { t: '7', ins: '7' },
   { t: '8', ins: '8' },
   { t: '9', ins: '9' },
@@ -53,9 +64,16 @@ const TASTI: { t: string; ins?: string; azione?: 'canc' | 'backspace' | 'salva';
   { t: '%', ins: '%', classe: 'is-op' },
   { t: '^', ins: '^' },
   { t: 'π', ins: 'pi' },
+  // la γ dei pesi di volume: sul cellulare non la si scrive altrimenti
+  { t: 'γ', ins: 'γ', titolo: 'Iniziale dei pesi di volume: γCLS, γACC, γTERRA' },
+  { t: ';', ins: ';', titolo: 'Separatore degli argomenti: min(3;5)' },
+  { t: 'ans', ins: 'ans', classe: 'is-largo', titolo: 'Ultimo risultato' },
   { t: 'C', azione: 'canc', classe: 'is-canc' },
   { t: '⌫', azione: 'backspace', classe: 'is-canc' },
 ];
+
+/** Un valore scritto come numero e basta: la pastiglia non ripete il risultato. */
+const SOLO_NUMERO = /^[+-]?[\d\s.,]+$/;
 
 /**
  * Campo dell'unità di misura: si scrive a mano, ma con i suggerimenti
@@ -109,6 +127,7 @@ export default function Calcolatrice() {
   const input = useRef<HTMLInputElement>(null);
   const [apriUnita, setApriUnita] = useState(false);
   const [nuovaUnita, setNuovaUnita] = useState('');
+  const [nuovaPre, setNuovaPre] = useState({ nome: '', espressione: '', um: '', nota: '' });
 
   const voci = useMemo(() => ricalcola(calc.voci, calc.unita), [calc.voci, calc.unita]);
   const vars = useMemo(() => variabili(voci), [voci]);
@@ -123,6 +142,7 @@ export default function Calcolatrice() {
 
   const set = (patch: Partial<typeof calc>) => dispatch({ type: 'calcolatrice', patch });
   const setVoci = (v: VoceCalcolo[]) => set({ voci: v });
+  const setPre = (p: Preimpostata[]) => set({ preimpostate: p });
 
   /** Inserisce testo al punto del cursore, non in coda: si corregge senza riscrivere. */
   const inserisci = (testo: string) => {
@@ -180,6 +200,17 @@ export default function Calcolatrice() {
     setVoci(copia);
   };
 
+  /** Aggiunge una grandezza (dal catalogo o vuota) e ne apre subito i campi. */
+  const aggiungiGrandezza = (base?: Omit<VoceCalcolo, 'id'>) => {
+    const id = `calc-${Date.now()}`;
+    setVoci([...calc.voci, { id, nome: '', espressione: '', nota: '', um: '', ...base }]);
+    if (!base) dispatch({ type: 'toggleExp', id: `calc-${id}` });
+  };
+
+  const nomiUsati = new Set(voci.map((v) => v.nome.trim()));
+  const catalogo = GRANDEZZE_CATALOGO.filter((g) => !nomiUsati.has(g.nome));
+  const mancantiDefault = VOCI_DEFAULT.filter((g) => !nomiUsati.has(g.nome));
+
   const nomeGiaUsato = voci.some((v) => v.nomeValido && v.nome.trim() === calc.nome.trim());
   const nomeErrato = !!calc.nome.trim() && (!nomeAmmesso(calc.nome) || nomeGiaUsato);
 
@@ -189,6 +220,59 @@ export default function Calcolatrice() {
     if (!nuovaUnita.trim()) return;
     setUnita([...calc.unita, nuovaUnita.trim()]);
     setNuovaUnita('');
+  };
+
+  /* ─── operazioni preimpostate ─── */
+
+  /** Ogni formula con quello che le manca e, se non manca niente, il risultato. */
+  const preimpostate = useMemo(
+    () =>
+      calc.preimpostate.map((p) => {
+        const mancanti = nomiMancanti(p.espressione, vars);
+        const esito = p.espressione.trim() && !mancanti.length
+          ? valutaConUnita(p.espressione, vars, unitaVars)
+          : null;
+        const umAutoPre = esito?.ok && esito.dim ? scriviUnita(esito.dim, calc.unita) : '';
+        return { ...p, mancanti, esito, umEffettiva: p.um.trim() || umAutoPre };
+      }),
+    [calc.preimpostate, calc.unita, vars, unitaVars],
+  );
+
+  const aggiornaPre = (id: string, patch: Partial<Preimpostata>) =>
+    setPre(calc.preimpostate.map((p) => (p.id === id ? { ...p, ...patch } : p)));
+
+  const aggiungiPre = () => {
+    if (!nuovaPre.espressione.trim()) return;
+    setPre([
+      ...calc.preimpostate,
+      {
+        id: `pre-${Date.now()}`,
+        nome: nuovaPre.nome.trim(),
+        espressione: nuovaPre.espressione.trim(),
+        nota: nuovaPre.nota.trim(),
+        um: nuovaPre.um.trim(),
+      },
+    ]);
+    setNuovaPre({ nome: '', espressione: '', um: '', nota: '' });
+  };
+
+  /** La formula finisce nel display già pronta: il risultato compare lì. */
+  const usaPre = (p: Preimpostata) => {
+    set({ espressione: p.espressione, nome: p.nome, nota: p.nota, um: p.um });
+    requestAnimationFrame(() => {
+      const el = input.current;
+      el?.focus();
+      el?.setSelectionRange(p.espressione.length, p.espressione.length);
+      el?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    });
+  };
+
+  /** Salva la formula fra le operazioni senza passare dal display. */
+  const salvaPre = (p: Preimpostata) => {
+    setVoci([
+      ...calc.voci,
+      { id: `calc-${Date.now()}`, nome: p.nome.trim(), espressione: p.espressione.trim(), nota: p.nota.trim(), um: p.um.trim() },
+    ]);
   };
 
   return (
@@ -234,8 +318,8 @@ export default function Calcolatrice() {
             <p className="note" style={{ marginTop: 0 }}>
               Sono le uniche ammesse nei campi «Unità»: scrivendo compaiono come suggerimento e quello
               che non è in elenco viene segnato come errore. Il prodotto e il rapporto fra operazioni
-              con nome ricavano l’unità da soli — <code>b*h</code> in m dà mq, <code>b*h*gCLS</code>{' '}
-              con gCLS in kN/mc dà kN/m.
+              con nome ricavano l’unità da soli — <code>b*h</code> in m dà mq, <code>b*h*γCLS</code>{' '}
+              con γCLS in kN/mc dà kN/m.
             </p>
 
             <div className="calc-unita-aggiungi">
@@ -297,7 +381,7 @@ export default function Calcolatrice() {
               autoCapitalize="off"
               spellCheck={false}
               aria-label="Espressione da calcolare"
-              placeholder="es.  base*altezza/2   ·   area*incidenza   ·   sqrt(2)*3"
+              placeholder="es.  b*h   ·   q*l^2/8   ·   sqrt(2)*3"
               onChange={(e) => set({ espressione: e.target.value })}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') {
@@ -337,6 +421,7 @@ export default function Calcolatrice() {
                 key={k.t}
                 type="button"
                 className={`calc-tasto${k.classe ? ` ${k.classe}` : ''}`}
+                title={k.titolo}
                 onClick={() => {
                   if (k.azione === 'canc') set({ espressione: '' });
                   else if (k.azione === 'backspace') backspace();
@@ -412,114 +497,69 @@ export default function Calcolatrice() {
             Operatori <code>+ − × ÷ ^</code>, parentesi, <code>%</code> come «per cento», virgola o punto
             decimale, argomenti separati da <code>;</code>. Funzioni:{' '}
             {Object.keys(FUNZIONI).join(', ')} — trigonometria in <strong>gradi</strong>. Nelle espressioni
-            puoi usare i nomi delle operazioni salvate, <code>ans</code> (ultimo risultato), <code>pi</code> ed{' '}
+            puoi usare i nomi delle grandezze qui sotto, <code>ans</code> (ultimo risultato), <code>pi</code> ed{' '}
             <code>e</code>.
           </p>
         </div>
       </section>
 
+      {/* ─────────────── grandezze e operazioni salvate ─────────────── */}
+
       <section className="panel">
         <div className="panel-body" style={{ paddingTop: 12 }}>
-          <div className="section-title">Operazioni salvate</div>
+          <div className="section-title">Grandezze e operazioni</div>
+          <p className="note" style={{ marginTop: 0 }}>
+            Il valore si scrive dentro la pastiglia; toccando il nome si aprono nome, unità e nota. Ogni
+            riga vede solo quelle che la precedono, così correggere una grandezza a monte aggiorna da solo
+            tutto quello che ne discende.
+          </p>
 
-          {voci.length === 0 ? (
-            <div className="placeholder">
-              <div className="t">Nessuna operazione salvata</div>
-              <div className="d">
-                Salva i passaggi del predimensionamento con un nome — area, incidenza, carico — e riusali
-                nelle operazioni successive scrivendone il nome. Le operazioni salvate viaggiano con il
-                progetto: sono nell’Esporta JSON e nel Copia txt.
-              </div>
-              <button
-                type="button"
-                className="btn btn-secondary"
-                style={{ marginTop: 10 }}
-                title="Rimette b, l, h, gCLS, gACC e gTERRA, vuote da compilare"
-                onClick={() => setVoci(VOCI_DEFAULT)}
-              >
-                <Plus size={14} />
-                Rimetti le grandezze di base
-              </button>
-            </div>
-          ) : (
-            <ul className="calc-lista">
+          {voci.length > 0 && (
+            <ul className="calc-griglia">
               {voci.map((v, i) => {
                 const aperta = !!state.ui.exp[`calc-${v.id}`];
+                const numerica = SOLO_NUMERO.test(v.espressione.trim());
                 return (
-                  <li key={v.id} className={`calc-voce${v.errore ? ' is-errore' : ''}`}>
+                  <li
+                    key={v.id}
+                    className={`calc-gr${v.errore ? ' is-errore' : ''}${aperta ? ' is-aperta' : ''}`}
+                  >
                     <button
                       type="button"
-                      className="calc-voce-testa"
+                      className="calc-gr-nome"
                       aria-expanded={aperta}
-                      title={aperta ? 'Mostra il risultato' : 'Mostra l’operazione'}
+                      title={v.nota.trim() || 'Nome, unità e nota'}
                       onClick={() => dispatch({ type: 'toggleExp', id: `calc-${v.id}` })}
                     >
-                      <span className="calc-voce-nome">
-                        {v.nome.trim() ? (
-                          v.nome.trim()
-                        ) : (
-                          <span className="calc-senza-nome">operazione {i + 1}</span>
-                        )}
-                      </span>
-                      <span className="calc-voce-valore">
-                        {aperta && v.espressione.trim() && (
-                          <span className="calc-espressione">{v.espressione} =</span>
-                        )}
-                        {v.errore ? (
-                          <span className="calc-voce-errore">
-                            <WarningCircle size={13} /> {v.errore}
-                          </span>
-                        ) : !v.espressione.trim() ? (
-                          <span className="calc-da-compilare">da compilare</span>
-                        ) : (
-                          <>
-                            <strong>{formatta(v.valore)}</strong>
-                            {v.umEffettiva && (
-                              <span className={`um${v.um.trim() ? '' : ' is-auto'}`}>{v.umEffettiva}</span>
-                            )}
-                          </>
-                        )}
-                      </span>
-                      {v.nota.trim() && <span className="calc-voce-nota">{v.nota.trim()}</span>}
+                      {v.nome.trim() ? v.nome.trim() : <span className="calc-senza-nome">n. {i + 1}</span>}
                     </button>
 
-                    <div className="calc-voce-azioni">
-                      {v.nomeValido && (
-                        <button
-                          type="button"
-                          className="btn btn-secondary btn-icon"
-                          title={`Usa ${v.nome.trim()} nell’espressione`}
-                          onClick={() => inserisci(v.nome.trim())}
-                        >
-                          <Copy size={13} />
-                        </button>
+                    <input
+                      className={`input calc-gr-valore${v.errore ? ' is-error' : ''}`}
+                      value={v.espressione}
+                      placeholder="—"
+                      inputMode="decimal"
+                      autoComplete="off"
+                      spellCheck={false}
+                      aria-label={`Valore di ${v.nome.trim() || `operazione ${i + 1}`}`}
+                      onChange={(e) => aggiorna(v.id, { espressione: e.target.value })}
+                    />
+
+                    <div className="calc-gr-esito">
+                      {v.errore ? (
+                        <span className="calc-voce-errore" title={v.errore}>
+                          <WarningCircle size={12} /> errore
+                        </span>
+                      ) : !v.espressione.trim() ? (
+                        <span className="calc-da-compilare">{v.umEffettiva || 'da compilare'}</span>
+                      ) : (
+                        <>
+                          {!numerica && <strong>{formatta(v.valore)}</strong>}
+                          {v.umEffettiva && (
+                            <span className={`um${v.um.trim() ? '' : ' is-auto'}`}>{v.umEffettiva}</span>
+                          )}
+                        </>
                       )}
-                      <button
-                        type="button"
-                        className="btn btn-secondary btn-icon"
-                        title="Sposta su"
-                        disabled={i === 0}
-                        onClick={() => sposta(v.id, -1)}
-                      >
-                        <ArrowUp size={13} />
-                      </button>
-                      <button
-                        type="button"
-                        className="btn btn-secondary btn-icon"
-                        title="Sposta giù"
-                        disabled={i === voci.length - 1}
-                        onClick={() => sposta(v.id, 1)}
-                      >
-                        <ArrowDown size={13} />
-                      </button>
-                      <button
-                        type="button"
-                        className="btn btn-secondary btn-icon"
-                        title="Elimina operazione"
-                        onClick={() => setVoci(calc.voci.filter((x) => x.id !== v.id))}
-                      >
-                        <Trash size={13} />
-                      </button>
                     </div>
 
                     {aperta && (
@@ -564,6 +604,44 @@ export default function Calcolatrice() {
                             onChange={(e) => aggiorna(v.id, { nota: e.target.value })}
                           />
                         </div>
+                        <div className="calc-voce-azioni">
+                          {v.nomeValido && (
+                            <button
+                              type="button"
+                              className="btn btn-secondary btn-icon"
+                              title={`Usa ${v.nome.trim()} nell’espressione`}
+                              onClick={() => inserisci(v.nome.trim())}
+                            >
+                              <Copy size={13} />
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            className="btn btn-secondary btn-icon"
+                            title="Sposta su"
+                            disabled={i === 0}
+                            onClick={() => sposta(v.id, -1)}
+                          >
+                            <ArrowUp size={13} />
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-secondary btn-icon"
+                            title="Sposta giù"
+                            disabled={i === voci.length - 1}
+                            onClick={() => sposta(v.id, 1)}
+                          >
+                            <ArrowDown size={13} />
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-secondary btn-icon"
+                            title="Elimina"
+                            onClick={() => setVoci(calc.voci.filter((x) => x.id !== v.id))}
+                          >
+                            <Trash size={13} />
+                          </button>
+                        </div>
                       </div>
                     )}
                   </li>
@@ -572,11 +650,242 @@ export default function Calcolatrice() {
             </ul>
           )}
 
+          {/* quali grandezze tenere lo decide chi calcola: qui si aggiungono
+              quelle di serie che mancano, quelle del catalogo e una vuota */}
+          <div className="calc-catalogo">
+            {[...mancantiDefault, ...catalogo].map((g) => (
+              <button
+                type="button"
+                key={g.nome}
+                className="calc-catalogo-chip"
+                title={`Aggiungi ${g.nome} — ${g.nota}${g.espressione ? ` (${g.espressione} ${g.um})` : ''}`}
+                onClick={() => aggiungiGrandezza({ nome: g.nome, espressione: g.espressione, nota: g.nota, um: g.um })}
+              >
+                <Plus size={11} weight="bold" />
+                {g.nome}
+              </button>
+            ))}
+            <button
+              type="button"
+              className="calc-catalogo-chip is-vuota"
+              title="Aggiungi una grandezza tua, con nome e unità da scrivere"
+              onClick={() => aggiungiGrandezza()}
+            >
+              <Plus size={11} weight="bold" />
+              nuova
+            </button>
+          </div>
+
           {voci.length > 0 && (
             <p className="note" style={{ marginTop: 10 }}>
-              Ogni operazione vede solo quelle che la precedono: correggere un valore a monte aggiorna da
-              solo tutto quello che ne discende. Riga estesa: <code>{testoVoce(voci[0])}</code>
+              Le grandezze viaggiano con il progetto: sono nell’Esporta JSON e nel Copia. Riga estesa:{' '}
+              <code>{testoVoce(voci[0])}</code>
             </p>
+          )}
+        </div>
+      </section>
+
+      {/* ─────────────── operazioni preimpostate ─────────────── */}
+
+      <section className="panel">
+        <div className="panel-body" style={{ paddingTop: 12 }}>
+          <div className="section-title">Operazioni preimpostate</div>
+          <p className="note" style={{ marginTop: 0 }}>
+            Formule scritte una volta sui nomi delle grandezze qui sopra — <code>q*l^2/8</code>,{' '}
+            <code>b*h^2/6</code>. Quando le grandezze che servono sono tutte compilate la formula si
+            accende e al tocco fa il calcolo: finisce nel display con nome e unità, pronta da salvare.
+          </p>
+
+          {preimpostate.length > 0 && (
+            <ul className="calc-preset-lista">
+              {preimpostate.map((p) => {
+                const aperta = !!state.ui.exp[`pre-${p.id}`];
+                const pronta = !!p.esito?.ok;
+                return (
+                  <li key={p.id} className={`calc-preset${pronta ? ' is-pronta' : ''}`}>
+                    <button
+                      type="button"
+                      className="calc-preset-usa"
+                      disabled={!pronta}
+                      title={
+                        pronta
+                          ? 'Calcola e porta la formula nel display'
+                          : `Mancano: ${p.mancanti.join(', ') || 'un’espressione valida'}`
+                      }
+                      onClick={() => usaPre(p)}
+                    >
+                      <span className="calc-preset-nome">{p.nome.trim() || '—'}</span>
+                      <span className="calc-preset-espr">{p.espressione}</span>
+                      <span className="calc-preset-esito">
+                        {p.esito?.ok ? (
+                          <>
+                            <Equals size={13} />
+                            <strong>{formatta(p.esito.valore)}</strong>
+                            {p.umEffettiva && <span className="um">{p.umEffettiva}</span>}
+                          </>
+                        ) : p.mancanti.length ? (
+                          <span className="calc-preset-mancanti">manca {p.mancanti.join(', ')}</span>
+                        ) : (
+                          <span className="calc-preset-mancanti">
+                            {p.esito && !p.esito.ok ? p.esito.errore : 'formula da scrivere'}
+                          </span>
+                        )}
+                      </span>
+                    </button>
+
+                    <div className="calc-preset-azioni">
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-icon"
+                        disabled={!pronta}
+                        title="Salva subito fra le operazioni"
+                        onClick={() => salvaPre(p)}
+                      >
+                        <BookmarkSimple size={13} />
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-icon"
+                        aria-expanded={aperta}
+                        title="Modifica la formula"
+                        onClick={() => dispatch({ type: 'toggleExp', id: `pre-${p.id}` })}
+                      >
+                        <PencilSimple size={13} />
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-icon"
+                        title="Elimina la formula"
+                        onClick={() => setPre(calc.preimpostate.filter((x) => x.id !== p.id))}
+                      >
+                        <Trash size={13} />
+                      </button>
+                    </div>
+
+                    {aperta && (
+                      <div className="calc-voce-modifica">
+                        <div className="mini-campo">
+                          <label htmlFor={`pn-${p.id}`}>Nome</label>
+                          <input
+                            id={`pn-${p.id}`}
+                            className="input"
+                            value={p.nome}
+                            autoComplete="off"
+                            spellCheck={false}
+                            onChange={(e) => aggiornaPre(p.id, { nome: e.target.value })}
+                          />
+                        </div>
+                        <div className="mini-campo calc-campo-espr">
+                          <label htmlFor={`pe-${p.id}`}>Formula</label>
+                          <input
+                            id={`pe-${p.id}`}
+                            className="input"
+                            value={p.espressione}
+                            autoComplete="off"
+                            spellCheck={false}
+                            onChange={(e) => aggiornaPre(p.id, { espressione: e.target.value })}
+                          />
+                        </div>
+                        <CampoUnita
+                          id={`pu-${p.id}`}
+                          label="Unità"
+                          value={p.um}
+                          auto={p.umEffettiva}
+                          elenco={calc.unita}
+                          onChange={(um) => aggiornaPre(p.id, { um })}
+                        />
+                        <div className="mini-campo calc-campo-nota">
+                          <label htmlFor={`pt-${p.id}`}>Nota</label>
+                          <input
+                            id={`pt-${p.id}`}
+                            className="input"
+                            value={p.nota}
+                            autoComplete="off"
+                            onChange={(e) => aggiornaPre(p.id, { nota: e.target.value })}
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {p.nota.trim() && !aperta && <span className="calc-preset-nota">{p.nota.trim()}</span>}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+
+          <div className="calc-preset-aggiungi">
+            <div className="mini-campo">
+              <label htmlFor="pre-nome">Nome</label>
+              <input
+                id="pre-nome"
+                className="input"
+                value={nuovaPre.nome}
+                placeholder="M"
+                autoComplete="off"
+                spellCheck={false}
+                onChange={(e) => setNuovaPre({ ...nuovaPre, nome: e.target.value })}
+              />
+            </div>
+            <div className="mini-campo calc-campo-espr">
+              <label htmlFor="pre-espr">Formula</label>
+              <input
+                id="pre-espr"
+                className="input"
+                value={nuovaPre.espressione}
+                placeholder="q*l^2/8"
+                autoComplete="off"
+                spellCheck={false}
+                onChange={(e) => setNuovaPre({ ...nuovaPre, espressione: e.target.value })}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    aggiungiPre();
+                  }
+                }}
+              />
+            </div>
+            <CampoUnita
+              id="pre-um"
+              label="Unità"
+              value={nuovaPre.um}
+              auto=""
+              elenco={calc.unita}
+              onChange={(um) => setNuovaPre({ ...nuovaPre, um })}
+            />
+            <div className="mini-campo calc-campo-nota">
+              <label htmlFor="pre-nota">Nota</label>
+              <input
+                id="pre-nota"
+                className="input"
+                value={nuovaPre.nota}
+                placeholder="momento in mezzeria, trave appoggiata"
+                autoComplete="off"
+                onChange={(e) => setNuovaPre({ ...nuovaPre, nota: e.target.value })}
+              />
+            </div>
+            <button
+              type="button"
+              className="btn btn-primary calc-btn-salva"
+              disabled={!nuovaPre.espressione.trim()}
+              onClick={aggiungiPre}
+            >
+              <Plus size={14} />
+              Aggiungi formula
+            </button>
+          </div>
+
+          {calc.preimpostate.length === 0 && (
+            <button
+              type="button"
+              className="btn btn-secondary"
+              style={{ marginTop: 10 }}
+              title="Rimette le formule di serie: momenti, taglio, area, modulo di resistenza, peso proprio"
+              onClick={() => setPre(PREIMPOSTATE_DEFAULT)}
+            >
+              <Plus size={14} />
+              Rimetti le formule di serie
+            </button>
           )}
         </div>
       </section>

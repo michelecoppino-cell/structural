@@ -1,5 +1,18 @@
 import { describe, it, expect } from 'vitest';
-import { formatta, nomeAmmesso, ricalcola, testoVoce, valuta, variabili, type VoceCalcolo } from './calcolatrice';
+import {
+  PREIMPOSTATE_DEFAULT,
+  VOCI_DEFAULT,
+  formatta,
+  nomeAmmesso,
+  nomiMancanti,
+  nomiRichiesti,
+  ricalcola,
+  testoVoce,
+  valuta,
+  valutaConUnita,
+  variabili,
+  type VoceCalcolo,
+} from './calcolatrice';
 
 const v = (src: string, vars: Record<string, number> = {}) => {
   const e = valuta(src, vars);
@@ -147,5 +160,58 @@ describe('formattazione e testo esteso', () => {
   it('riga estesa nome = operazione = risultato', () => {
     const [r] = ricalcola([{ id: '1', nome: 'area', espressione: '5*4', nota: 'solaio tipo', um: 'm²' }]);
     expect(testoVoce(r)).toBe('area = 5*4 = 20 m²   — solaio tipo');
+  });
+});
+
+describe('grandezze di partenza', () => {
+  it('i pesi di volume arrivano già compilati, le lunghezze no', () => {
+    const r = ricalcola(VOCI_DEFAULT);
+    const v = Object.fromEntries(r.map((x) => [x.nome, x]));
+    expect(v['γCLS'].valore).toBe(25);
+    expect(v['γACC'].valore).toBe(78.5);
+    expect(v['γTERRA'].valore).toBe(18);
+    expect(v['b'].espressione).toBe('');
+    expect(v['b'].errore).toBe('');
+    // la γ greca è un nome ammesso a tutti gli effetti
+    expect(r.every((x) => x.nomeValido)).toBe(true);
+  });
+
+  it('la γ si può richiamare in un’espressione', () => {
+    const vars = variabili(ricalcola(VOCI_DEFAULT));
+    expect(valuta('0,3*0,5*γCLS', vars)).toEqual({ ok: true, valore: 3.75 });
+  });
+});
+
+describe('operazioni preimpostate', () => {
+  it('dice quali nomi servono, saltando funzioni e costanti', () => {
+    expect(nomiRichiesti('q*l^2/8')).toEqual(['q', 'l']);
+    expect(nomiRichiesti('sqrt(2)*pi*r')).toEqual(['r']);
+    expect(nomiRichiesti('3+4')).toEqual([]);
+    // quello che non si riesce nemmeno a leggere non ha nomi da chiedere
+    expect(nomiRichiesti('2 + @')).toEqual([]);
+  });
+
+  it('dice quali nomi mancano fra quelli disponibili', () => {
+    expect(nomiMancanti('q*l^2/8', { q: 10 })).toEqual(['l']);
+    expect(nomiMancanti('q*l^2/8', { q: 10, l: 5 })).toEqual([]);
+  });
+
+  it('le formule di serie si calcolano con le grandezze compilate', () => {
+    const voci = ricalcola([
+      ...VOCI_DEFAULT.map((v) =>
+        v.nome === 'q' ? { ...v, espressione: '10' } : v.nome === 'l' ? { ...v, espressione: '5' } : v,
+      ),
+    ]);
+    const vars = variabili(voci);
+    const m = PREIMPOSTATE_DEFAULT.find((p) => p.id === 'pre-m-app')!;
+    expect(nomiMancanti(m.espressione, vars)).toEqual([]);
+    const esito = valutaConUnita(m.espressione, vars);
+    expect(esito.ok && esito.valore).toBeCloseTo(31.25, 6);
+  });
+
+  it('una formula con grandezze non compilate resta in attesa', () => {
+    const vars = variabili(ricalcola(VOCI_DEFAULT));
+    const w = PREIMPOSTATE_DEFAULT.find((p) => p.id === 'pre-w')!;
+    expect(nomiMancanti(w.espressione, vars)).toEqual(['b', 'h']);
   });
 });

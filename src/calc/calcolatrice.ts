@@ -464,19 +464,93 @@ export interface VoceCalcolo {
 }
 
 /**
- * Voci di partenza: le grandezze che in un predimensionamento si scrivono
- * sempre. Partono **vuote** — nome, nota e unità sono già pronti, il valore lo
- * mette chi calcola — così le espressioni successive possono richiamarle per
- * nome senza doverle inventare ogni volta.
+ * Grandezze di partenza: quelle che in un predimensionamento si scrivono
+ * sempre. Le lunghezze partono **vuote** — il valore lo mette chi calcola —
+ * mentre i pesi di volume arrivano già compilati con il valore di normale
+ * impiego, che resta comunque modificabile come tutti gli altri.
  */
 export const VOCI_DEFAULT: VoceCalcolo[] = [
   { id: 'calc-b', nome: 'b', espressione: '', nota: 'base', um: 'm' },
-  { id: 'calc-l', nome: 'l', espressione: '', nota: 'larghezza', um: 'm' },
+  { id: 'calc-l', nome: 'l', espressione: '', nota: 'luce / larghezza', um: 'm' },
   { id: 'calc-h', nome: 'h', espressione: '', nota: 'altezza', um: 'm' },
-  { id: 'calc-gcls', nome: 'gCLS', espressione: '', nota: 'peso di volume del calcestruzzo', um: 'kN/mc' },
-  { id: 'calc-gacc', nome: 'gACC', espressione: '', nota: 'peso di volume dell’acciaio', um: 'kN/mc' },
-  { id: 'calc-gterra', nome: 'gTERRA', espressione: '', nota: 'peso di volume del terreno', um: 'kN/mc' },
+  { id: 'calc-q', nome: 'q', espressione: '', nota: 'carico distribuito', um: 'kN/m' },
+  { id: 'calc-gcls', nome: 'γCLS', espressione: '25', nota: 'peso di volume del calcestruzzo', um: 'kN/mc' },
+  { id: 'calc-gacc', nome: 'γACC', espressione: '78,5', nota: 'peso di volume dell’acciaio', um: 'kN/mc' },
+  { id: 'calc-gterra', nome: 'γTERRA', espressione: '18', nota: 'peso di volume del terreno', um: 'kN/mc' },
 ];
+
+/**
+ * Grandezze proposte in aggiunta a quelle di partenza: si aggiungono con un
+ * tocco, così l'elenco delle grandezze lo compone chi calcola invece di
+ * subirlo. I pesi di volume portano con sé la densità del materiale.
+ */
+export const GRANDEZZE_CATALOGO: Omit<VoceCalcolo, 'id'>[] = [
+  { nome: 's', espressione: '', nota: 'spessore', um: 'm' },
+  { nome: 'i', espressione: '', nota: 'interasse', um: 'm' },
+  { nome: 'A', espressione: '', nota: 'area', um: 'mq' },
+  { nome: 'F', espressione: '', nota: 'forza concentrata', um: 'kN' },
+  { nome: 'E', espressione: '', nota: 'modulo elastico', um: 'MPa' },
+  { nome: 'J', espressione: '', nota: 'momento d’inerzia', um: 'mc' },
+  { nome: 'γMUR', espressione: '18', nota: 'peso di volume della muratura', um: 'kN/mc' },
+  { nome: 'γLEGNO', espressione: '5', nota: 'peso di volume del legno', um: 'kN/mc' },
+  { nome: 'γACQUA', espressione: '10', nota: 'peso di volume dell’acqua', um: 'kN/mc' },
+];
+
+/* ─────────────────────── operazioni preimpostate ─────────────────────── */
+
+/**
+ * Formula pronta all'uso: si scrive una volta con i nomi delle grandezze e
+ * si richiama quando servono i numeri. Non porta un valore proprio — il
+ * valore nasce dalle grandezze compilate sopra nel momento in cui la si usa.
+ */
+export interface Preimpostata {
+  id: string;
+  /** Nome che prenderà l'operazione una volta salvata (può essere vuoto). */
+  nome: string;
+  espressione: string;
+  nota: string;
+  um: string;
+}
+
+/** Le formule del predimensionamento a mano, scritte sui nomi di partenza. */
+export const PREIMPOSTATE_DEFAULT: Preimpostata[] = [
+  { id: 'pre-m-app', nome: 'M', espressione: 'q*l^2/8', nota: 'momento in mezzeria, trave appoggiata', um: 'kNm' },
+  { id: 'pre-m-inc', nome: 'M', espressione: 'q*l^2/12', nota: 'momento agli incastri, trave incastrata', um: 'kNm' },
+  { id: 'pre-m-mens', nome: 'M', espressione: 'q*l^2/2', nota: 'momento all’incastro, mensola', um: 'kNm' },
+  { id: 'pre-v-app', nome: 'V', espressione: 'q*l/2', nota: 'taglio agli appoggi', um: 'kN' },
+  { id: 'pre-area', nome: 'A', espressione: 'b*h', nota: 'area della sezione rettangolare', um: 'mq' },
+  { id: 'pre-w', nome: 'W', espressione: 'b*h^2/6', nota: 'modulo di resistenza della sezione rettangolare', um: 'mc' },
+  { id: 'pre-j', nome: 'J', espressione: 'b*h^3/12', nota: 'momento d’inerzia della sezione rettangolare', um: '' },
+  { id: 'pre-peso', nome: 'P', espressione: 'b*h*γCLS', nota: 'peso proprio della trave', um: 'kN/m' },
+  { id: 'pre-freccia', nome: 'f', espressione: '5*q*l^4/(384*E*J)', nota: 'freccia in mezzeria, trave appoggiata', um: '' },
+];
+
+/**
+ * Nomi richiamati da un'espressione: servono a dire quali grandezze mancano
+ * ancora prima di provare a calcolare. Le funzioni e le costanti non contano —
+ * `sqrt`, `pi` ed `e` ci sono sempre. Un'espressione che non si riesce nemmeno
+ * a leggere non ha nomi da chiedere: torna un elenco vuoto.
+ */
+export function nomiRichiesti(espressione: string): string[] {
+  let tk: Token[];
+  try {
+    tk = tokenizza(espressione);
+  } catch {
+    return [];
+  }
+  const out: string[] = [];
+  for (const t of tk) {
+    if (t.t !== 'nome') continue;
+    if (t.v.toLowerCase() in FUNZIONI || t.v in COSTANTI) continue;
+    if (!out.includes(t.v)) out.push(t.v);
+  }
+  return out;
+}
+
+/** Nomi richiamati che non sono ancora disponibili fra le variabili. */
+export function nomiMancanti(espressione: string, vars: Record<string, number>): string[] {
+  return nomiRichiesti(espressione).filter((n) => !(n in vars));
+}
 
 export interface VoceCalcolata extends VoceCalcolo {
   valore: number;
