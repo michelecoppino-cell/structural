@@ -6,7 +6,7 @@ import { ACCIAIO_ARMATURA, ACCIAIO_STRUTTURALE, CLS, DIAMETRI } from '../data/ma
 import { TIPI_PROFILO, taglieDisponibili, type TipoProfilo } from '../data/profili-acciaio';
 import { Bar, Field, NumInput, Origine, Output, Select, Seg, Verdict } from '../components/ui';
 import { ComandiScheda } from '../components/ComandiScheda';
-import { SezioneTaglio } from '../components/Disegni';
+import { SezioneArmata, SezioneTaglio } from '../components/Disegni';
 
 const fx = (v: number, d = 2) => (Number.isFinite(v) ? v.toFixed(d) : '—');
 
@@ -739,6 +739,24 @@ export default function Verifiche() {
               </div>
 
               <div className="col-aside">
+                <SezioneArmata
+                  b={num(v.flessioneCA.b)}
+                  h={num(v.flessioneCA.h)}
+                  c={num(v.flessioneCA.c)}
+                  c2={num(v.flessioneCA.c2)}
+                  d={fl.d}
+                  x={fl.x}
+                  As={fl.As}
+                  As2={fl.As2}
+                  tesi={[
+                    { n: num(v.flessioneCA.n1), phi: num(v.flessioneCA.phi1) },
+                    { n: num(v.flessioneCA.n2), phi: num(v.flessioneCA.phi2) },
+                  ].filter((l) => l.n > 0)}
+                  compressi={[
+                    { n: num(v.flessioneCA.n1c), phi: num(v.flessioneCA.phi1c) },
+                  ].filter((l) => l.n > 0)}
+                />
+
                 {fl.duttilitaScarsa && (
                   <p className="note" style={{ color: 'var(--warn)' }}>
                     x/d = {fx(fl.xSuD, 2)} &gt; 0.45 — sezione poco duttile, valutare un'armatura tesa

@@ -10,6 +10,10 @@
  *
  * Convenzioni: h, b, spessori in mm; A in cm²; Ix, Wx (elastico) attorno
  * all'asse forte; Avz = area resistente a taglio (approssimata), in cm².
+ * Iy, Wy sono le stesse grandezze attorno all'**asse debole**: per i profili
+ * a tabella si ricavano dalla geometria delle ali e dell'anima (senza i
+ * raccordi, quindi leggermente a favore di sicurezza), per tubi e angolari
+ * dalle stesse formule esatte del rispettivo asse forte.
  */
 
 export interface ProprietaProfilo {
@@ -19,6 +23,24 @@ export interface ProprietaProfilo {
   Ix: number;
   Wx: number;
   Avz: number;
+  /** Momento d'inerzia attorno all'asse debole (cm⁴). */
+  Iy: number;
+  /** Modulo di resistenza elastico attorno all'asse debole (cm³). */
+  Wy: number;
+  /** Area resistente a taglio per forza parallela all'asse forte (cm²). */
+  Avy: number;
+}
+
+/** Asse di flessione del profilo: come è ruotato rispetto al carico. */
+export type AsseProfilo = 'forte' | 'debole';
+
+/**
+ * Proprietà viste dall'asse scelto: ruotare il profilo di 90° vuol dire
+ * scambiare (Ix, Wx, Avz) con (Iy, Wy, Avy) e, per la geometria, h con b.
+ */
+export function propretaSecondoAsse(p: ProprietaProfilo, asse: AsseProfilo): ProprietaProfilo {
+  if (asse === 'forte') return p;
+  return { ...p, h: p.b, b: p.h, Ix: p.Iy, Wx: p.Wy, Iy: p.Ix, Wy: p.Wx, Avz: p.Avy, Avy: p.Avz };
 }
 
 export type TipoProfilo =
@@ -42,15 +64,43 @@ export const TIPI_PROFILO: { id: TipoProfilo; label: string }[] = [
   { id: 'TUBO_TONDO', label: 'Tubo tondo' },
 ];
 
-/** h, b, tw (anima), tf (ali), A, Ix, Wx — Avz ≈ h·tw. */
-type RigaIHU = [number, number, number, number, number, number, number];
+/**
+ * h, b, tw (anima), tf (ali), A, Ix, Wx e, dove non basta la geometria, anche
+ * Iy e Wy da tabella. Avz ≈ h·tw; Avy ≈ 2·b·tf (le ali sono ciò che resiste
+ * al taglio quando il profilo è ruotato).
+ */
+type RigaIHU = [number, number, number, number, number, number, number, number?, number?];
+
+/**
+ * Asse debole di un doppio T, dalla geometria: due ali b×tf più l'anima.
+ * Confrontata con le tabelle EN 10365 la differenza è nell'ordine del mezzo
+ * per cento (IPE 200: 142.0 contro 142 cm⁴), perché i raccordi stanno vicino
+ * all'asse e pesano poco: si può calcolarla invece di trascriverla.
+ */
+function debolePerDoppioT(h: number, b: number, tw: number, tf: number) {
+  const Iy = (2 * (tf * b ** 3) + (h - 2 * tf) * tw ** 3) / 12; // mm⁴
+  return { Iy: Iy / 1e4, Wy: b > 0 ? Iy / (b / 2) / 1000 : 0 };
+}
 
 const daTabella = (righe: Record<string, RigaIHU>): Record<string, ProprietaProfilo> =>
   Object.fromEntries(
-    Object.entries(righe).map(([k, [h, b, tw, , A, Ix, Wx]]) => [
-      k,
-      { h, b, A, Ix, Wx, Avz: (h * tw) / 100 },
-    ]),
+    Object.entries(righe).map(([k, [h, b, tw, tf, A, Ix, Wx, IyTab, WyTab]]) => {
+      const geom = debolePerDoppioT(h, b, tw, tf);
+      return [
+        k,
+        {
+          h,
+          b,
+          A,
+          Ix,
+          Wx,
+          Avz: (h * tw) / 100,
+          Iy: IyTab ?? geom.Iy,
+          Wy: WyTab ?? geom.Wy,
+          Avy: (2 * b * tf) / 100,
+        },
+      ];
+    }),
   );
 
 export const IPE: Record<string, ProprietaProfilo> = daTabella({
@@ -128,25 +178,30 @@ export const HEB: Record<string, ProprietaProfilo> = daTabella({
   'HEB 1000': [1000, 300, 19.0, 36.0, 400, 644700, 12890],
 });
 
+/**
+ * Gli UPN hanno le ali rastremate: l'asse debole calcolato sulla geometria a
+ * spessore costante verrebbe sopravvalutato (~15%), perciò Iy e Wy sono
+ * quelli di tabella (DIN 1026-1), riferiti al bordo esterno delle ali.
+ */
 export const UPN: Record<string, ProprietaProfilo> = daTabella({
-  'UPN 50': [50, 38, 5.0, 7.0, 7.12, 26.4, 10.6],
-  'UPN 65': [65, 42, 5.5, 7.5, 9.03, 57.5, 17.7],
-  'UPN 80': [80, 45, 6.0, 8.0, 11.0, 106, 26.5],
-  'UPN 100': [100, 50, 6.0, 8.5, 13.5, 206, 41.2],
-  'UPN 120': [120, 55, 7.0, 9.0, 17.0, 364, 60.7],
-  'UPN 140': [140, 60, 7.0, 10.0, 20.4, 605, 86.4],
-  'UPN 160': [160, 65, 7.5, 10.5, 24.0, 925, 116],
-  'UPN 180': [180, 70, 8.0, 11.0, 28.0, 1350, 150],
-  'UPN 200': [200, 75, 8.5, 11.5, 32.2, 1910, 191],
-  'UPN 220': [220, 80, 9.0, 12.5, 37.4, 2690, 245],
-  'UPN 240': [240, 85, 9.5, 13.0, 42.3, 3600, 300],
-  'UPN 260': [260, 90, 10.0, 14.0, 48.3, 4820, 371],
-  'UPN 280': [280, 95, 10.0, 15.0, 53.3, 6280, 448],
-  'UPN 300': [300, 100, 10.0, 16.0, 58.8, 8030, 535],
-  'UPN 320': [320, 100, 14.0, 17.5, 75.8, 10870, 679],
-  'UPN 350': [350, 100, 14.0, 16.0, 77.3, 12840, 734],
-  'UPN 380': [380, 102, 13.5, 16.0, 80.4, 15760, 829],
-  'UPN 400': [400, 110, 14.0, 18.0, 91.5, 20350, 1020],
+  'UPN 50': [50, 38, 5.0, 7.0, 7.12, 26.4, 10.6, 9.12, 3.75],
+  'UPN 65': [65, 42, 5.5, 7.5, 9.03, 57.5, 17.7, 14.1, 5.07],
+  'UPN 80': [80, 45, 6.0, 8.0, 11.0, 106, 26.5, 19.4, 6.36],
+  'UPN 100': [100, 50, 6.0, 8.5, 13.5, 206, 41.2, 29.3, 8.49],
+  'UPN 120': [120, 55, 7.0, 9.0, 17.0, 364, 60.7, 43.2, 11.1],
+  'UPN 140': [140, 60, 7.0, 10.0, 20.4, 605, 86.4, 62.7, 14.8],
+  'UPN 160': [160, 65, 7.5, 10.5, 24.0, 925, 116, 85.3, 18.3],
+  'UPN 180': [180, 70, 8.0, 11.0, 28.0, 1350, 150, 114, 22.4],
+  'UPN 200': [200, 75, 8.5, 11.5, 32.2, 1910, 191, 148, 27.0],
+  'UPN 220': [220, 80, 9.0, 12.5, 37.4, 2690, 245, 197, 33.6],
+  'UPN 240': [240, 85, 9.5, 13.0, 42.3, 3600, 300, 248, 39.6],
+  'UPN 260': [260, 90, 10.0, 14.0, 48.3, 4820, 371, 317, 47.7],
+  'UPN 280': [280, 95, 10.0, 15.0, 53.3, 6280, 448, 399, 57.2],
+  'UPN 300': [300, 100, 10.0, 16.0, 58.8, 8030, 535, 495, 67.8],
+  'UPN 320': [320, 100, 14.0, 17.5, 75.8, 10870, 679, 597, 80.6],
+  'UPN 350': [350, 100, 14.0, 16.0, 77.3, 12840, 734, 570, 75.0],
+  'UPN 380': [380, 102, 13.5, 16.0, 80.4, 15760, 829, 615, 78.7],
+  'UPN 400': [400, 110, 14.0, 18.0, 91.5, 20350, 1020, 846, 102],
 });
 
 export const SAGOMARI: Record<'IPE' | 'HEA' | 'HEB' | 'UPN', Record<string, ProprietaProfilo>> = {
@@ -202,6 +257,10 @@ function angolare(b: number, t: number): ProprietaProfilo {
     Ix: Ix / 10000,
     Wx: cMax > 0 ? Ix / cMax / 1000 : 0,
     Avz: A / 200, // ala reagente a taglio ≈ metà sezione, semplificato
+    // a lati uguali le due direzioni principali baricentriche coincidono
+    Iy: Ix / 10000,
+    Wy: cMax > 0 ? Ix / cMax / 1000 : 0,
+    Avy: A / 200,
   };
 }
 
@@ -210,7 +269,19 @@ function tuboQuadro(b: number, t: number): ProprietaProfilo {
   const bi = b - 2 * t;
   const A = b ** 2 - Math.max(bi, 0) ** 2;
   const Ix = (b ** 4 - Math.max(bi, 0) ** 4) / 12;
-  return { h: b, b, A: A / 100, Ix: Ix / 10000, Wx: Ix / (b / 2) / 1000, Avz: (2 * Math.max(bi, 0) * t) / 100 };
+  const Av = (2 * Math.max(bi, 0) * t) / 100;
+  // quadro: ruotarlo non cambia niente
+  return {
+    h: b,
+    b,
+    A: A / 100,
+    Ix: Ix / 10000,
+    Wx: Ix / (b / 2) / 1000,
+    Avz: Av,
+    Iy: Ix / 10000,
+    Wy: Ix / (b / 2) / 1000,
+    Avy: Av,
+  };
 }
 
 /** Tubo rettangolare b×h×t (asse forte = h). */
@@ -219,7 +290,18 @@ function tuboRettangolare(b: number, h: number, t: number): ProprietaProfilo {
   const hi = h - 2 * t;
   const A = b * h - Math.max(bi, 0) * Math.max(hi, 0);
   const Ix = (b * h ** 3 - Math.max(bi, 0) * Math.max(hi, 0) ** 3) / 12;
-  return { h, b, A: A / 100, Ix: Ix / 10000, Wx: Ix / (h / 2) / 1000, Avz: (2 * Math.max(hi, 0) * t) / 100 };
+  const Iy = (h * b ** 3 - Math.max(hi, 0) * Math.max(bi, 0) ** 3) / 12;
+  return {
+    h,
+    b,
+    A: A / 100,
+    Ix: Ix / 10000,
+    Wx: Ix / (h / 2) / 1000,
+    Avz: (2 * Math.max(hi, 0) * t) / 100,
+    Iy: Iy / 10000,
+    Wy: b > 0 ? Iy / (b / 2) / 1000 : 0,
+    Avy: (2 * Math.max(bi, 0) * t) / 100,
+  };
 }
 
 /** Tubo tondo D×t. */
@@ -227,7 +309,19 @@ function tuboTondo(D: number, t: number): ProprietaProfilo {
   const Di = D - 2 * t;
   const A = (Math.PI / 4) * (D ** 2 - Math.max(Di, 0) ** 2);
   const Ix = (Math.PI / 64) * (D ** 4 - Math.max(Di, 0) ** 4);
-  return { h: D, b: D, A: A / 100, Ix: Ix / 10000, Wx: Ix / (D / 2) / 1000, Avz: ((2 * A) / Math.PI) / 100 };
+  const Av = (2 * A) / Math.PI / 100;
+  // tondo: qualunque asse è uguale all'altro
+  return {
+    h: D,
+    b: D,
+    A: A / 100,
+    Ix: Ix / 10000,
+    Wx: Ix / (D / 2) / 1000,
+    Avz: Av,
+    Iy: Ix / 10000,
+    Wy: Ix / (D / 2) / 1000,
+    Avy: Av,
+  };
 }
 
 const numeri = (s: string) => s.split('x').map((v) => parseFloat(v));
@@ -247,7 +341,9 @@ export function proprietaProfilo(tipo: TipoProfilo, taglia: string): ProprietaPr
     return Number.isFinite(b) && Number.isFinite(t) ? tuboQuadro(b, t) : undefined;
   }
   if (tipo === 'TUBO_RETT') {
-    const [b, h, t] = numeri(taglia);
+    // la sigla commerciale è altezza × larghezza × spessore: 200x100x6 è un
+    // tubo alto 200 e largo 100, quindi il primo numero è h, non b
+    const [h, b, t] = numeri(taglia);
     return Number.isFinite(b) && Number.isFinite(h) && Number.isFinite(t)
       ? tuboRettangolare(b, h, t)
       : undefined;

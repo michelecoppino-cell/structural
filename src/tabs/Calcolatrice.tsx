@@ -30,7 +30,9 @@ import {
   valutaConUnita,
   variabili,
   type Preimpostata,
+  type TipoVoce,
   type VoceCalcolo,
+  type VoceCalcolata,
 } from '../calc/calcolatrice';
 import { UNITA_DEFAULT, normalizzaElenco, scriviUnita, unitaInElenco } from '../calc/unita';
 
@@ -65,7 +67,7 @@ const TASTI: {
   { t: '^', ins: '^' },
   { t: 'π', ins: 'pi' },
   // la γ dei pesi di volume: sul cellulare non la si scrive altrimenti
-  { t: 'γ', ins: 'γ', titolo: 'Iniziale dei pesi di volume: γCLS, γACC, γTERRA' },
+  { t: 'γ', ins: 'γ', titolo: 'Iniziale dei pesi di volume: γC, γS, γT — si scrivono anche gC, gS, gT' },
   { t: ';', ins: ';', titolo: 'Separatore degli argomenti: min(3;5)' },
   { t: 'ans', ins: 'ans', classe: 'is-largo', titolo: 'Ultimo risultato' },
   { t: 'C', azione: 'canc', classe: 'is-canc' },
@@ -74,6 +76,12 @@ const TASTI: {
 
 /** Un valore scritto come numero e basta: la pastiglia non ripete il risultato. */
 const SOLO_NUMERO = /^[+-]?[\d\s.,]+$/;
+
+/** Le due colonne delle grandezze: a sinistra quelle del calcolo di oggi. */
+const COLONNE: { id: Exclude<TipoVoce, 'operazione'>; titolo: string; sotto: string }[] = [
+  { id: 'compilabile', titolo: 'Da compilare', sotto: 'si svuotano a ogni riapertura' },
+  { id: 'fissa', titolo: 'Fisse', sotto: 'pesi di volume e costanti' },
+];
 
 /**
  * Campo dell'unità di misura: si scrive a mano, ma con i suggerimenti
@@ -121,9 +129,174 @@ function CampoUnita({
   );
 }
 
+/**
+ * Una grandezza o un'operazione salvata: il valore si scrive dentro la
+ * pastiglia, il nome apre i campi di dettaglio. È la stessa riga per le tre
+ * colonne — compilabili, fisse, operazioni — perché si comportano allo stesso
+ * modo: cambia solo dove stanno.
+ */
+function RigaVoce({
+  v,
+  indice,
+  ultima,
+  aperta,
+  elenco,
+  onApri,
+  onAggiorna,
+  onSposta,
+  onElimina,
+  onUsa,
+}: {
+  v: VoceCalcolata;
+  /** Posizione nella sequenza completa: serve alle frecce di spostamento. */
+  indice: number;
+  ultima: boolean;
+  aperta: boolean;
+  elenco: string[];
+  onApri: () => void;
+  onAggiorna: (patch: Partial<VoceCalcolo>) => void;
+  onSposta: (verso: -1 | 1) => void;
+  onElimina: () => void;
+  onUsa: (nome: string) => void;
+}) {
+  const numerica = SOLO_NUMERO.test(v.espressione.trim());
+  return (
+    <li className={`calc-gr${v.errore ? ' is-errore' : ''}${aperta ? ' is-aperta' : ''}`}>
+      <button
+        type="button"
+        className="calc-gr-nome"
+        aria-expanded={aperta}
+        title={v.nota.trim() || 'Nome, unità e nota'}
+        onClick={onApri}
+      >
+        {v.nome.trim() ? v.nome.trim() : <span className="calc-senza-nome">n. {indice + 1}</span>}
+      </button>
+
+      <input
+        className={`input calc-gr-valore${v.errore ? ' is-error' : ''}`}
+        value={v.espressione}
+        placeholder="—"
+        inputMode="decimal"
+        autoComplete="off"
+        spellCheck={false}
+        aria-label={`Valore di ${v.nome.trim() || `operazione ${indice + 1}`}`}
+        onChange={(e) => onAggiorna({ espressione: e.target.value })}
+      />
+
+      <div className="calc-gr-esito">
+        {v.errore ? (
+          <span className="calc-voce-errore" title={v.errore}>
+            <WarningCircle size={12} /> errore
+          </span>
+        ) : !v.espressione.trim() ? (
+          <span className="calc-da-compilare">{v.umEffettiva || 'da compilare'}</span>
+        ) : (
+          <>
+            {!numerica && <strong>{formatta(v.valore)}</strong>}
+            {v.umEffettiva && <span className={`um${v.um.trim() ? '' : ' is-auto'}`}>{v.umEffettiva}</span>}
+          </>
+        )}
+      </div>
+
+      {aperta && (
+        <div className="calc-voce-modifica">
+          <div className="mini-campo">
+            <label htmlFor={`n-${v.id}`}>Nome</label>
+            <input
+              id={`n-${v.id}`}
+              className={`input${v.nome.trim() && !v.nomeValido ? ' is-error' : ''}`}
+              value={v.nome}
+              autoComplete="off"
+              spellCheck={false}
+              onChange={(e) => onAggiorna({ nome: e.target.value })}
+            />
+          </div>
+          <div className="mini-campo calc-campo-espr">
+            <label htmlFor={`x-${v.id}`}>Operazione</label>
+            <input
+              id={`x-${v.id}`}
+              className={`input${v.errore ? ' is-error' : ''}`}
+              value={v.espressione}
+              autoComplete="off"
+              spellCheck={false}
+              onChange={(e) => onAggiorna({ espressione: e.target.value })}
+            />
+          </div>
+          <CampoUnita
+            id={`u-${v.id}`}
+            label="Unità"
+            value={v.um}
+            auto={v.umCalcolata}
+            elenco={elenco}
+            onChange={(um) => onAggiorna({ um })}
+          />
+          <div className="mini-campo calc-campo-nota">
+            <label htmlFor={`t-${v.id}`}>Nota</label>
+            <input
+              id={`t-${v.id}`}
+              className="input"
+              value={v.nota}
+              autoComplete="off"
+              onChange={(e) => onAggiorna({ nota: e.target.value })}
+            />
+          </div>
+          <div className="mini-campo">
+            <label htmlFor={`r-${v.id}`}>Colonna</label>
+            <select
+              id={`r-${v.id}`}
+              className="input"
+              value={v.tipo ?? 'operazione'}
+              onChange={(e) => onAggiorna({ tipo: e.target.value as TipoVoce })}
+            >
+              <option value="compilabile">Da compilare</option>
+              <option value="fissa">Fissa</option>
+              <option value="operazione">Operazione</option>
+            </select>
+          </div>
+          <div className="calc-voce-azioni">
+            {v.nomeValido && (
+              <button
+                type="button"
+                className="btn btn-secondary btn-icon"
+                title={`Usa ${v.nome.trim()} nell’espressione`}
+                onClick={() => onUsa(v.nome.trim())}
+              >
+                <Copy size={13} />
+              </button>
+            )}
+            <button
+              type="button"
+              className="btn btn-secondary btn-icon"
+              title="Sposta su"
+              disabled={indice === 0}
+              onClick={() => onSposta(-1)}
+            >
+              <ArrowUp size={13} />
+            </button>
+            <button
+              type="button"
+              className="btn btn-secondary btn-icon"
+              title="Sposta giù"
+              disabled={ultima}
+              onClick={() => onSposta(1)}
+            >
+              <ArrowDown size={13} />
+            </button>
+            <button type="button" className="btn btn-secondary btn-icon" title="Elimina" onClick={onElimina}>
+              <Trash size={13} />
+            </button>
+          </div>
+        </div>
+      )}
+    </li>
+  );
+}
+
 export default function Calcolatrice() {
   const { state, dispatch } = useStore();
   const calc = state.calcolatrice;
+  /** Le spiegazioni della scheda stanno dietro l'(i) della barra in testa. */
+  const aiuto = state.ui.allDetails.calcolatrice;
   const input = useRef<HTMLInputElement>(null);
   const [apriUnita, setApriUnita] = useState(false);
   const [nuovaUnita, setNuovaUnita] = useState('');
@@ -201,15 +374,28 @@ export default function Calcolatrice() {
   };
 
   /** Aggiunge una grandezza (dal catalogo o vuota) e ne apre subito i campi. */
-  const aggiungiGrandezza = (base?: Omit<VoceCalcolo, 'id'>) => {
+  const aggiungiGrandezza = (base?: Partial<Omit<VoceCalcolo, 'id'>>) => {
     const id = `calc-${Date.now()}`;
-    setVoci([...calc.voci, { id, nome: '', espressione: '', nota: '', um: '', ...base }]);
-    if (!base) dispatch({ type: 'toggleExp', id: `calc-${id}` });
+    setVoci([
+      ...calc.voci,
+      { id, nome: '', espressione: '', nota: '', um: '', tipo: 'compilabile', ...base },
+    ]);
+    if (!base?.nome) dispatch({ type: 'toggleExp', id: `calc-${id}` });
   };
 
+  /** Le operazioni salvate stanno sotto le due colonne, in fila fra loro. */
+  const operazioni = voci.filter((v) => (v.tipo ?? 'operazione') === 'operazione');
+
+  // grandezze proposte: quelle di serie che mancano più il catalogo, divise
+  // per colonna — a sinistra si aggiungono lunghezze, a destra pesi di volume
   const nomiUsati = new Set(voci.map((v) => v.nome.trim()));
-  const catalogo = GRANDEZZE_CATALOGO.filter((g) => !nomiUsati.has(g.nome));
-  const mancantiDefault = VOCI_DEFAULT.filter((g) => !nomiUsati.has(g.nome));
+  const proposte = [...VOCI_DEFAULT.map(({ id: _id, ...g }) => g), ...GRANDEZZE_CATALOGO].filter(
+    (g) => !nomiUsati.has(g.nome),
+  );
+  const daAggiungere = {
+    compilabili: proposte.filter((g) => g.tipo !== 'fissa'),
+    fisse: proposte.filter((g) => g.tipo === 'fissa'),
+  };
 
   const nomeGiaUsato = voci.some((v) => v.nomeValido && v.nome.trim() === calc.nome.trim());
   const nomeErrato = !!calc.nome.trim() && (!nomeAmmesso(calc.nome) || nomeGiaUsato);
@@ -307,7 +493,8 @@ export default function Calcolatrice() {
           Unità
         </button>
         <span className="calc-conteggio">
-          {voci.length} {voci.length === 1 ? 'operazione salvata' : 'operazioni salvate'}
+          {voci.filter((v) => v.espressione.trim()).length} compilate ·{' '}
+          {operazioni.length} {operazioni.length === 1 ? 'operazione salvata' : 'operazioni salvate'}
         </span>
       </ComandiScheda>
 
@@ -315,11 +502,11 @@ export default function Calcolatrice() {
         <section className="panel">
           <div className="panel-body" style={{ paddingTop: 12 }}>
             <div className="section-title">Unità di misura proposte</div>
-            <p className="note" style={{ marginTop: 0 }}>
+            <p className="note" style={{ marginTop: 0, display: aiuto ? undefined : 'none' }}>
               Sono le uniche ammesse nei campi «Unità»: scrivendo compaiono come suggerimento e quello
               che non è in elenco viene segnato come errore. Il prodotto e il rapporto fra operazioni
-              con nome ricavano l’unità da soli — <code>b*h</code> in m dà mq, <code>b*h*γCLS</code>{' '}
-              con γCLS in kN/mc dà kN/m.
+              con nome ricavano l’unità da soli — <code>b*h</code> in m dà mq, <code>b*h*γC</code>{' '}
+              con γC in kN/mc dà kN/m.
             </p>
 
             <div className="calc-unita-aggiungi">
@@ -493,13 +680,15 @@ export default function Calcolatrice() {
             </div>
           )}
 
-          <p className="note calc-aiuto">
-            Operatori <code>+ − × ÷ ^</code>, parentesi, <code>%</code> come «per cento», virgola o punto
-            decimale, argomenti separati da <code>;</code>. Funzioni:{' '}
-            {Object.keys(FUNZIONI).join(', ')} — trigonometria in <strong>gradi</strong>. Nelle espressioni
-            puoi usare i nomi delle grandezze qui sotto, <code>ans</code> (ultimo risultato), <code>pi</code> ed{' '}
-            <code>e</code>.
-          </p>
+          {aiuto && (
+            <p className="note calc-aiuto">
+              Operatori <code>+ − × ÷ ^</code>, parentesi, <code>%</code> come «per cento», virgola o punto
+              decimale, argomenti separati da <code>;</code>. Funzioni:{' '}
+              {Object.keys(FUNZIONI).join(', ')} — trigonometria in <strong>gradi</strong>. Nelle espressioni
+              puoi usare i nomi delle grandezze qui sotto, <code>ans</code> (ultimo risultato), <code>pi</code> ed{' '}
+              <code>e</code>.
+            </p>
+          )}
         </div>
       </section>
 
@@ -508,175 +697,102 @@ export default function Calcolatrice() {
       <section className="panel">
         <div className="panel-body" style={{ paddingTop: 12 }}>
           <div className="section-title">Grandezze e operazioni</div>
-          <p className="note" style={{ marginTop: 0 }}>
-            Il valore si scrive dentro la pastiglia; toccando il nome si aprono nome, unità e nota. Ogni
-            riga vede solo quelle che la precedono, così correggere una grandezza a monte aggiorna da solo
-            tutto quello che ne discende.
-          </p>
-
-          {voci.length > 0 && (
-            <ul className="calc-griglia">
-              {voci.map((v, i) => {
-                const aperta = !!state.ui.exp[`calc-${v.id}`];
-                const numerica = SOLO_NUMERO.test(v.espressione.trim());
-                return (
-                  <li
-                    key={v.id}
-                    className={`calc-gr${v.errore ? ' is-errore' : ''}${aperta ? ' is-aperta' : ''}`}
-                  >
-                    <button
-                      type="button"
-                      className="calc-gr-nome"
-                      aria-expanded={aperta}
-                      title={v.nota.trim() || 'Nome, unità e nota'}
-                      onClick={() => dispatch({ type: 'toggleExp', id: `calc-${v.id}` })}
-                    >
-                      {v.nome.trim() ? v.nome.trim() : <span className="calc-senza-nome">n. {i + 1}</span>}
-                    </button>
-
-                    <input
-                      className={`input calc-gr-valore${v.errore ? ' is-error' : ''}`}
-                      value={v.espressione}
-                      placeholder="—"
-                      inputMode="decimal"
-                      autoComplete="off"
-                      spellCheck={false}
-                      aria-label={`Valore di ${v.nome.trim() || `operazione ${i + 1}`}`}
-                      onChange={(e) => aggiorna(v.id, { espressione: e.target.value })}
-                    />
-
-                    <div className="calc-gr-esito">
-                      {v.errore ? (
-                        <span className="calc-voce-errore" title={v.errore}>
-                          <WarningCircle size={12} /> errore
-                        </span>
-                      ) : !v.espressione.trim() ? (
-                        <span className="calc-da-compilare">{v.umEffettiva || 'da compilare'}</span>
-                      ) : (
-                        <>
-                          {!numerica && <strong>{formatta(v.valore)}</strong>}
-                          {v.umEffettiva && (
-                            <span className={`um${v.um.trim() ? '' : ' is-auto'}`}>{v.umEffettiva}</span>
-                          )}
-                        </>
-                      )}
-                    </div>
-
-                    {aperta && (
-                      <div className="calc-voce-modifica">
-                        <div className="mini-campo">
-                          <label htmlFor={`n-${v.id}`}>Nome</label>
-                          <input
-                            id={`n-${v.id}`}
-                            className={`input${v.nome.trim() && !v.nomeValido ? ' is-error' : ''}`}
-                            value={v.nome}
-                            autoComplete="off"
-                            spellCheck={false}
-                            onChange={(e) => aggiorna(v.id, { nome: e.target.value })}
-                          />
-                        </div>
-                        <div className="mini-campo calc-campo-espr">
-                          <label htmlFor={`x-${v.id}`}>Operazione</label>
-                          <input
-                            id={`x-${v.id}`}
-                            className={`input${v.errore ? ' is-error' : ''}`}
-                            value={v.espressione}
-                            autoComplete="off"
-                            spellCheck={false}
-                            onChange={(e) => aggiorna(v.id, { espressione: e.target.value })}
-                          />
-                        </div>
-                        <CampoUnita
-                          id={`u-${v.id}`}
-                          label="Unità"
-                          value={v.um}
-                          auto={v.umCalcolata}
-                          elenco={calc.unita}
-                          onChange={(um) => aggiorna(v.id, { um })}
-                        />
-                        <div className="mini-campo calc-campo-nota">
-                          <label htmlFor={`t-${v.id}`}>Nota</label>
-                          <input
-                            id={`t-${v.id}`}
-                            className="input"
-                            value={v.nota}
-                            autoComplete="off"
-                            onChange={(e) => aggiorna(v.id, { nota: e.target.value })}
-                          />
-                        </div>
-                        <div className="calc-voce-azioni">
-                          {v.nomeValido && (
-                            <button
-                              type="button"
-                              className="btn btn-secondary btn-icon"
-                              title={`Usa ${v.nome.trim()} nell’espressione`}
-                              onClick={() => inserisci(v.nome.trim())}
-                            >
-                              <Copy size={13} />
-                            </button>
-                          )}
-                          <button
-                            type="button"
-                            className="btn btn-secondary btn-icon"
-                            title="Sposta su"
-                            disabled={i === 0}
-                            onClick={() => sposta(v.id, -1)}
-                          >
-                            <ArrowUp size={13} />
-                          </button>
-                          <button
-                            type="button"
-                            className="btn btn-secondary btn-icon"
-                            title="Sposta giù"
-                            disabled={i === voci.length - 1}
-                            onClick={() => sposta(v.id, 1)}
-                          >
-                            <ArrowDown size={13} />
-                          </button>
-                          <button
-                            type="button"
-                            className="btn btn-secondary btn-icon"
-                            title="Elimina"
-                            onClick={() => setVoci(calc.voci.filter((x) => x.id !== v.id))}
-                          >
-                            <Trash size={13} />
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
+          {aiuto && (
+            <p className="note" style={{ marginTop: 0 }}>
+              Il valore si scrive dentro la pastiglia; toccando il nome si aprono nome, unità, nota e la
+              colonna in cui sta. A sinistra le grandezze <strong>da compilare</strong>, che si svuotano a
+              ogni riapertura perché valgono per il calcolo di oggi; a destra quelle <strong>fisse</strong>,
+              i pesi di volume, che restano compilate. La γ si può scrivere anche con la g:{' '}
+              <code>gC</code> e <code>gammaC</code> sono <code>γC</code>. Ogni riga vede solo quelle che la
+              precedono, così correggere una grandezza a monte aggiorna da solo tutto quello che ne
+              discende.
+            </p>
           )}
 
-          {/* quali grandezze tenere lo decide chi calcola: qui si aggiungono
-              quelle di serie che mancano, quelle del catalogo e una vuota */}
-          <div className="calc-catalogo">
-            {[...mancantiDefault, ...catalogo].map((g) => (
-              <button
-                type="button"
-                key={g.nome}
-                className="calc-catalogo-chip"
-                title={`Aggiungi ${g.nome} — ${g.nota}${g.espressione ? ` (${g.espressione} ${g.um})` : ''}`}
-                onClick={() => aggiungiGrandezza({ nome: g.nome, espressione: g.espressione, nota: g.nota, um: g.um })}
-              >
-                <Plus size={11} weight="bold" />
-                {g.nome}
-              </button>
-            ))}
-            <button
-              type="button"
-              className="calc-catalogo-chip is-vuota"
-              title="Aggiungi una grandezza tua, con nome e unità da scrivere"
-              onClick={() => aggiungiGrandezza()}
-            >
-              <Plus size={11} weight="bold" />
-              nuova
-            </button>
+          <div className="calc-colonne">
+            {COLONNE.map((col) => {
+              const gruppo = voci.filter((v) => (v.tipo ?? 'operazione') === col.id);
+              const chips = col.id === 'fissa' ? daAggiungere.fisse : daAggiungere.compilabili;
+              return (
+                <div className="calc-colonna" key={col.id}>
+                  <div className="calc-colonna-testa">
+                    <span className="t">{col.titolo}</span>
+                    <span className="d">{col.sotto}</span>
+                  </div>
+                  {gruppo.length > 0 && (
+                    <ul className="calc-griglia">
+                      {gruppo.map((v) => (
+                        <RigaVoce
+                          key={v.id}
+                          v={v}
+                          indice={voci.findIndex((x) => x.id === v.id)}
+                          ultima={voci[voci.length - 1]?.id === v.id}
+                          aperta={!!state.ui.exp[`calc-${v.id}`]}
+                          elenco={calc.unita}
+                          onApri={() => dispatch({ type: 'toggleExp', id: `calc-${v.id}` })}
+                          onAggiorna={(patch) => aggiorna(v.id, patch)}
+                          onSposta={(verso) => sposta(v.id, verso)}
+                          onElimina={() => setVoci(calc.voci.filter((x) => x.id !== v.id))}
+                          onUsa={inserisci}
+                        />
+                      ))}
+                    </ul>
+                  )}
+                  <div className="calc-catalogo">
+                    {chips.map((g) => (
+                      <button
+                        type="button"
+                        key={g.nome}
+                        className="calc-catalogo-chip"
+                        title={`Aggiungi ${g.nome} — ${g.nota}${g.espressione ? ` (${g.espressione} ${g.um})` : ''}`}
+                        onClick={() => aggiungiGrandezza({ ...g })}
+                      >
+                        <Plus size={11} weight="bold" />
+                        {g.nome}
+                      </button>
+                    ))}
+                    <button
+                      type="button"
+                      className="calc-catalogo-chip is-vuota"
+                      title={`Aggiungi una grandezza tua fra quelle ${col.id === 'fissa' ? 'fisse' : 'da compilare'}`}
+                      onClick={() => aggiungiGrandezza({ tipo: col.id })}
+                    >
+                      <Plus size={11} weight="bold" />
+                      nuova
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
           </div>
 
-          {voci.length > 0 && (
+          {operazioni.length > 0 && (
+            <>
+              <div className="calc-colonna-testa" style={{ marginTop: 14 }}>
+                <span className="t">Operazioni salvate</span>
+                <span className="d">restano con il progetto</span>
+              </div>
+              <ul className="calc-griglia">
+                {operazioni.map((v) => (
+                  <RigaVoce
+                    key={v.id}
+                    v={v}
+                    indice={voci.findIndex((x) => x.id === v.id)}
+                    ultima={voci[voci.length - 1]?.id === v.id}
+                    aperta={!!state.ui.exp[`calc-${v.id}`]}
+                    elenco={calc.unita}
+                    onApri={() => dispatch({ type: 'toggleExp', id: `calc-${v.id}` })}
+                    onAggiorna={(patch) => aggiorna(v.id, patch)}
+                    onSposta={(verso) => sposta(v.id, verso)}
+                    onElimina={() => setVoci(calc.voci.filter((x) => x.id !== v.id))}
+                    onUsa={inserisci}
+                  />
+                ))}
+              </ul>
+            </>
+          )}
+
+          {aiuto && voci.length > 0 && (
             <p className="note" style={{ marginTop: 10 }}>
               Le grandezze viaggiano con il progetto: sono nell’Esporta JSON e nel Copia. Riga estesa:{' '}
               <code>{testoVoce(voci[0])}</code>
@@ -690,11 +806,13 @@ export default function Calcolatrice() {
       <section className="panel">
         <div className="panel-body" style={{ paddingTop: 12 }}>
           <div className="section-title">Operazioni preimpostate</div>
-          <p className="note" style={{ marginTop: 0 }}>
-            Formule scritte una volta sui nomi delle grandezze qui sopra — <code>q*l^2/8</code>,{' '}
-            <code>b*h^2/6</code>. Quando le grandezze che servono sono tutte compilate la formula si
-            accende e al tocco fa il calcolo: finisce nel display con nome e unità, pronta da salvare.
-          </p>
+          {aiuto && (
+            <p className="note" style={{ marginTop: 0 }}>
+              Formule scritte una volta sui nomi delle grandezze qui sopra — <code>q*l^2/8</code>,{' '}
+              <code>b*h^2/6</code>. Quando le grandezze che servono sono tutte compilate la formula si
+              accende e al tocco fa il calcolo: finisce nel display con nome e unità, pronta da salvare.
+            </p>
+          )}
 
           {preimpostate.length > 0 && (
             <ul className="calc-preset-lista">

@@ -12,7 +12,13 @@ import {
 import { validaSollecitazioni } from '../calc/validazione';
 import { SCHEMI, SCHEMI_BY_ID, type SchemaId } from '../calc/trave';
 import { CLS } from '../data/materiali';
-import { TIPI_PROFILO, taglieDisponibili, type TipoProfilo } from '../data/profili-acciaio';
+import {
+  TIPI_PROFILO,
+  proprietaProfilo,
+  taglieDisponibili,
+  type AsseProfilo,
+  type TipoProfilo,
+} from '../data/profili-acciaio';
 import { Accordion, DettaglioPanel, NumInput, Output, Seg, Select, type Dettaglio } from '../components/ui';
 import { ComandiScheda } from '../components/ComandiScheda';
 import { DiagrammaCarichi, DiagrammaSerie } from '../components/Diagrammi';
@@ -60,6 +66,23 @@ function MiniSchema({ id }: { id: SchemaId }) {
       <line x1={xa} y1={y} x2={xb} y2={y} stroke={C} strokeWidth={2} />
       {vincolo(xa, v.A, 'A')}
       {vincolo(xb, v.B, 'B')}
+    </svg>
+  );
+}
+
+/**
+ * Doppio T visto in sezione, dritto o coricato: dice a colpo d'occhio come
+ * sta il profilo rispetto al carico, che viene sempre dall'alto.
+ */
+function AsseIcona({ ruotato }: { ruotato: boolean }) {
+  const C = 'currentColor';
+  // ali e anima di un doppio T; ruotato = stesso profilo girato di 90°
+  const d = ruotato
+    ? 'M4,3 L4,15 M12,3 L12,15 M4,9 L12,9'
+    : 'M3,4 L15,4 M3,12 L15,12 M9,4 L9,12';
+  return (
+    <svg viewBox="0 0 18 18" width={14} height={14} aria-hidden="true">
+      <path d={d} stroke={C} strokeWidth={1.6} fill="none" strokeLinecap="round" />
     </svg>
   );
 }
@@ -115,6 +138,8 @@ export default function Sollecitazioni() {
   const verticale = inp.orientamento === 'verticale';
   const t = r.trave;
   const schema = SCHEMI_BY_ID[inp.schema];
+  /** Proprietà del profilo scelto, per far vedere J dei due assi sul selettore. */
+  const propAsse = proprietaProfilo(inp.sezioneTipoProfilo, inp.sezioneProfilo);
 
   /** Formule di tutta la fascia "geometria e carichi", riunite in un solo (i). */
   const dettaglioGeom: Dettaglio = {
@@ -291,7 +316,13 @@ export default function Sollecitazioni() {
         <Accordion
           id="soll-inerzia"
           title="Momento d'inerzia — sezione resistente"
-          hint={`${inp.sezioneMateriale === 'manuale' ? 'manuale' : inp.sezioneMateriale === 'cls' ? 'c.a.' : 'acciaio'} · J ${fx(r.J, 0)} cm⁴`}
+          hint={`${
+            inp.sezioneMateriale === 'manuale'
+              ? 'manuale'
+              : inp.sezioneMateriale === 'cls'
+                ? 'c.a.'
+                : `acciaio · asse ${inp.sezioneAsse}`
+          } · J ${fx(r.J, 0)} cm⁴`}
         >
           <Seg<SezioneMateriale>
             label="Supporto"
@@ -393,6 +424,17 @@ export default function Sollecitazioni() {
                     onChange={(v) => set({ sezioneProfilo: v })}
                   />
                 </div>
+              </div>
+              <div className="campo-largo">
+                <Seg<AsseProfilo>
+                  label="Asse di flessione — il profilo si può posare ruotato"
+                  value={inp.sezioneAsse}
+                  onChange={(v) => set({ sezioneAsse: v })}
+                  options={[
+                    { id: 'forte', label: 'Asse forte', nota: `J ${fx(propAsse?.Ix ?? 0, 0)}`, icon: <AsseIcona ruotato={false} /> },
+                    { id: 'debole', label: 'Asse debole', nota: `J ${fx(propAsse?.Iy ?? 0, 0)}`, icon: <AsseIcona ruotato /> },
+                  ]}
+                />
               </div>
             </div>
           )}
