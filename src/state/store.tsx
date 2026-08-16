@@ -32,8 +32,9 @@ import {
   type RisultatiTaglioArmato,
   type RisultatiTaglioNonArmato,
 } from '../calc/verifiche';
+import type { VoceCalcolo } from '../calc/calcolatrice';
 
-export type TabId = 'azioni' | 'sollecitazioni' | 'verifiche' | 'costi';
+export type TabId = 'azioni' | 'sollecitazioni' | 'verifiche' | 'costi' | 'calcolatrice' | 'normativa';
 export type MaterialeId = 'cls' | 'acciaio' | 'legno' | 'muratura';
 
 export interface VoceCosto {
@@ -69,6 +70,7 @@ export interface AppState {
     collegaSollecitazioni: boolean;
   };
   costi: VoceCosto[];
+  calcolatrice: StatoCalcolatrice;
   ui: {
     open: Record<string, boolean>;
     exp: Record<string, boolean>;
@@ -78,7 +80,20 @@ export interface AppState {
   };
 }
 
-export const SCHEMA_VERSION = 2;
+export interface StatoCalcolatrice {
+  /** Espressione in corso di scrittura. */
+  espressione: string;
+  /** Nome, nota e unità con cui verrà salvata l'operazione. */
+  nome: string;
+  nota: string;
+  um: string;
+  /** Operazioni salvate, in ordine: ognuna vede le variabili delle precedenti. */
+  voci: VoceCalcolo[];
+  /** Tastierino a video: su cellulare c'è sempre, su desktop è a richiesta. */
+  tastierino: boolean;
+}
+
+export const SCHEMA_VERSION = 3;
 
 export const STATO_INIZIALE: AppState = {
   schemaVersion: SCHEMA_VERSION,
@@ -106,10 +121,25 @@ export const STATO_INIZIALE: AppState = {
     { id: 'c4', categoria: 'Scavi e movimenti terra', descrizione: 'Scavo a sezione obbligata', um: 'm³', quantita: '210', prezzo: '18.50' },
     { id: 'c5', categoria: 'Opere provvisionali', descrizione: 'Ponteggio di servizio', um: 'm²', quantita: '260', prezzo: '14.00' },
   ],
+  calcolatrice: {
+    espressione: '',
+    nome: '',
+    nota: '',
+    um: '',
+    voci: [],
+    tastierino: false,
+  },
   ui: {
     open: { sisma: true, vari: true, 'soll-risultati': true, 'soll-inerzia': true },
     exp: {},
-    allDetails: { azioni: false, sollecitazioni: false, verifiche: false, costi: false },
+    allDetails: {
+      azioni: false,
+      sollecitazioni: false,
+      verifiche: false,
+      costi: false,
+      calcolatrice: false,
+      normativa: false,
+    },
     verifica: 'taglio-non-armato',
   },
 };
@@ -125,6 +155,7 @@ export type Action =
   | { type: 'flessioneCA'; patch: Partial<InputFlessioneCA> }
   | { type: 'acciaioSezione'; patch: Partial<InputAcciaioSezione> }
   | { type: 'costi'; voci: VoceCosto[] }
+  | { type: 'calcolatrice'; patch: Partial<StatoCalcolatrice> }
   | { type: 'toggleOpen'; id: string }
   | { type: 'toggleExp'; id: string }
   | { type: 'toggleAllDetails'; tab: TabId }
@@ -178,6 +209,8 @@ export function reducer(state: AppState, action: Action): AppState {
       };
     case 'costi':
       return { ...state, costi: action.voci };
+    case 'calcolatrice':
+      return { ...state, calcolatrice: { ...state.calcolatrice, ...action.patch } };
     case 'toggleOpen':
       return {
         ...state,
@@ -233,10 +266,24 @@ export function migra(raw: Partial<AppState>): AppState {
       acciaio: { ...base.verifiche.acciaio, ...raw.verifiche?.acciaio },
     },
     costi: Array.isArray(raw.costi) && raw.costi.length ? raw.costi : base.costi,
+    calcolatrice: {
+      ...base.calcolatrice,
+      ...raw.calcolatrice,
+      // le operazioni salvate sono dati di commessa: si tengono tutte quelle
+      // del file, comprese le liste vuote (l'utente può averle cancellate)
+      voci: (Array.isArray(raw.calcolatrice?.voci) ? raw.calcolatrice.voci : []).map((v, i) => ({
+        id: v?.id || `calc-${i}`,
+        nome: v?.nome ?? '',
+        espressione: v?.espressione ?? '',
+        nota: v?.nota ?? '',
+        um: v?.um ?? '',
+      })),
+    },
     ui: {
       ...base.ui,
       ...raw.ui,
       open: { ...base.ui.open, ...aperture },
+      allDetails: { ...base.ui.allDetails, ...raw.ui?.allDetails },
       verifica: raw.ui?.verifica || base.ui.verifica,
     },
   };
@@ -244,14 +291,30 @@ export function migra(raw: Partial<AppState>): AppState {
 
 const CHIAVE = 'structural:stato';
 
+const TAB_VALIDE: TabId[] = ['azioni', 'sollecitazioni', 'verifiche', 'costi', 'calcolatrice', 'normativa'];
+
+/** Scheda chiesta da `?scheda=…` — le scorciatoie dell'app installata. */
+function tabDaUrl(): TabId | undefined {
+  try {
+    const q = new URLSearchParams(window.location.search).get('scheda');
+    return TAB_VALIDE.find((t) => t === q);
+  } catch {
+    return undefined;
+  }
+}
+
 function statoIniziale(): AppState {
+  const richiesta = tabDaUrl();
   try {
     const salvato = localStorage.getItem(CHIAVE);
-    if (salvato) return migra(JSON.parse(salvato));
+    if (salvato) {
+      const stato = migra(JSON.parse(salvato));
+      return richiesta ? { ...stato, tab: richiesta } : stato;
+    }
   } catch {
     // storage non disponibile o JSON corrotto: si riparte dai default
   }
-  return STATO_INIZIALE;
+  return richiesta ? { ...STATO_INIZIALE, tab: richiesta } : STATO_INIZIALE;
 }
 
 const StoreContext = createContext<{ state: AppState; dispatch: Dispatch<Action> } | null>(null);

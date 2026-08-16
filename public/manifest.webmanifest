@@ -1,0 +1,25 @@
+{
+  "name": "Predimensionamento strutturale — NTC2018",
+  "short_name": "Strutturale",
+  "description": "Predimensionamento, verifiche NTC2018, calcolatrice e indice della normativa — strumento personale.",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#12141c",
+  "theme_color": "#171923",
+  "lang": "it",
+  "dir": "ltr",
+  "categories": ["productivity", "utilities"],
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml" },
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Calcolatrice", "short_name": "Calcolatrice", "url": "/?scheda=calcolatrice" },
+    { "name": "Normativa", "short_name": "Normativa", "url": "/?scheda=normativa" }
+  ]
+}

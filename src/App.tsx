@@ -11,6 +11,8 @@ import {
   FunctionIcon,
   ClipboardText,
   CheckCircle,
+  Calculator,
+  Books,
 } from '@phosphor-icons/react';
 import { useStore, type TabId } from './state/store';
 import { migra } from './state/store';
@@ -20,6 +22,8 @@ import Azioni from './tabs/Azioni';
 import Sollecitazioni from './tabs/Sollecitazioni';
 import Verifiche from './tabs/Verifiche';
 import Costi from './tabs/Costi';
+import Calcolatrice from './tabs/Calcolatrice';
+import Normativa from './tabs/Normativa';
 
 const TABS: { id: TabId; label: string; icon: React.ReactNode; sub: string }[] = [
   { id: 'azioni', label: 'Azioni', icon: <CloudSun size={17} />, sub: '5 gruppi · NTC2018 cap. 3' },
@@ -36,6 +40,18 @@ const TABS: { id: TabId; label: string; icon: React.ReactNode; sub: string }[] =
     sub: 'Calcestruzzo · Acciaio · Legno · Muratura',
   },
   { id: 'costi', label: 'Stime costi', icon: <CurrencyEur size={17} />, sub: 'Computo sintetico e incidenze' },
+  {
+    id: 'calcolatrice',
+    label: 'Calcolatrice',
+    icon: <Calculator size={17} />,
+    sub: 'Calcoli in sequenza, con nome e nota',
+  },
+  {
+    id: 'normativa',
+    label: 'Normativa',
+    icon: <Books size={17} />,
+    sub: 'NTC2018, Circolare 2019 e indice dei capitoli',
+  },
 ];
 
 export default function App() {
@@ -193,18 +209,22 @@ export default function App() {
           <div className="tab-toolbar">
             <div className="toolbar-slot" ref={setSlot} />
             <div className="toolbar-actions">
-              <button
-                type="button"
-                className="btn btn-secondary"
-                onClick={() => dispatch({ type: 'toggleAllDetails', tab: state.tab })}
-              >
-                <FunctionIcon size={14} />
-                {state.ui.allDetails[state.tab] ? 'Chiudi dettagli' : 'Mostra formule'}
-              </button>
-              <button type="button" className="btn btn-primary" onClick={copia}>
-                <ClipboardText size={14} />
-                Copia per relazione
-              </button>
+              {state.tab !== 'normativa' && state.tab !== 'calcolatrice' && (
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => dispatch({ type: 'toggleAllDetails', tab: state.tab })}
+                >
+                  <FunctionIcon size={14} />
+                  {state.ui.allDetails[state.tab] ? 'Chiudi dettagli' : 'Mostra formule'}
+                </button>
+              )}
+              {state.tab !== 'normativa' && (
+                <button type="button" className="btn btn-primary" onClick={copia}>
+                  <ClipboardText size={14} />
+                  Copia per relazione
+                </button>
+              )}
             </div>
           </div>
 
@@ -213,6 +233,8 @@ export default function App() {
             {state.tab === 'sollecitazioni' && <Sollecitazioni />}
             {state.tab === 'verifiche' && <Verifiche />}
             {state.tab === 'costi' && <Costi />}
+            {state.tab === 'calcolatrice' && <Calcolatrice />}
+            {state.tab === 'normativa' && <Normativa />}
           </SlotProvider>
         </main>
       </div>

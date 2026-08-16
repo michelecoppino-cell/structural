@@ -5,7 +5,8 @@ verifiche di base secondo **NTC2018 (DM 17/01/2018)**, con esportazione in JSON 
 testo pronti per la relazione di calcolo.
 
 App single-page, nessun backend: lo stato vive nel browser (`localStorage`) e si sposta tra
-dispositivi con Esporta / Importa JSON.
+dispositivi con Esporta / Importa JSON. È **installabile** su cellulare e su PC, con icona
+propria, e funziona anche senza rete.
 
 ---
 
@@ -55,6 +56,7 @@ Altri comandi:
 | `npm run typecheck` | Controllo dei tipi TypeScript |
 | `npm run build` | Build di produzione in `dist/` |
 | `npm run preview` | Serve la build di produzione |
+| `node scripts/genera-icone.mjs` | Rigenera le icone PNG dell'app installabile |
 
 La versione di Node è fissata in `.nvmrc` (Node 22): la leggono sia `nvm` in locale sia
 Cloudflare in fase di build, così l'ambiente è lo stesso ovunque.
@@ -84,9 +86,28 @@ typecheck, test e build. È il cancello prima del merge; il deploy lo fa Cloudfl
 
 ---
 
+## App installabile (PWA)
+
+Il sito si installa come app — «Aggiungi a schermata Home» su cellulare, «Installa» dalla
+barra degli indirizzi su PC — e resta con **icona propria** nel launcher: triangolo ocra su
+fondo scuro, la stessa geometria della favicon.
+
+- `public/manifest.webmanifest` — nome, colori, `display: standalone` e le scorciatoie
+  «Calcolatrice» e «Normativa» (aprono l'app direttamente su quella scheda, via
+  `?scheda=…`);
+- `public/icon.svg`, `icon-192.png`, `icon-512.png`, `icon-maskable-512.png` (zona sicura
+  all'80% per i launcher Android che ritagliano) e `apple-touch-icon.png` per iOS. I PNG si
+  rigenerano con `node scripts/genera-icone.mjs`, senza dipendenze esterne;
+- `public/sw.js` — service worker minimo: rete-prima per `index.html` (un deploy nuovo si
+  vede subito), cache-prima per gli asset con hash nel nome. Serve anche a rendere l'app
+  installabile su Chrome e a farla **partire senza rete**, che in cantiere capita. È
+  registrato solo nella build di produzione.
+
+---
+
 ## Struttura dell'app
 
-Quattro schede, navigazione laterale su desktop e bottom-bar su mobile (breakpoint unico a
+Sei schede, navigazione laterale su desktop e bottom-bar su mobile (breakpoint unico a
 900 px).
 
 ### 1. Azioni — NTC2018 cap. 3
@@ -188,6 +209,41 @@ Acciaio, legno e muratura sono segnaposto — vedi "Prossimi passi".
 Tabella editabile (categoria, descrizione, u.m., quantità, prezzo unitario), totale generale
 e torta di incidenza per macrocategoria.
 
+### 5. Calcolatrice
+Calcoli in sequenza con nome, come si fa a mano in un predimensionamento: mi calcolo
+un'area, poi un'incidenza, poi le moltiplico.
+
+- **Da PC si scrive da tastiera** nel campo dell'espressione (Invio salva, Esc pulisce), **da
+  cellulare** c'è il tastierino a video; su desktop lo si richiama con il pulsante
+  *Tastierino*.
+- **Salva operazione con nota**: l'operazione resta salvata *estesa* — la riga mostra il
+  risultato, un clic la apre e fa vedere `operazione = risultato` con i campi (nome,
+  operazione, unità, nota) modificabili.
+- **Nomi richiamabili**: dando un nome a un'operazione (`area`, `incidenza`) la si riusa
+  nelle successive scrivendone il nome; `ans` è l'ultimo risultato. Ogni voce vede solo
+  quelle che la precedono, quindi **correggere un valore a monte aggiorna tutto quello che
+  ne discende**; l'ordine si cambia con le frecce.
+- Sintassi: `+ − × ÷ ^`, parentesi, `%` come «per cento», virgola o punto decimale,
+  argomenti separati da `;`, funzioni (`sqrt`, `min`, `max`, `round`, `ln`, `log`, `exp`,
+  trigonometria **in gradi**), costanti `pi` ed `e`.
+- Le operazioni salvate sono **dati di commessa**: viaggiano nell'Esporta/Importa JSON e
+  finiscono in *Copia per relazione*.
+
+Il motore (`src/calc/calcolatrice.ts`) è un interprete a discesa ricorsiva scritto in casa —
+nessuna dipendenza, nessun `eval` — con i suoi test in `calcolatrice.test.ts`.
+
+### 6. Normativa
+Indice dei riferimenti: NTC2018 (DM 17/01/2018) e Circolare n. 7 del 2019, con i capitoli
+richiamabili uno per uno e una ricerca che filtra su numero, titolo e parole chiave
+(`taglio`, `neve`, `VRd`, `C8.5`…).
+
+L'indice **è parte del sito, non del progetto**: sta in `src/data/normative.ts`, è uguale per
+tutte le commesse e non entra nel JSON esportato. Nuove norme e nuovi capitoli si aggiungono
+a mano in quel file, un po' alla volta — le istruzioni sono nel commento in testa. Se si
+valorizza `pagina`, il link apre il PDF **direttamente su quel capitolo** (fragment
+`#page=N`); senza, apre il documento e il numero di capitolo resta scritto accanto al
+titolo.
+
 ### Comune a tutte le schede
 - **Mostra formule**: apre in un colpo tutti i pannelli di dettaglio della scheda.
 - **Copia per relazione**: copia negli appunti un blocco di testo con valori, formule e
@@ -213,8 +269,10 @@ e torta di incidenza per macrocategoria.
 ```
 dati/
   spettri2008.csv    reticolo di riferimento NTC, All. B (10751 nodi)
+public/            file serviti così come sono: manifest, icone, service worker
 scripts/
   genera-comuni.mjs  rigenera i due file di dati dei comuni
+  genera-icone.mjs   rigenera le icone PNG dell'app installabile
 src/
   calc/            motore di calcolo — funzioni pure, testabili, senza React
     trave.ts       solutore di trave a campata unica (FEM Eulero–Bernoulli)
@@ -222,8 +280,10 @@ src/
     sismica.ts     pericolosità sismica di base: TR, ag/F0/TC*, SS, CC (§3.2)
     sollecitazioni.ts  combinazioni di carico e collegamento con il solutore
     verifiche.ts   verifiche a taglio (dai fogli Excel)
+    calcolatrice.ts  interprete delle espressioni e sequenza dei calcoli salvati
     relazione.ts   generazione del testo per la relazione
   data/            tabelle normative e di materiali (ntc2018.ts, materiali.ts)
+    normative.ts   indice dei documenti e dei capitoli della scheda Normativa
     comuni.ts      FILE GENERATO: comuni, zona sismica, coordinate
     parametri-sismici.ts  FILE GENERATO: ag/F0/TC* per comune e per TR
   components/      pattern di UI riusabili e diagrammi SVG

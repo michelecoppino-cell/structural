@@ -1738,3 +1738,450 @@ button.field-origin:hover {
     font-size: 10.5px;
   }
 }
+
+/* ─────────────────── scheda Calcolatrice ─────────────────── */
+
+.calc-conteggio {
+  font-size: 11.5px;
+  color: var(--text-faint);
+  white-space: nowrap;
+  align-self: center;
+}
+
+.calc-display {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: var(--radius-lg);
+  background: var(--nested);
+  border: 1px solid var(--border-panel);
+}
+
+.calc-input {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 20px;
+  line-height: 1.4;
+  padding: 2px 0;
+  outline: none;
+}
+
+.calc-input::placeholder {
+  color: var(--text-faint);
+  font-size: 13px;
+}
+
+.calc-risultato {
+  display: flex;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: 6px;
+  min-height: 26px;
+  font-family: var(--font-mono);
+  font-size: 21px;
+  color: var(--color-accent-300);
+}
+
+.calc-risultato > svg {
+  align-self: center;
+}
+
+.calc-risultato .um {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.calc-risultato.is-errore {
+  font-family: var(--font);
+  font-size: 12.5px;
+  color: var(--err);
+}
+
+.calc-vuoto {
+  font-family: var(--font);
+  font-size: 11.5px;
+  color: var(--text-faint);
+}
+
+/* su desktop si scrive da tastiera: il tastierino compare a richiesta */
+.calc-tastierino {
+  display: none;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+  margin-top: 10px;
+  max-width: 420px;
+}
+
+.calc-tastierino.is-sempre {
+  display: grid;
+}
+
+.calc-tasto {
+  min-height: 46px;
+  border: 1px solid var(--divider);
+  border-radius: var(--radius-md);
+  background: var(--control);
+  color: var(--text);
+  font-size: 16px;
+  font-family: var(--font-mono);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
+
+.calc-tasto:hover {
+  background: var(--hover);
+}
+
+.calc-tasto.is-op {
+  color: var(--color-accent-300);
+}
+
+.calc-tasto.is-canc {
+  color: var(--text-muted);
+}
+
+.calc-salva {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.calc-salva .mini-campo {
+  width: 118px;
+}
+
+.calc-salva .calc-campo-nota {
+  flex: 1 1 220px;
+  width: auto;
+  min-width: 180px;
+}
+
+.calc-btn-salva {
+  flex: none;
+  height: var(--control-h);
+}
+
+.calc-aiuto {
+  margin-top: 10px;
+}
+
+.calc-aiuto code,
+.note code {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--color-accent-300);
+}
+
+.calc-lista {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.calc-voce {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px 6px 10px;
+  border: 1px solid var(--border-faint);
+  border-radius: var(--radius-md);
+  background: var(--nested);
+}
+
+.calc-voce.is-errore {
+  border-color: color-mix(in srgb, var(--err) 45%, transparent);
+}
+
+/* la riga mostra il risultato; cliccandola compare l'operazione estesa */
+.calc-voce-testa {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  padding: 4px 0;
+}
+
+.calc-voce-nome {
+  font-size: 12.5px;
+  color: var(--text-2);
+  flex: none;
+  max-width: 34%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.calc-senza-nome {
+  color: var(--text-faint);
+  font-style: italic;
+}
+
+.calc-voce-valore {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: 14px;
+  color: var(--color-accent-300);
+}
+
+.calc-voce-valore .um {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.calc-espressione {
+  color: var(--text-2);
+  font-size: 12.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.calc-voce-errore {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--font);
+  font-size: 11.5px;
+  color: var(--err);
+}
+
+.calc-voce-nota {
+  font-size: 11.5px;
+  color: var(--text-faint);
+  margin-left: auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.calc-voce-azioni {
+  display: flex;
+  gap: 4px;
+  flex: none;
+}
+
+.calc-voce-modifica {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border-faint);
+}
+
+.calc-voce-modifica .mini-campo {
+  width: 110px;
+}
+
+.calc-voce-modifica .calc-campo-espr {
+  flex: 1 1 260px;
+  width: auto;
+}
+
+.calc-voce-modifica .calc-campo-espr .input {
+  font-family: var(--font-mono);
+}
+
+.calc-voce-modifica .calc-campo-nota {
+  flex: 1 1 200px;
+  width: auto;
+}
+
+/* ─────────────────── scheda Normativa ─────────────────── */
+
+.norma-ricerca {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-faint);
+  flex: 1 1 320px;
+  min-width: 0;
+  max-width: 480px;
+}
+
+.norma-ricerca .input {
+  flex: 1;
+  min-width: 0;
+}
+
+.norma-testa {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.norma-sigla {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-accent-400);
+}
+
+.norma-titolo {
+  font-size: 13.5px;
+  color: var(--text);
+  margin-top: 3px;
+  max-width: var(--reading-max);
+}
+
+.norma-estremi {
+  font-size: 11.5px;
+  color: var(--text-faint);
+  margin-top: 2px;
+  max-width: var(--reading-max);
+}
+
+.norma-indice {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--border-faint);
+}
+
+.norma-voce {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 7px 8px;
+  border-bottom: 1px solid var(--border-faint);
+  color: var(--text-2);
+  text-decoration: none;
+  border-radius: var(--radius-sm);
+}
+
+.norma-voce:hover {
+  background: var(--hover-soft);
+  color: var(--text);
+}
+
+.norma-voce .codice {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--color-accent-300);
+  flex: none;
+  min-width: 104px;
+}
+
+.norma-voce .titolo {
+  font-size: 12.5px;
+  flex: 1;
+  min-width: 0;
+}
+
+.norma-voce .pagina {
+  font-size: 11px;
+  color: var(--text-faint);
+  flex: none;
+}
+
+.norma-voce > svg {
+  flex: none;
+  color: var(--text-faint);
+  align-self: center;
+}
+
+/* ────────── calcolatrice e normativa su cellulare ────────── */
+
+@media (max-width: 899px) {
+  /* qui i tasti sono l'unico modo comodo di scrivere: ci sono sempre */
+  .calc-tastierino {
+    display: grid;
+    max-width: none;
+  }
+
+  .calc-tasto {
+    min-height: 52px;
+    font-size: 18px;
+  }
+
+  .calc-input {
+    font-size: 18px;
+  }
+
+  .calc-salva .mini-campo,
+  .calc-salva .calc-campo-nota,
+  .calc-voce-modifica .mini-campo,
+  .calc-voce-modifica .calc-campo-espr,
+  .calc-voce-modifica .calc-campo-nota {
+    flex: 1 1 100%;
+    width: 100%;
+  }
+
+  .calc-btn-salva {
+    width: 100%;
+    justify-content: center;
+    height: var(--control-h);
+  }
+
+  .calc-voce {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .calc-voce-testa {
+    flex-wrap: wrap;
+    gap: 4px 10px;
+  }
+
+  .calc-voce-nome {
+    max-width: 100%;
+  }
+
+  .calc-voce-nota {
+    margin-left: 0;
+    flex-basis: 100%;
+  }
+
+  .calc-voce-azioni {
+    justify-content: flex-end;
+  }
+
+  .norma-ricerca {
+    flex-basis: 100%;
+    max-width: none;
+  }
+
+  .norma-voce {
+    flex-wrap: wrap;
+    gap: 2px 8px;
+    padding: 9px 6px;
+  }
+
+  .norma-voce .codice {
+    min-width: 0;
+  }
+
+  .norma-voce .titolo {
+    flex-basis: 100%;
+  }
+
+  /* sei voci in fondo: le etichette si stringono un filo per starci */
+  .bottom-item .label {
+    font-size: 9.5px;
+  }
+}
