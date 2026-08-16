@@ -233,16 +233,22 @@ Il motore (`src/calc/calcolatrice.ts`) è un interprete a discesa ricorsiva scri
 nessuna dipendenza, nessun `eval` — con i suoi test in `calcolatrice.test.ts`.
 
 ### 6. Normativa
-Indice dei riferimenti: NTC2018 (DM 17/01/2018) e Circolare n. 7 del 2019, con i capitoli
-richiamabili uno per uno e una ricerca che filtra su numero, titolo e parole chiave
-(`taglio`, `neve`, `VRd`, `C8.5`…).
+Indice dei riferimenti: NTC2018 (DM 17/01/2018) e Circolare n. 7 del 2019.
+
+- **Due livelli apribili**: di default si vedono solo i titoli delle norme; aprendo una norma
+  compare l'elenco dei capitoli, aprendo un capitolo i suoi paragrafi, **rientrati secondo la
+  profondità del numero** (`4.1` → `4.1.2.3` → `4.1.2.3.5.2`). Lo stato di apertura si ricorda.
+- **Ricerca** su numero, titolo e parole chiave (`taglio`, `neve`, `VRd`, `C8.5`…): i capitoli
+  che contengono un risultato si aprono da soli.
+- **I link vanno sul capitolo**, non sul decreto intero: puntano a
+  [studiopetrillo.com](https://www.studiopetrillo.com/ntc2018.html), che pubblica NTC e
+  Circolare divise per capitolo. Il capitolo apre la sua pagina web dove c'è (Cap. 2, 3, 4, 6,
+  7, 8) e il PDF del capitolo altrove; i paragrafi aprono il PDF del capitolo, sulla pagina
+  indicata se il campo `pagina` è valorizzato (`#page=N`).
 
 L'indice **è parte del sito, non del progetto**: sta in `src/data/normative.ts`, è uguale per
-tutte le commesse e non entra nel JSON esportato. Nuove norme e nuovi capitoli si aggiungono
-a mano in quel file, un po' alla volta — le istruzioni sono nel commento in testa. Se si
-valorizza `pagina`, il link apre il PDF **direttamente su quel capitolo** (fragment
-`#page=N`); senza, apre il documento e il numero di capitolo resta scritto accanto al
-titolo.
+tutte le commesse e non entra nel JSON esportato. Nuove norme, capitoli e paragrafi si
+aggiungono a mano in quel file, un po' alla volta — le istruzioni sono nel commento in testa.
 
 ### Comune a tutte le schede
 - **Mostra formule**: apre in un colpo tutti i pannelli di dettaglio della scheda.
