@@ -32,7 +32,7 @@ import {
   type RisultatiTaglioArmato,
   type RisultatiTaglioNonArmato,
 } from '../calc/verifiche';
-import { VOCI_DEFAULT, type VoceCalcolo } from '../calc/calcolatrice';
+import { PREIMPOSTATE_DEFAULT, VOCI_DEFAULT, type Preimpostata, type VoceCalcolo } from '../calc/calcolatrice';
 import { UNITA_DEFAULT, normalizzaElenco } from '../calc/unita';
 import type { LinkUtente } from '../data/normative';
 
@@ -93,13 +93,15 @@ export interface StatoCalcolatrice {
   um: string;
   /** Operazioni salvate, in ordine: ognuna vede le variabili delle precedenti. */
   voci: VoceCalcolo[];
+  /** Formule pronte all'uso, scritte sui nomi delle grandezze qui sopra. */
+  preimpostate: Preimpostata[];
   /** Unità di misura proposte: si scrivono a mano ma devono stare qui dentro. */
   unita: string[];
   /** Tastierino a video: su cellulare c'è sempre, su desktop è a richiesta. */
   tastierino: boolean;
 }
 
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 4;
 
 export const STATO_INIZIALE: AppState = {
   schemaVersion: SCHEMA_VERSION,
@@ -133,6 +135,7 @@ export const STATO_INIZIALE: AppState = {
     nota: '',
     um: '',
     voci: VOCI_DEFAULT,
+    preimpostate: PREIMPOSTATE_DEFAULT,
     unita: UNITA_DEFAULT,
     tastierino: false,
   },
@@ -291,6 +294,18 @@ export function migra(raw: Partial<AppState>): AppState {
             um: v?.um ?? '',
           }))
         : base.calcolatrice.voci,
+      // anche le formule preimpostate sono dati di commessa: si tengono quelle
+      // del file, comprese le liste vuote; i file di prima non ne hanno e
+      // ripartono da quelle di serie
+      preimpostate: Array.isArray(raw.calcolatrice?.preimpostate)
+        ? raw.calcolatrice.preimpostate.map((v, i) => ({
+            id: v?.id || `pre-${i}`,
+            nome: v?.nome ?? '',
+            espressione: v?.espressione ?? '',
+            nota: v?.nota ?? '',
+            um: v?.um ?? '',
+          }))
+        : base.calcolatrice.preimpostate,
       // l'elenco delle unità è una preferenza: se il file non ne porta uno
       // valido si riparte da quello di serie
       unita: normalizzaElenco(

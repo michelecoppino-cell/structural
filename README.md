@@ -236,8 +236,8 @@ un'area, poi un'incidenza, poi le moltiplico.
 - **Da PC si scrive da tastiera** nel campo dell'espressione (Invio salva, Esc pulisce), **da
   cellulare** c'è il tastierino a video; su desktop lo si richiama con il pulsante
   *Tastierino*.
-- **Salva operazione con nota**: l'operazione resta salvata *estesa* — la riga mostra il
-  risultato, un clic la apre e fa vedere `operazione = risultato` con i campi (nome,
+- **Salva operazione con nota**: l'operazione resta salvata *estesa* — la pastiglia mostra il
+  valore, un clic sul nome la apre e fa vedere `operazione = risultato` con i campi (nome,
   operazione, unità, nota) modificabili.
 - **Nomi richiamabili**: dando un nome a un'operazione (`area`, `incidenza`) la si riusa
   nelle successive scrivendone il nome; `ans` è l'ultimo risultato. Ogni voce vede solo
@@ -246,18 +246,28 @@ un'area, poi un'incidenza, poi le moltiplico.
 - Sintassi: `+ − × ÷ ^`, parentesi, `%` come «per cento», virgola o punto decimale,
   argomenti separati da `;`, funzioni (`sqrt`, `min`, `max`, `round`, `ln`, `log`, `exp`,
   trigonometria **in gradi**), costanti `pi` ed `e`.
-- **Grandezze di base già pronte**: `b` (base), `l` (larghezza), `h` (altezza), `gCLS`,
-  `gACC`, `gTERRA` partono **vuote**, con nome, nota e unità già impostati: si compilano
-  quando servono e le altre operazioni le richiamano per nome.
+- **Grandezze in pastiglie**: `b`, `l`, `h`, `q` e i pesi di volume `γCLS`, `γACC`, `γTERRA`
+  stanno in riquadri piccoli — almeno tre per riga su cellulare — con il valore scrivibile
+  dentro la pastiglia. Le lunghezze partono vuote, i **pesi di volume arrivano già compilati**
+  con la densità del materiale (25, 78,5 e 18 kN/mc), modificabile come tutto il resto.
+- **L'elenco lo compone chi calcola**: sotto le pastiglie ci sono quelle da aggiungere — le
+  altre di serie che sono state tolte, il catalogo (`s`, `i`, `A`, `F`, `E`, `J`, `γMUR`,
+  `γLEGNO`, `γACQUA`) e una *nuova* vuota con nome e unità da scrivere. Il tastierino ha il
+  tasto `γ`, che su cellulare non si scriverebbe altrimenti.
+- **Operazioni preimpostate**: formule scritte una volta sui nomi delle grandezze —
+  `q*l^2/8`, `q*l/2`, `b*h^2/6`, `b*h*γCLS`, `5*q*l^4/(384*E*J)` — che si accendono quando
+  tutte le grandezze che servono sono compilate. Al tocco fanno il calcolo e finiscono nel
+  display con nome e unità, pronte da salvare (o si salvano direttamente con il segnalibro).
+  Se ne aggiungono di proprie e si modificano tutte: sono **dati di commessa**.
 - **Unità di misura da elenco**: il campo si scrive a mano ma suggerisce mentre si digita, e
   quello che in elenco non c'è viene segnato come errore e non si salva. L'elenco (kg, kg/mc,
   kg/mq, kg/ml, kN/cmq, MPa, m, mq, mc…) si cambia dal pulsante *Unità*.
 - **Unità ricavata da sola**: il prodotto e il rapporto fra operazioni con nome compongono
-  l'unità del risultato — `b*h` in m dà `mq`, `b*h*gCLS` con gCLS in kN/mc dà `kN/m`,
+  l'unità del risultato — `b*h` in m dà `mq`, `b*h*γCLS` con γCLS in kN/mc dà `kN/m`,
   `sqrt(A)` con A in mq dà `m`. L'unità scritta a mano vince su quella calcolata; una somma
   fra unità diverse non ne propone nessuna.
 - Le operazioni salvate sono **dati di commessa**: viaggiano nell'Esporta/Importa JSON e
-  finiscono in *Copia txt*.
+  finiscono in *Copia*.
 
 Il motore (`src/calc/calcolatrice.ts`) è un interprete a discesa ricorsiva scritto in casa —
 nessuna dipendenza, nessun `eval`: costruisce l'albero dell'espressione e ci passa due volte,
@@ -289,17 +299,20 @@ istruzioni sono nel commento in testa.
 
 ### Comune a tutte le schede
 - **(i)**: apre in un colpo tutti i pannelli di dettaglio della scheda — formule con i numeri
-  sostituiti, coefficienti e riferimenti.
-- **Copia txt**: copia negli appunti un blocco di testo con valori, formule e riferimenti
+  sostituiti, coefficienti e riferimenti. Sta nella **testata**, insieme a *Copia*: sono
+  comandi che valgono per tutte le schede e lassù non rubano altezza al contenuto.
+- **Copia**: copia negli appunti un blocco di testo con valori, formule e riferimenti
   normativi, pronto da incollare in Word.
 - **Esporta / Importa JSON**: l'intero stato del progetto, con numero di versione dello
   schema e migrazione dei file salvati da versioni precedenti. Lo stato si salva in
   `localStorage` con un ritardo di 300 ms, così scrivere in un campo non costa una
   serializzazione per carattere.
-- **OneDrive**: disabilitato finché Microsoft Graph + MSAL non sono collegati — l'azione
-  principale della testata resta *Esporta JSON*.
 - **Intestazione di scheda sticky**: resta in vista mentre si scorre e ospita i comandi
-  della scheda attiva (materiale, verifica visibile, combinazione, orientamento).
+  della scheda attiva (materiale, verifica visibile, combinazione, orientamento); dove la
+  scheda non ha comandi propri sparisce del tutto.
+- **Zone di sicurezza del cellulare**: la testata scende sotto l'orologio e la tacca
+  (`env(safe-area-inset-top)`), la barra in fondo lascia posto al gesto di casa e le due
+  fasce prendono il colore della cornice invece di restare nere.
 - **Impaginazione**: il contenuto non supera i 1600 px e il testo corrente le ~78 battute;
   i campi vanno su più colonne dove c'è spazio, con breakpoint a 900, 1200, 1400 e 1600 px e
   container query dove lo stesso pannello è riusato largo e stretto. Sotto i 1200 px la
@@ -411,4 +424,3 @@ npm test
 2. Verifiche a flessione e pressoflessione per il calcestruzzo.
 3. Legno e muratura.
 4. Spettro di risposta disegnato (Se(T) e Sd(T)) a partire dai parametri già calcolati.
-5. Salvataggio su OneDrive con Microsoft Graph.

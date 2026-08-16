@@ -3,7 +3,6 @@ import {
   Triangle,
   DownloadSimple,
   UploadSimple,
-  CloudArrowUp,
   CloudSun,
   ChartLine,
   SealCheck,
@@ -145,21 +144,40 @@ export default function App() {
               e.target.value = '';
             }}
           />
-          {/* finché Microsoft Graph non è collegato, il salvataggio in cloud
-              non è l'azione principale: l'accento resta su Esporta JSON */}
-          <button
-            type="button"
-            className="btn btn-secondary"
-            disabled
-            title="Salvataggio su OneDrive in arrivo — per ora usa Esporta JSON"
-          >
-            <CloudArrowUp size={14} />
-            <span>OneDrive</span>
-          </button>
-          <button type="button" className="btn btn-primary" title="Esporta JSON" onClick={esporta}>
+          <button type="button" className="btn btn-secondary" title="Esporta JSON" onClick={esporta}>
             <DownloadSimple size={14} />
             <span>Esporta JSON</span>
           </button>
+
+          {/* comandi della scheda: stanno quassù per non rubare altezza al
+              contenuto, che su cellulare è tutto quello che c'è */}
+          {state.tab !== 'normativa' && state.tab !== 'calcolatrice' && (
+            <button
+              type="button"
+              className="btn btn-secondary btn-icon"
+              aria-pressed={state.ui.allDetails[state.tab]}
+              aria-label={state.ui.allDetails[state.tab] ? 'Chiudi le formule' : 'Mostra le formule'}
+              title={
+                state.ui.allDetails[state.tab]
+                  ? 'Chiudi formule e riferimenti'
+                  : 'Mostra formule e riferimenti di tutta la scheda'
+              }
+              onClick={() => dispatch({ type: 'toggleAllDetails', tab: state.tab })}
+            >
+              <Info size={15} weight={state.ui.allDetails[state.tab] ? 'fill' : 'regular'} />
+            </button>
+          )}
+          {state.tab !== 'normativa' && (
+            <button
+              type="button"
+              className="btn btn-primary btn-copia"
+              title="Copia il blocco di testo della scheda, pronto per la relazione"
+              onClick={copia}
+            >
+              <ClipboardText size={14} />
+              <span>Copia</span>
+            </button>
+          )}
         </div>
       </header>
 
@@ -208,35 +226,6 @@ export default function App() {
         <main className={`app-main${fit ? ' is-fit' : ''}`}>
           <div className="tab-toolbar">
             <div className="toolbar-slot" ref={setSlot} />
-            <div className="toolbar-actions">
-              {state.tab !== 'normativa' && state.tab !== 'calcolatrice' && (
-                <button
-                  type="button"
-                  className="btn btn-secondary btn-icon"
-                  aria-pressed={state.ui.allDetails[state.tab]}
-                  aria-label={state.ui.allDetails[state.tab] ? 'Chiudi le formule' : 'Mostra le formule'}
-                  title={
-                    state.ui.allDetails[state.tab]
-                      ? 'Chiudi formule e riferimenti'
-                      : 'Mostra formule e riferimenti di tutta la scheda'
-                  }
-                  onClick={() => dispatch({ type: 'toggleAllDetails', tab: state.tab })}
-                >
-                  <Info size={15} weight={state.ui.allDetails[state.tab] ? 'fill' : 'regular'} />
-                </button>
-              )}
-              {state.tab !== 'normativa' && (
-                <button
-                  type="button"
-                  className="btn btn-primary"
-                  title="Copia il blocco di testo della scheda, pronto per la relazione"
-                  onClick={copia}
-                >
-                  <ClipboardText size={14} />
-                  Copia txt
-                </button>
-              )}
-            </div>
           </div>
 
           <SlotProvider value={slot}>
