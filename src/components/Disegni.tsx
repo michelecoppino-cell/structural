@@ -226,17 +226,38 @@ export function Spettro({
 
 /* ─────────────────────── paramento e spinta delle terre ─────────────────── */
 
-export function Paramento({ H, ka, Sa, za }: { H: number; ka: number; Sa: number; za: number }) {
+export function Paramento({
+  H,
+  ka,
+  Sa,
+  za,
+  dEd,
+}: {
+  H: number;
+  ka: number;
+  Sa: number;
+  za: number;
+  /** Incremento sismico ΔEd (kN/m): se c'è, si disegna anche il suo diagramma. */
+  dEd?: number;
+}) {
   const W = 260;
-  const Ht = 170;
+  const Ht = 182;
   const xw = 92; // faccia interna del muro
   const y0 = 22;
   const y1 = Ht - 30;
   const alt = y1 - y0;
   const spinta = 74; // ampiezza del diagramma triangolare
+  const sisma = dEd !== undefined && Number.isFinite(dEd) && dEd > 0;
+  // l'incremento dinamico si rappresenta come diagramma costante su H,
+  // risultante a metà altezza: ampiezza in proporzione alla spinta statica
+  const ampiezzaSisma = sisma ? Math.min(52, (spinta * dEd) / Math.max(Sa, 1e-6)) : 0;
+  const yMezzo = (y0 + y1) / 2;
 
   return (
-    <Cornice titolo="Spinta delle terre — Rankine" viewBox={`0 0 ${W} ${Ht}`}>
+    <Cornice
+      titolo={sisma ? 'Spinta delle terre — statica e sismica' : 'Spinta delle terre — Rankine'}
+      viewBox={`0 0 ${W} ${Ht}`}
+    >
       {/* muro */}
       <path
         className="dg-beam"
@@ -280,9 +301,35 @@ export function Paramento({ H, ka, Sa, za }: { H: number; ka: number; Sa: number
       <text x={xw - 54} y={(y0 + y1) / 2} className="dg-testo" textAnchor="end" dominantBaseline="middle">
         H {fx(H)} m
       </text>
-      <text x={xw + 4} y={y1 + 16} className="dg-testo">
+
+      {/* incremento sismico: diagramma costante lungo H, risultante a H/2 */}
+      {sisma && (
+        <>
+          <path
+            className="dg-line is-faint"
+            strokeWidth={1.4}
+            strokeDasharray="4 3"
+            d={`M${xw},${y0} L${xw + ampiezzaSisma},${y0} L${xw + ampiezzaSisma},${y1} L${xw},${y1}`}
+          />
+          <path
+            className="dg-carico is-faint"
+            strokeWidth={1.6}
+            d={`M${xw + ampiezzaSisma + 34},${yMezzo} L${xw + ampiezzaSisma + 6},${yMezzo} M${xw + ampiezzaSisma + 14},${yMezzo - 4} L${xw + ampiezzaSisma + 5},${yMezzo} L${xw + ampiezzaSisma + 14},${yMezzo + 4}`}
+          />
+          <text x={xw + ampiezzaSisma + 38} y={yMezzo} className="dg-testo" dominantBaseline="middle">
+            ΔEd {fx(dEd!, 1)}
+          </text>
+        </>
+      )}
+
+      <text x={8} y={y1 + 16} className="dg-testo">
         za = H/3 = {fx(za)} m · Ka = {fx(ka, 3)}
       </text>
+      {sisma && (
+        <text x={8} y={y1 + 27} className="dg-testo">
+          ΔEd costante su H, risultante a H/2
+        </text>
+      )}
     </Cornice>
   );
 }

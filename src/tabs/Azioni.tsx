@@ -24,6 +24,7 @@ export default function Azioni() {
   const [cpAperto, setCpAperto] = useState(false);
   /** Promemoria dei cp ordinari, con la falda calcolata sull'inclinazione data. */
   const cpOpzioni = opzioniCp(r.neve.alfa);
+  const sismaT = r.terre.sisma;
 
   const province = provinceDi(inp.regione);
   const comuni = comuniDi(inp.regione, inp.prov);
@@ -731,7 +732,11 @@ export default function Azioni() {
           id="terre"
           title="Spinta delle terre"
           icon={<Mountains size={18} />}
-          hint={`Ka ${fx(r.terre.ka, 3)} · Sa ${fx(r.terre.Sa, 1)} kN/m`}
+          hint={
+            sismaT.attiva
+              ? `Ka ${fx(r.terre.ka, 3)} · Sa ${fx(r.terre.Sa, 1)} → Ed ${fx(sismaT.Ed, 1)} kN/m`
+              : `Ka ${fx(r.terre.ka, 3)} · Sa ${fx(r.terre.Sa, 1)} kN/m`
+          }
         >
           <div className="panel-split">
             <div className="fields">
@@ -781,19 +786,146 @@ export default function Azioni() {
               <Field
                 id="terre_d"
                 tab="azioni"
-                label="Inclinazione δ del muro"
+                label="Attrito terra-muro δ"
                 unit="°"
                 dettaglio={{
-                  formula: 'δ = 0 → spinta orizzontale; per δ ≠ 0 si applica il coefficiente di Coulomb',
-                  ref: 'NTC2018 §6.5.3.1.1',
+                  formula:
+                    'δ = 0 → spinta orizzontale; con δ > 0 la spinta si inclina di δ sulla normale al paramento',
+                  ref: 'NTC2018 §6.5.3.1.1 — entra nel coefficiente di Coulomb e di Mononobe-Okabe',
                 }}
               >
                 <NumInput id="terre_d" value={inp.delta} onChange={(v) => set({ delta: v })} />
               </Field>
+
+              {/* ── spinta sismica ──────────────────────────────────────── */}
+              <div className="campo-largo">
+                <button
+                  type="button"
+                  className="chip-toggle"
+                  aria-pressed={sismaT.attiva}
+                  title="Somma alla spinta statica l’incremento sismico di Mononobe-Okabe (§7.11.6)"
+                  onClick={() => set({ sismaTerre: !inp.sismaTerre })}
+                >
+                  Spinta sismica — §7.11.6
+                  <span className="val">
+                    {sismaT.attiva ? `Ed ${fx(sismaT.Ed, 1)} kN/m` : 'esclusa'}
+                  </span>
+                </button>
+              </div>
+
+              {sismaT.attiva && (
+                <>
+                  <Field
+                    id="terre_betam"
+                    tab="azioni"
+                    label="Coefficiente di riduzione βm"
+                    unit="—"
+                    errore={err.betam}
+                    dettaglio={{
+                      formula: `kh = βm · amax/g = ${fx(num(inp.betam))} · ${fx(sismaT.amax, 3)} = ${fx(sismaT.kh, 3)}; kv = ±0.5·kh = ${fx(Math.abs(sismaT.kv), 3)}`,
+                      ref: 'NTC2018 §7.11.6.2.1 — Tab. 7.11.II; amax/g = S · ag/g',
+                      coeffs: [
+                        { k: 'amax/g = S·ag/g', v: fx(sismaT.amax, 3) },
+                        { k: 'kh', v: fx(sismaT.kh, 3) },
+                        { k: 'kv', v: fx(sismaT.kv, 3) },
+                      ],
+                    }}
+                  >
+                    <NumInput
+                      id="terre_betam"
+                      value={inp.betam}
+                      errore={!!err.betam}
+                      onChange={(v) => set({ betam: v })}
+                    />
+                  </Field>
+
+                  <Field
+                    id="terre_kh"
+                    tab="azioni"
+                    label="kh del muro"
+                    unit="—"
+                    origine={
+                      <Origine
+                        testo={inp.khManuale.trim() ? 'a mano' : 'da βm · amax'}
+                        titolo={
+                          inp.khManuale.trim()
+                            ? 'Valore imposto a mano: vince su βm · amax/g'
+                            : `kh = βm · amax/g = ${fx(sismaT.kh, 3)}`
+                        }
+                      />
+                    }
+                    dettaglio={{
+                      formula: `θ = atan[kh / (1 ∓ kv)] = ${fx(sismaT.theta, 2)}°`,
+                      ref: 'NTC2018 §7.11.6.2.1 — si tiene il verso di kv che dà la spinta maggiore',
+                      coeffs: [{ k: 'θ', v: `${fx(sismaT.theta, 2)}°` }],
+                    }}
+                  >
+                    <NumInput
+                      id="terre_kh"
+                      value={inp.khManuale}
+                      placeholder={fx(sismaT.kh, 3)}
+                      onChange={(v) => set({ khManuale: v })}
+                    />
+                  </Field>
+
+                  <Field
+                    id="terre_beta"
+                    tab="azioni"
+                    label="Inclinazione del terrapieno β"
+                    unit="°"
+                    errore={err.betaTerre}
+                    dettaglio={{
+                      formula: `Kae = cos²(φ′ − θ − ψ) / {cosθ · cos²ψ · cos(δ + ψ + θ) · [1 + √(sin(φ′+δ)·sin(φ′−θ−β) / (cos(δ+ψ+θ)·cos(β−ψ)))]²} = ${fx(sismaT.kae, 3)}`,
+                      ref: 'NTC2018 §7.11.6.2.1 — Mononobe-Okabe, eq. 7.11.7',
+                      coeffs: [
+                        { k: 'Ka statico', v: fx(r.terre.ka, 3) },
+                        { k: 'Kae sismico', v: fx(sismaT.kae, 3) },
+                      ],
+                    }}
+                  >
+                    <NumInput
+                      id="terre_beta"
+                      value={inp.betaTerre}
+                      errore={!!err.betaTerre}
+                      onChange={(v) => set({ betaTerre: v })}
+                    />
+                  </Field>
+
+                  <Field
+                    id="terre_psi"
+                    tab="azioni"
+                    label="Inclinazione del paramento ψ"
+                    unit="°"
+                    errore={err.psiTerre}
+                    dettaglio={{
+                      formula: `Ed = ½ · γ · H² · (1 ∓ kv) · Kae = ${fx(sismaT.Ed, 1)} kN/m; ΔEd = Ed − Sa = ${fx(sismaT.dEd, 1)} kN/m applicato a H/2`,
+                      ref: 'NTC2018 §7.11.6.3.1 — ψ misurato dalla verticale',
+                      coeffs: [
+                        { k: 'Ed', v: `${fx(sismaT.Ed, 1)} kN/m` },
+                        { k: 'ΔEd', v: `${fx(sismaT.dEd, 1)} kN/m` },
+                        { k: 'Mtot', v: `${fx(sismaT.Mtot, 1)} kNm/m` },
+                      ],
+                    }}
+                  >
+                    <NumInput
+                      id="terre_psi"
+                      value={inp.psiTerre}
+                      errore={!!err.psiTerre}
+                      onChange={(v) => set({ psiTerre: v })}
+                    />
+                  </Field>
+                </>
+              )}
             </div>
 
             <div className="col-aside">
-              <Paramento H={num(inp.H)} ka={r.terre.ka} Sa={r.terre.Sa} za={r.terre.za} />
+              <Paramento
+                H={num(inp.H)}
+                ka={r.terre.ka}
+                Sa={r.terre.Sa}
+                za={r.terre.za}
+                dEd={sismaT.attiva ? sismaT.dEd : undefined}
+              />
               <Output
                 voci={[
                   { k: 'Ka', v: fx(r.terre.ka, 3) },
@@ -802,6 +934,31 @@ export default function Azioni() {
                   { k: 'Mribaltante', v: fx(r.terre.Mrib, 1), u: 'kNm/m' },
                 ]}
               />
+              {sismaT.attiva && (
+                <>
+                  <Output
+                    titolo="Sisma — Mononobe-Okabe"
+                    voci={[
+                      { k: 'kh', v: fx(sismaT.kh, 3) },
+                      { k: 'kv', v: fx(sismaT.kv, 3) },
+                      { k: 'θ', v: fx(sismaT.theta, 2), u: '°' },
+                      { k: 'Kae', v: fx(sismaT.kae, 3) },
+                      { k: 'Ed totale', v: fx(sismaT.Ed, 1), u: 'kN/m' },
+                      { k: 'ΔEd a H/2', v: fx(sismaT.dEd, 1), u: 'kN/m' },
+                      { k: 'M totale', v: fx(sismaT.Mtot, 1), u: 'kNm/m' },
+                    ]}
+                  />
+                  {sismaT.avviso ? (
+                    <p className="field-error">{sismaT.avviso}</p>
+                  ) : (
+                    <p className="note">
+                      La spinta statica resta a H/3 dal piede, l’incremento dinamico ΔEd si applica a
+                      metà altezza (§7.11.6.3.1). Fra kv verso l’alto e verso il basso si tiene quello
+                      che dà la spinta maggiore.
+                    </p>
+                  )}
+                </>
+              )}
             </div>
           </div>
         </Accordion>

@@ -1,5 +1,5 @@
 /**
- * Blocco di testo "Copia per relazione": valori, formule e riferimenti
+ * Blocco di testo "Copia txt": valori, formule e riferimenti
  * normativi pronti da incollare in Word.
  */
 
@@ -40,8 +40,9 @@ export function testoRelazione(state: AppState, tab: TabId): string {
       `  q = ${fx(az.sisma.q)}; Sd(T1) = ag·S·F0/q = ${fx(az.sisma.Sd, 3)} g`,
       '',
       'CARICO NEVE — NTC2018 §3.4',
-      `  Zona ${state.azioni.zneve}; as = ${fx(num(state.azioni.as), 0)} m`,
-      `  qsk = ${fx(az.neve.qsk)} kN/m²; qs = μ1·qsk·CE·Ct = ${fx(az.neve.qs)} kN/m²`,
+      `  Zona ${state.azioni.zneve}; as = ${fx(num(state.azioni.as), 0)} m; falda α = ${fx(az.neve.alfa, 0)}°`,
+      `  μ1 = ${fx(az.neve.mu)} (Tab. 3.4.II per α = ${fx(az.neve.alfa, 0)}°: ${fx(az.neve.muSuggerito)}); CE = ${fx(az.neve.ce)}; Ct = ${fx(az.neve.ct)}`,
+      `  qsk = ${fx(az.neve.qsk)} kN/m²; qs = μ1·qsk·CE·Ct = ${fx(az.neve.qs)} kN/m² sulla proiezione orizzontale`,
       '',
       'AZIONE DEL VENTO — NTC2018 §3.3',
       `  Zona ${state.azioni.zvento}; esposizione ${state.azioni.espo}; z = ${fx(num(state.azioni.z))} m`,
@@ -57,6 +58,7 @@ export function testoRelazione(state: AppState, tab: TabId): string {
       `  γ = ${fx(num(state.azioni.gamma), 1)} kN/m³; φ′ = ${fx(num(state.azioni.phi), 0)}°; H = ${fx(num(state.azioni.H))} m`,
       `  Ka = tan²(45° − φ′/2) = ${fx(az.terre.ka, 3)}; Sa = ½·γ·H²·Ka = ${fx(az.terre.Sa, 1)} kN/m`,
       `  za = H/3 = ${fx(az.terre.za)} m; Mrib = ${fx(az.terre.Mrib, 1)} kNm/m`,
+      ...(az.terre.sisma.attiva ? spintaSismica(state, az) : []),
     ].join('\n');
   }
 
@@ -125,6 +127,22 @@ export function testoRelazione(state: AppState, tab: TabId): string {
   });
   const generale = state.costi.reduce((s, v) => s + num(v.quantita) * num(v.prezzo), 0);
   return [...intestazione, 'COMPUTO SINTETICO', ...righe, '', `  TOTALE GENERALE = ${generale.toFixed(2)} €`].join('\n');
+}
+
+/** Blocco della spinta sismica delle terre, solo se è stata attivata. */
+function spintaSismica(state: AppState, az: ReturnType<typeof calcolaAzioni>): string[] {
+  const s = az.terre.sisma;
+  const H = num(state.azioni.H);
+  if (s.avviso) return ['', 'SPINTA SISMICA DELLE TERRE — NTC2018 §7.11.6', `  ${s.avviso}`];
+  return [
+    '',
+    'SPINTA SISMICA DELLE TERRE — NTC2018 §7.11.6 (Mononobe-Okabe)',
+    `  amax/g = S·ag/g = ${fx(s.amax, 3)}; βm = ${fx(num(state.azioni.betam))} → kh = ${fx(s.kh, 3)}; kv = ${fx(s.kv, 3)}`,
+    `  θ = atan[kh/(1∓kv)] = ${fx(s.theta, 2)}°; δ = ${fx(num(state.azioni.delta), 0)}°; β = ${fx(num(state.azioni.betaTerre), 0)}°; ψ = ${fx(num(state.azioni.psiTerre), 0)}°`,
+    `  Kae = ${fx(s.kae, 3)} (Ka statico = ${fx(az.terre.ka, 3)})`,
+    `  Ed = ½·γ·H²·(1∓kv)·Kae = ${fx(s.Ed, 1)} kN/m; ΔEd = Ed − Sa = ${fx(s.dEd, 1)} kN/m applicato a H/2 = ${fx(H / 2)} m`,
+    `  M totale = Sa·H/3 + ΔEd·H/2 = ${fx(s.Mtot, 1)} kNm/m`,
+  ];
 }
 
 /** Input delle verifiche con il VEd effettivamente in uso (collegato o a mano). */
