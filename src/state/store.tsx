@@ -32,7 +32,9 @@ import {
   type RisultatiTaglioArmato,
   type RisultatiTaglioNonArmato,
 } from '../calc/verifiche';
-import type { VoceCalcolo } from '../calc/calcolatrice';
+import { VOCI_DEFAULT, type VoceCalcolo } from '../calc/calcolatrice';
+import { UNITA_DEFAULT, normalizzaElenco } from '../calc/unita';
+import type { LinkUtente } from '../data/normative';
 
 export type TabId = 'azioni' | 'sollecitazioni' | 'verifiche' | 'costi' | 'calcolatrice' | 'normativa';
 export type MaterialeId = 'cls' | 'acciaio' | 'legno' | 'muratura';
@@ -71,6 +73,8 @@ export interface AppState {
   };
   costi: VoceCosto[];
   calcolatrice: StatoCalcolatrice;
+  /** Norme e link aggiunti a mano nella scheda Normativa. */
+  normative: LinkUtente[];
   ui: {
     open: Record<string, boolean>;
     exp: Record<string, boolean>;
@@ -89,6 +93,8 @@ export interface StatoCalcolatrice {
   um: string;
   /** Operazioni salvate, in ordine: ognuna vede le variabili delle precedenti. */
   voci: VoceCalcolo[];
+  /** Unità di misura proposte: si scrivono a mano ma devono stare qui dentro. */
+  unita: string[];
   /** Tastierino a video: su cellulare c'è sempre, su desktop è a richiesta. */
   tastierino: boolean;
 }
@@ -126,9 +132,11 @@ export const STATO_INIZIALE: AppState = {
     nome: '',
     nota: '',
     um: '',
-    voci: [],
+    voci: VOCI_DEFAULT,
+    unita: UNITA_DEFAULT,
     tastierino: false,
   },
+  normative: [],
   ui: {
     open: { sisma: true, vari: true, 'soll-risultati': true, 'soll-inerzia': true },
     exp: {},
@@ -156,6 +164,7 @@ export type Action =
   | { type: 'acciaioSezione'; patch: Partial<InputAcciaioSezione> }
   | { type: 'costi'; voci: VoceCosto[] }
   | { type: 'calcolatrice'; patch: Partial<StatoCalcolatrice> }
+  | { type: 'normative'; voci: LinkUtente[] }
   | { type: 'toggleOpen'; id: string }
   | { type: 'toggleExp'; id: string }
   | { type: 'toggleAllDetails'; tab: TabId }
@@ -211,6 +220,8 @@ export function reducer(state: AppState, action: Action): AppState {
       return { ...state, costi: action.voci };
     case 'calcolatrice':
       return { ...state, calcolatrice: { ...state.calcolatrice, ...action.patch } };
+    case 'normative':
+      return { ...state, normative: action.voci };
     case 'toggleOpen':
       return {
         ...state,
@@ -271,14 +282,28 @@ export function migra(raw: Partial<AppState>): AppState {
       ...raw.calcolatrice,
       // le operazioni salvate sono dati di commessa: si tengono tutte quelle
       // del file, comprese le liste vuote (l'utente può averle cancellate)
-      voci: (Array.isArray(raw.calcolatrice?.voci) ? raw.calcolatrice.voci : []).map((v, i) => ({
-        id: v?.id || `calc-${i}`,
-        nome: v?.nome ?? '',
-        espressione: v?.espressione ?? '',
-        nota: v?.nota ?? '',
-        um: v?.um ?? '',
-      })),
+      voci: raw.calcolatrice
+        ? (Array.isArray(raw.calcolatrice.voci) ? raw.calcolatrice.voci : []).map((v, i) => ({
+            id: v?.id || `calc-${i}`,
+            nome: v?.nome ?? '',
+            espressione: v?.espressione ?? '',
+            nota: v?.nota ?? '',
+            um: v?.um ?? '',
+          }))
+        : base.calcolatrice.voci,
+      // l'elenco delle unità è una preferenza: se il file non ne porta uno
+      // valido si riparte da quello di serie
+      unita: normalizzaElenco(
+        Array.isArray(raw.calcolatrice?.unita) && raw.calcolatrice.unita.length
+          ? raw.calcolatrice.unita
+          : base.calcolatrice.unita,
+      ),
     },
+    normative: (Array.isArray(raw.normative) ? raw.normative : []).flatMap((v, i) =>
+      v?.url
+        ? [{ id: v.id || `norma-${i}`, sigla: v.sigla ?? '', titolo: v.titolo ?? '', url: v.url }]
+        : [],
+    ),
     ui: {
       ...base.ui,
       ...raw.ui,

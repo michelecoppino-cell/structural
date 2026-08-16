@@ -2,9 +2,12 @@
  * Indice della normativa: documenti, capitoli e paragrafi della scheda
  * "Normativa".
  *
+ * Le norme e i link che l'utente aggiunge a mano dalla scheda **non** stanno
+ * qui: sono dati di commessa e vivono nello stato (`LinkUtente`).
+ *
  * È un file di dati, non di calcolo: **si aggiorna a mano**, un capitolo alla
- * volta, e quello che si scrive qui resta nel sito per tutti i progetti (non è
- * dato di commessa, non finisce nel JSON esportato).
+ * volta, e quello che si scrive qui resta nel sito per tutti i progetti (non
+ * finisce nel JSON esportato).
  *
  * I link puntano a studiopetrillo.com, che pubblica le NTC 2018 e la Circolare
  * **spezzate per capitolo**: così un riferimento apre il capitolo giusto e non
@@ -43,6 +46,20 @@ export interface Documento {
   /** PDF del capitolo n, sul sito di consultazione. */
   pdfCapitolo: (n: number) => string;
   nota?: string;
+}
+
+/**
+ * Norma o link aggiunto a mano dall'utente, dalla scheda Normativa: ha la
+ * stessa testata dei documenti di serie (sigla ocra, titolo bianco) ma sta
+ * nello stato dell'app, non in questo file.
+ */
+export interface LinkUtente {
+  id: string;
+  /** Sigla breve — è la riga ocra (es. "CNR-DT 207"). */
+  sigla: string;
+  /** Titolo esteso — è la riga bianca. */
+  titolo: string;
+  url: string;
 }
 
 export interface VoceNorma {

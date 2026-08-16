@@ -8,7 +8,7 @@ import {
   ChartLine,
   SealCheck,
   CurrencyEur,
-  FunctionIcon,
+  Info,
   ClipboardText,
   CheckCircle,
   Calculator,
@@ -212,17 +212,28 @@ export default function App() {
               {state.tab !== 'normativa' && state.tab !== 'calcolatrice' && (
                 <button
                   type="button"
-                  className="btn btn-secondary"
+                  className="btn btn-secondary btn-icon"
+                  aria-pressed={state.ui.allDetails[state.tab]}
+                  aria-label={state.ui.allDetails[state.tab] ? 'Chiudi le formule' : 'Mostra le formule'}
+                  title={
+                    state.ui.allDetails[state.tab]
+                      ? 'Chiudi formule e riferimenti'
+                      : 'Mostra formule e riferimenti di tutta la scheda'
+                  }
                   onClick={() => dispatch({ type: 'toggleAllDetails', tab: state.tab })}
                 >
-                  <FunctionIcon size={14} />
-                  {state.ui.allDetails[state.tab] ? 'Chiudi dettagli' : 'Mostra formule'}
+                  <Info size={15} weight={state.ui.allDetails[state.tab] ? 'fill' : 'regular'} />
                 </button>
               )}
               {state.tab !== 'normativa' && (
-                <button type="button" className="btn btn-primary" onClick={copia}>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  title="Copia il blocco di testo della scheda, pronto per la relazione"
+                  onClick={copia}
+                >
                   <ClipboardText size={14} />
-                  Copia per relazione
+                  Copia txt
                 </button>
               )}
             </div>

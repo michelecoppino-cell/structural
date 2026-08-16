@@ -1,5 +1,5 @@
 import { useRef, type ReactNode } from 'react';
-import { CaretDown, CaretUp, CaretUpDown, Info, BookOpenText, ArrowUUpLeft } from '@phosphor-icons/react';
+import { CaretDown, CaretUp, BookOpenText, ArrowUUpLeft } from '@phosphor-icons/react';
 import { useStore } from '../state/store';
 import type { TabId } from '../state/store';
 
@@ -121,12 +121,13 @@ interface FieldProps {
 }
 
 /**
- * Riga compatta etichetta + controllo + unità + bottone info; il pannello
- * con formula, coefficienti e riferimento normativo è a scomparsa.
+ * Riga compatta etichetta + controllo + unità; il pannello con formula,
+ * coefficienti e riferimento normativo compare tutto insieme con l'(i) della
+ * barra in testa alla scheda — un bottone per campo occupava troppo spazio.
  */
 export function Field({ id, tab, label, unit = '', dettaglio, errore, origine, children }: FieldProps) {
-  const { state, dispatch } = useStore();
-  const aperto = state.ui.allDetails[tab] || !!state.ui.exp[id];
+  const { state } = useStore();
+  const aperto = state.ui.allDetails[tab];
 
   return (
     <div>
@@ -139,20 +140,6 @@ export function Field({ id, tab, label, unit = '', dettaglio, errore, origine, c
           <div className="field-control">
             {children}
             {unit && <span className="field-unit">{unit}</span>}
-            {dettaglio ? (
-              <button
-                type="button"
-                className="field-info"
-                aria-expanded={aperto}
-                aria-controls={`${id}-detail`}
-                title="Formula e riferimenti"
-                onClick={() => dispatch({ type: 'toggleExp', id })}
-              >
-                {aperto ? <CaretUpDown size={14} weight="fill" /> : <Info size={14} />}
-              </button>
-            ) : (
-              <span className="field-info" style={{ border: 0 }} />
-            )}
           </div>
           {errore && (
             <div className="field-error" id={`${id}-errore`}>

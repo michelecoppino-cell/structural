@@ -382,6 +382,13 @@ button {
   padding: 0;
 }
 
+/* comando a stato acceso nella barra di scheda: l'(i) delle formule */
+.toolbar-actions .btn[aria-pressed='true'] {
+  color: var(--color-accent);
+  border-color: var(--color-accent);
+  background: var(--accent-12);
+}
+
 .input {
   width: 100%;
   min-height: var(--control-h);
@@ -657,6 +664,56 @@ select.input {
   }
 }
 
+/* promemoria dei cp di uso corrente, nella scheda Azioni */
+.cp-elenco {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 8px;
+  padding: 8px;
+  border: 1px solid var(--border-faint);
+  border-radius: var(--radius-md);
+  background: var(--nested);
+}
+
+.cp-voce {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr);
+  align-items: baseline;
+  gap: 2px 10px;
+  padding: 5px 8px;
+  text-align: left;
+  cursor: pointer;
+  color: var(--text-2);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  font: inherit;
+  font-size: 12.5px;
+}
+
+.cp-voce:hover {
+  background: var(--hover);
+}
+
+.cp-voce.is-attiva {
+  border-color: var(--color-accent);
+  color: var(--color-accent-300);
+}
+
+.cp-voce .v {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--color-accent-300);
+  text-align: right;
+}
+
+.cp-voce .r {
+  grid-column: 2;
+  font-size: 10.5px;
+  color: var(--text-faint);
+}
+
 /* ─────────────────────────── campo espandibile ─────────────────────────── */
 
 .fields {
@@ -669,6 +726,13 @@ select.input {
 /* una colonna sola: usata dove il campo deve restare a tutta larghezza */
 .fields.fields-1 {
   grid-template-columns: minmax(0, 1fr);
+}
+
+/* voce che occupa tutta la riga della griglia dei campi: pulsanti e pannelli
+   che si aprono sotto un campo (elenco dei cp, interruttore della spinta
+   sismica) e che non stanno bene in mezza colonna */
+.campo-largo {
+  grid-column: 1 / -1;
 }
 
 /* colonne più fitte: campi con l'etichetta sopra, dove lo spazio è poco */
@@ -718,24 +782,6 @@ select.input {
   color: var(--text-faint);
   width: 38px;
   flex: none;
-}
-
-.field-info {
-  width: var(--control-h-sm);
-  height: var(--control-h-sm);
-  flex: none;
-  display: grid;
-  place-items: center;
-  border-radius: var(--radius-md);
-  cursor: pointer;
-  background: transparent;
-  border: 1px solid var(--divider-strong);
-  color: var(--text-faint);
-}
-
-.field-info[aria-expanded='true'] {
-  border-color: var(--color-accent);
-  color: var(--color-accent);
 }
 
 /* provenienza del valore: «↩ ripreso da…», cliccabile per scollegare */
@@ -1106,6 +1152,10 @@ button.field-origin:hover {
   fill: none;
 }
 
+.dg-carico.is-faint {
+  stroke: var(--diagram-faint);
+}
+
 .dg-testo {
   fill: var(--diagram-faint);
   font-size: 10.5px;
@@ -1422,10 +1472,6 @@ button.field-origin:hover {
   margin-top: 0;
 }
 
-.geom-head .field-info {
-  flex: none;
-}
-
 .soll-geom-grid {
   display: grid;
   grid-template-columns: repeat(4, 88px);
@@ -1692,11 +1738,6 @@ button.field-origin:hover {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .field-info {
-    width: var(--control-h-sm);
-    height: var(--control-h-sm);
-  }
-
   .toast {
     /* sopra la barra inferiore, che su cellulare esiste */
     bottom: calc(74px + env(safe-area-inset-bottom));
@@ -1866,6 +1907,78 @@ button.field-origin:hover {
 .calc-btn-salva {
   flex: none;
   height: var(--control-h);
+}
+
+/* elenco delle unità proposte, modificabile */
+.calc-unita-aggiungi {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 10px;
+}
+
+.calc-unita-aggiungi .input {
+  width: 150px;
+  flex: none;
+}
+
+.calc-unita-elenco {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.calc-unita-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 4px 2px 9px;
+  font-size: 11.5px;
+  font-family: var(--font-mono);
+  color: var(--text-2);
+  background: var(--nested);
+  border: 1px solid var(--border-faint);
+  border-radius: 9px;
+}
+
+.calc-unita-chip button {
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  cursor: pointer;
+  color: var(--text-faint);
+  background: transparent;
+  border: 0;
+  border-radius: 50%;
+}
+
+.calc-unita-chip button:hover {
+  color: var(--err);
+  background: var(--hover);
+}
+
+/* unità ricavata dall'operazione invece che scritta a mano */
+.calc-risultato .um.is-auto,
+.calc-voce-valore .um.is-auto {
+  opacity: 0.7;
+  font-style: italic;
+}
+
+.calc-um-auto {
+  margin-left: 5px;
+  font-size: 9.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-accent-400);
+}
+
+.calc-da-compilare {
+  font-size: 11.5px;
+  font-family: var(--font);
+  color: var(--text-faint);
 }
 
 .calc-aiuto {
@@ -2083,6 +2196,36 @@ button.field-origin:hover {
   max-width: var(--reading-max);
 }
 
+/* form di aggiunta di una norma o di un link, nella scheda Normativa */
+.norma-aggiungi {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.norma-aggiungi .mini-campo {
+  width: 150px;
+}
+
+.norma-aggiungi .norma-campo-titolo {
+  flex: 1 1 260px;
+  width: auto;
+  min-width: 200px;
+}
+
+.norma-aggiungi .norma-campo-url {
+  flex: 1 1 220px;
+  width: auto;
+  min-width: 180px;
+}
+
+.norma-btn-aggiungi {
+  flex: none;
+  height: var(--control-h);
+}
+
 .norma-capitoli,
 .norma-voci {
   list-style: none;
@@ -2276,6 +2419,18 @@ button.field-origin:hover {
 
   .calc-voce-azioni {
     justify-content: flex-end;
+  }
+
+  .norma-aggiungi .mini-campo,
+  .norma-aggiungi .norma-campo-titolo,
+  .norma-aggiungi .norma-campo-url {
+    width: 100%;
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+
+  .norma-btn-aggiungi {
+    width: 100%;
   }
 
   .norma-ricerca {

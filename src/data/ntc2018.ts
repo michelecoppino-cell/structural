@@ -51,6 +51,40 @@ export const ESPOSIZIONE: Record<string, { kr: number; z0: number; zmin: number 
 };
 
 /**
+ * Valori di uso corrente del coefficiente di forma cp per edifici a pianta
+ * rettangolare, come promemoria del campo «cp»: si sceglie da qui e poi lo si
+ * può correggere a mano.
+ *
+ * Sono i casi ordinari della Circolare 2019 §C3.3.8; per geometrie fuori dal
+ * caso ordinario — tettoie, coperture curve, corpi isolati, effetti locali sui
+ * bordi — il riferimento è la **CNR-DT 207**, che qui non si prova a riassumere.
+ *
+ * `alfa` è l'inclinazione della falda in gradi: per 20° < α ≤ 60° la falda
+ * sopravento passa con continuità dalla depressione alla pressione.
+ */
+export function opzioniCp(alfa: number): { label: string; cp: number; ref: string }[] {
+  const a = Math.abs(alfa);
+  const faldaSopravento = a <= 20 ? -0.4 : a > 60 ? 0.8 : 0.03 * a - 1;
+  return [
+    { label: 'Parete sopravento', cp: 0.8, ref: 'Circolare 2019 §C3.3.8.1' },
+    { label: 'Parete sottovento', cp: -0.4, ref: 'Circolare 2019 §C3.3.8.1' },
+    { label: 'Pareti laterali (parallele al vento)', cp: -0.5, ref: 'CNR-DT 207 — App. G' },
+    {
+      label: 'Spinta d’insieme sopravento + sottovento',
+      cp: 1.2,
+      ref: 'Circolare 2019 §C3.3.8.1 — 0.8 + 0.4',
+    },
+    {
+      label: `Falda sopravento (α = ${a.toFixed(0)}°)`,
+      cp: Number(faldaSopravento.toFixed(2)),
+      ref: 'Circolare 2019 §C3.3.8.2 — −0.4 fino a 20°, poi 0.03α − 1 fino a 60°',
+    },
+    { label: 'Falda sottovento', cp: -0.4, ref: 'Circolare 2019 §C3.3.8.2' },
+    { label: 'Copertura piana', cp: -0.4, ref: 'Circolare 2019 §C3.3.8.2' },
+  ];
+}
+
+/**
  * Carichi variabili per categoria d'uso — Tab. 3.1.II.
  * [qk (kN/m²), Qk (kN), Hk (kN/m), ψ0, ψ1, ψ2]
  */

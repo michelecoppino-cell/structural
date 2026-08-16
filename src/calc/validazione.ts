@@ -101,6 +101,10 @@ export function validaAzioni(inp: InputAzioni): Errori<InputAzioni> {
     vn: num(inp.vn) >= 10 ? undefined : 'La vita nominale VN non può essere minore di 10 anni.',
     q: num(inp.q) >= 1 ? undefined : 'Il fattore di comportamento q non può essere minore di 1.',
     as: nonNegativo(inp.as, 'La quota sul livello del mare'),
+    alfaNeve:
+      num(inp.alfaNeve) >= 0 && num(inp.alfaNeve) <= 75
+        ? undefined
+        : "L'inclinazione della falda deve stare fra 0° e 75°.",
     mu: nonNegativo(inp.mu, 'Il coefficiente di forma μ1'),
     ceN: positivo(inp.ceN, 'Il coefficiente di esposizione CE'),
     ct: positivo(inp.ct, 'Il coefficiente termico Ct'),
@@ -112,5 +116,17 @@ export function validaAzioni(inp: InputAzioni): Errori<InputAzioni> {
         ? undefined
         : "L'angolo di attrito φ′ deve stare fra 0° e 45° perché Ka di Rankine abbia senso.",
     H: nonNegativo(inp.H, "L'altezza del paramento H"),
+    betam:
+      !inp.sismaTerre || (num(inp.betam) > 0 && num(inp.betam) <= 1)
+        ? undefined
+        : 'Il coefficiente βm deve stare fra 0 e 1 (Tab. 7.11.II).',
+    betaTerre:
+      !inp.sismaTerre || Math.abs(num(inp.betaTerre)) < phi
+        ? undefined
+        : "L'inclinazione del terrapieno β non può raggiungere l'angolo di attrito φ′.",
+    psiTerre:
+      !inp.sismaTerre || Math.abs(num(inp.psiTerre)) <= 30
+        ? undefined
+        : "L'inclinazione del paramento ψ deve stare fra −30° e 30°.",
   });
 }

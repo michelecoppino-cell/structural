@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { ArrowSquareOut, BookOpenText, CaretDown, CaretRight, MagnifyingGlass } from '@phosphor-icons/react';
+import { ArrowSquareOut, BookOpenText, CaretDown, CaretRight, MagnifyingGlass, Plus, Trash } from '@phosphor-icons/react';
 import { useStore } from '../state/store';
 import { ComandiScheda } from '../components/ComandiScheda';
 import {
@@ -10,6 +10,7 @@ import {
   livello,
   type Capitolo,
   type Documento,
+  type LinkUtente,
   type VoceNorma,
 } from '../data/normative';
 
@@ -157,7 +158,6 @@ function DocumentoPanel({
   const id = `norma:${doc.id}`;
   // di default si vede solo il titolo della norma; una ricerca apre tutto
   const aperto = ricerca || !!state.ui.open[id];
-  const paragrafi = capitoli.reduce((s, c) => s + c.voci.length, 0);
 
   return (
     <section className="panel">
@@ -171,17 +171,15 @@ function DocumentoPanel({
             onClick={() => dispatch({ type: 'toggleOpen', id })}
           >
             <span className="caret">{aperto ? <CaretDown size={14} /> : <CaretRight size={14} />}</span>
+            {/* solo sigla e titolo: gli estremi di pubblicazione e i conteggi
+                riempivano la testata senza aggiungere niente all'uso */}
             <span>
               <span className="norma-sigla">
                 <BookOpenText size={15} />
                 {doc.sigla}
               </span>
-              <span className="norma-titolo">{doc.titolo}</span>
-              <span className="norma-estremi">{doc.estremi}</span>
-              {doc.nota && <span className="norma-estremi">{doc.nota}</span>}
-              <span className="norma-estremi">
-                {capitoli.length} {capitoli.length === 1 ? 'capitolo' : 'capitoli'} · {paragrafi}{' '}
-                {paragrafi === 1 ? 'paragrafo indicizzato' : 'paragrafi indicizzati'}
+              <span className="norma-titolo" title={doc.estremi}>
+                {doc.titolo}
               </span>
             </span>
           </button>
@@ -206,11 +204,179 @@ function DocumentoPanel({
   );
 }
 
+/* ─────────────────── norme e link aggiunti a mano ─────────────────── */
+
+/** Completa un indirizzo scritto senza schema: `cnr.it/…` → `https://cnr.it/…`. */
+function indirizzo(url: string): string {
+  const u = url.trim();
+  if (!u) return '';
+  return /^[a-z][a-z0-9+.-]*:/i.test(u) ? u : `https://${u}`;
+}
+
+function Aggiunte({ voci, ricerca }: { voci: LinkUtente[]; ricerca: boolean }) {
+  const { state, dispatch } = useStore();
+  const [apri, setApri] = useState(false);
+  const [bozza, setBozza] = useState({ sigla: '', titolo: '', url: '' });
+
+  const setVoci = (v: LinkUtente[]) => dispatch({ type: 'normative', voci: v });
+
+  const url = indirizzo(bozza.url);
+  const urlValido = /^https?:\/\/[^\s]+\.[^\s]+/i.test(url);
+  const pronto = !!bozza.sigla.trim() && urlValido;
+
+  const aggiungi = () => {
+    if (!pronto) return;
+    setVoci([
+      ...state.normative,
+      {
+        id: `norma-${Date.now()}`,
+        sigla: bozza.sigla.trim(),
+        titolo: bozza.titolo.trim(),
+        url,
+      },
+    ]);
+    setBozza({ sigla: '', titolo: '', url: '' });
+  };
+
+  return (
+    <section className="panel">
+      <div className="panel-body" style={{ paddingTop: 12 }}>
+        <div className="norma-testa">
+          <span>
+            <span className="norma-sigla">
+              <BookOpenText size={15} />
+              Aggiunte a mano
+            </span>
+            <span className="norma-titolo">
+              Norme, linee guida e link tuoi — restano nel progetto e viaggiano con l’Esporta JSON
+            </span>
+          </span>
+          <button
+            type="button"
+            className="btn btn-primary"
+            aria-expanded={apri}
+            onClick={() => setApri((v) => !v)}
+          >
+            <Plus size={14} />
+            Aggiungi
+          </button>
+        </div>
+
+        {apri && (
+          <div className="norma-aggiungi">
+            <div className="mini-campo">
+              <label htmlFor="na-sigla">Sigla</label>
+              <input
+                id="na-sigla"
+                className="input"
+                value={bozza.sigla}
+                placeholder="CNR-DT 207"
+                autoComplete="off"
+                onChange={(e) => setBozza({ ...bozza, sigla: e.target.value })}
+              />
+            </div>
+            <div className="mini-campo norma-campo-titolo">
+              <label htmlFor="na-titolo">Titolo</label>
+              <input
+                id="na-titolo"
+                className="input"
+                value={bozza.titolo}
+                placeholder="Istruzioni per la valutazione delle azioni del vento"
+                autoComplete="off"
+                onChange={(e) => setBozza({ ...bozza, titolo: e.target.value })}
+              />
+            </div>
+            <div className="mini-campo norma-campo-url">
+              <label htmlFor="na-url">Indirizzo</label>
+              <input
+                id="na-url"
+                className={`input${bozza.url.trim() && !urlValido ? ' is-error' : ''}`}
+                value={bozza.url}
+                placeholder="https://…"
+                inputMode="url"
+                autoComplete="off"
+                spellCheck={false}
+                onChange={(e) => setBozza({ ...bozza, url: e.target.value })}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    aggiungi();
+                  }
+                }}
+              />
+            </div>
+            <button type="button" className="btn btn-primary norma-btn-aggiungi" disabled={!pronto} onClick={aggiungi}>
+              <Plus size={14} />
+              Aggiungi all’elenco
+            </button>
+          </div>
+        )}
+
+        {apri && bozza.url.trim() && !urlValido && (
+          <div className="field-error">L’indirizzo non sembra valido: serve un link tipo «https://…».</div>
+        )}
+
+        {voci.length === 0 ? (
+          <p className="note" style={{ marginTop: 10 }}>
+            {ricerca
+              ? 'Nessuna voce aggiunta a mano corrisponde alla ricerca.'
+              : 'Nessuna voce aggiunta a mano: con «Aggiungi» metti qui le norme che usi e che non sono nell’indice — CNR, Eurocodici, circolari regionali, capitolati.'}
+          </p>
+        ) : (
+          <ul className="norma-capitoli">
+            {voci.map((v) => (
+              <li className="norma-cap" key={v.id}>
+                <div className="norma-cap-riga">
+                  <a
+                    className="norma-cap-testa"
+                    href={v.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title={v.url}
+                  >
+                    <span className="caret" />
+                    <span className="codice">{v.sigla}</span>
+                    <span className="titolo">{v.titolo || v.url}</span>
+                  </a>
+                  <a
+                    className="norma-cap-link"
+                    href={v.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title={`Apri ${v.sigla}`}
+                  >
+                    <ArrowSquareOut size={14} />
+                  </a>
+                  <button
+                    type="button"
+                    className="norma-cap-link"
+                    title={`Togli ${v.sigla} dall’elenco`}
+                    onClick={() => setVoci(state.normative.filter((x) => x.id !== v.id))}
+                  >
+                    <Trash size={14} />
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </section>
+  );
+}
+
 /* ─────────────────────────── scheda ─────────────────────────── */
 
 export default function Normativa() {
+  const { state } = useStore();
   const [q, setQ] = useState('');
   const ricerca = q.trim().length > 0;
+
+  const aggiunte = useMemo(() => {
+    const chiavi = normalizza(q).split(/\s+/).filter(Boolean);
+    if (!chiavi.length) return state.normative;
+    return state.normative.filter((v) => corrisponde(`${v.sigla} ${v.titolo} ${v.url}`, chiavi));
+  }, [state.normative, q]);
 
   const gruppi = useMemo(
     () =>
@@ -250,12 +416,13 @@ export default function Normativa() {
         <DocumentoPanel key={g.doc.id} doc={g.doc} capitoli={g.capitoli} ricerca={ricerca} />
       ))}
 
+      <Aggiunte voci={aggiunte} ricerca={ricerca} />
+
       <p className="note">
         I link aprono la norma <strong>capitolo per capitolo</strong> su studiopetrillo.com: il
         capitolo va alla sua pagina, i paragrafi al PDF del capitolo (sulla pagina indicata, dove è
-        segnata). L’indice è parte del sito, non del progetto: resta uguale per tutte le commesse e
-        non entra nell’Esporta JSON. Nuove norme e nuovi capitoli si aggiungono in{' '}
-        <code>src/data/normative.ts</code>.
+        segnata). L’indice di NTC e Circolare è parte del sito e resta uguale per tutte le commesse;
+        le voci di «Aggiunte a mano» invece sono dati di progetto e finiscono nell’Esporta JSON.
       </p>
     </div>
   );

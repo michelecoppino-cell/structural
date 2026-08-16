@@ -1,12 +1,13 @@
-import { Waveform, Snowflake, Wind, Stack, Mountains } from '@phosphor-icons/react';
+import { useState } from 'react';
+import { Waveform, Snowflake, Wind, Stack, Mountains, ListBullets } from '@phosphor-icons/react';
 import { useCalcoli, useStore } from '../state/store';
 import { num } from '../calc/azioni';
 import { STATI_LIMITE, SUOLI, type StatoLimite } from '../calc/sismica';
 import { validaAzioni } from '../calc/validazione';
-import { ST, CU, ZONE_NEVE, VB0, ESPOSIZIONE, CAT } from '../data/ntc2018';
+import { ST, CU, ZONE_NEVE, VB0, ESPOSIZIONE, CAT, opzioniCp } from '../data/ntc2018';
 import { REGIONI, comuniDi, provinceDi } from '../data/comuni';
 import { Accordion, Field, NumInput, Origine, Output, Select } from '../components/ui';
-import { Falda, Paramento, Spettro } from '../components/Disegni';
+import { Falda, Paramento, ProfiloVento, Spettro } from '../components/Disegni';
 
 const fx = (v: number, d = 2) => (Number.isFinite(v) ? v.toFixed(d) : '—');
 
@@ -20,6 +21,10 @@ export default function Azioni() {
   const inp = state.azioni;
   const set = (patch: Partial<typeof inp>) => dispatch({ type: 'azioni', patch });
   const err = validaAzioni(inp);
+  const [cpAperto, setCpAperto] = useState(false);
+  /** Promemoria dei cp ordinari, con la falda calcolata sull'inclinazione data. */
+  const cpOpzioni = opzioniCp(r.neve.alfa);
+  const sismaT = r.terre.sisma;
 
   const province = provinceDi(inp.regione);
   const comuni = comuniDi(inp.regione, inp.prov);
@@ -423,14 +428,46 @@ export default function Azioni() {
               </Field>
 
               <Field
+                id="neve_alfa"
+                tab="azioni"
+                label="Inclinazione della falda α"
+                unit="°"
+                errore={err.alfaNeve}
+                dettaglio={{
+                  formula: `μ1 = ${fx(r.neve.muSuggerito)} per α = ${fx(r.neve.alfa, 0)}° (0.80 fino a 30°, poi in calo lineare fino a 0 a 60°)`,
+                  ref: 'NTC2018 §3.4.5.1 — Tab. 3.4.II',
+                  coeffs: [{ k: 'μ1 da α', v: fx(r.neve.muSuggerito) }],
+                }}
+              >
+                <NumInput
+                  id="neve_alfa"
+                  value={inp.alfaNeve}
+                  errore={!!err.alfaNeve}
+                  onChange={(v) => set({ alfaNeve: v })}
+                />
+              </Field>
+
+              <Field
                 id="neve_mu"
                 tab="azioni"
                 label="Coefficiente di forma μ1"
                 unit="—"
                 errore={err.mu}
+                origine={
+                  Math.abs(r.neve.mu - r.neve.muSuggerito) < 0.005 ? (
+                    <Origine testo={`da α = ${fx(r.neve.alfa, 0)}°`} titolo="Coincide con Tab. 3.4.II" />
+                  ) : (
+                    <Origine
+                      testo="a mano"
+                      titolo={`Tab. 3.4.II darebbe μ1 = ${fx(r.neve.muSuggerito)} per α = ${fx(r.neve.alfa, 0)}°: premi per allinearlo`}
+                      onClick={() => set({ mu: r.neve.muSuggerito.toFixed(2) })}
+                    />
+                  )
+                }
                 dettaglio={{
                   formula: 'μ1 = 0.80 per 0° ≤ α ≤ 30°; riduzione lineare fino a 0 per α = 60°',
                   ref: 'NTC2018 §3.4.5.1 — Tab. 3.4.II',
+                  coeffs: [{ k: 'μ1 da α', v: fx(r.neve.muSuggerito) }],
                 }}
               >
                 <NumInput id="neve_mu" value={inp.mu} errore={!!err.mu} onChange={(v) => set({ mu: v })} />
@@ -466,7 +503,7 @@ export default function Azioni() {
             </div>
 
             <div className="col-aside">
-              <Falda qsk={r.neve.qsk} qs={r.neve.qs} mu={r.neve.mu} />
+              <Falda qsk={r.neve.qsk} qs={r.neve.qs} mu={r.neve.mu} alfa={r.neve.alfa} />
               <Output
                 voci={[
                   { k: 'qsk', v: fx(r.neve.qsk), u: 'kN/m²' },
@@ -487,97 +524,145 @@ export default function Azioni() {
           icon={<Wind size={18} />}
           hint={`vb ${fx(r.vento.vb, 0)} m/s · p ${fx(r.vento.p)} kN/m²`}
         >
-          <div className="fields">
-            <Field
-              id="vento_zona"
-              tab="azioni"
-              label="Zona di vento"
-              dettaglio={{
-                formula: 'vb = vb,0 · ca   con ca = 1 per as ≤ a0',
-                ref: 'NTC2018 §3.3.2 — Tab. 3.3.I',
-                coeffs: [{ k: 'vb,0', v: `${fx(r.vento.vb, 0)} m/s` }],
-              }}
-            >
-              <Select id="vento_zona" value={inp.zvento} options={Object.keys(VB0)} onChange={(v) => set({ zvento: v })} />
-            </Field>
+          <div className="panel-split">
+            <div className="fields fields-1">
+              <Field
+                id="vento_zona"
+                tab="azioni"
+                label="Zona di vento"
+                dettaglio={{
+                  formula: 'vb = vb,0 · ca   con ca = 1 per as ≤ a0',
+                  ref: 'NTC2018 §3.3.2 — Tab. 3.3.I',
+                  coeffs: [{ k: 'vb,0', v: `${fx(r.vento.vb, 0)} m/s` }],
+                }}
+              >
+                <Select id="vento_zona" value={inp.zvento} options={Object.keys(VB0)} onChange={(v) => set({ zvento: v })} />
+              </Field>
 
-            <Field
-              id="vento_z"
-              tab="azioni"
-              label="Quota di riferimento z"
-              unit="m"
-              errore={err.z}
-              dettaglio={{
-                formula: `qb = ½ · ρ · vb² = 0.5 · 1.25 · ${fx(r.vento.vb, 0)}² = ${fx(r.vento.qb, 3)} kN/m²`,
-                ref: 'NTC2018 §3.3.6',
-                coeffs: [
-                  { k: 'ρ', v: '1.25 kg/m³' },
-                  { k: 'zmin', v: `${ESPOSIZIONE[inp.espo]?.zmin ?? 5} m` },
-                ],
-              }}
-            >
-              <NumInput id="vento_z" value={inp.z} errore={!!err.z} onChange={(v) => set({ z: v })} />
-            </Field>
+              <Field
+                id="vento_z"
+                tab="azioni"
+                label="Quota di riferimento z"
+                unit="m"
+                errore={err.z}
+                dettaglio={{
+                  formula: `qb = ½ · ρ · vb² = 0.5 · 1.25 · ${fx(r.vento.vb, 0)}² = ${fx(r.vento.qb, 3)} kN/m²`,
+                  ref: 'NTC2018 §3.3.6',
+                  coeffs: [
+                    { k: 'ρ', v: '1.25 kg/m³' },
+                    { k: 'zmin', v: `${ESPOSIZIONE[inp.espo]?.zmin ?? 5} m` },
+                  ],
+                }}
+              >
+                <NumInput id="vento_z" value={inp.z} errore={!!err.z} onChange={(v) => set({ z: v })} />
+              </Field>
 
-            <Field
-              id="vento_espo"
-              tab="azioni"
-              label="Categoria di esposizione"
-              unit="ce"
-              dettaglio={{
-                formula: `ce(z) = kr² · ct · ln(z/z0) · [7 + ct · ln(z/z0)] = ${fx(r.vento.ce)}`,
-                ref: 'NTC2018 §3.3.7 — Tab. 3.3.II',
-                coeffs: [
-                  { k: 'kr', v: fx(ESPOSIZIONE[inp.espo]?.kr ?? 0, 2) },
-                  { k: 'z0', v: `${fx(ESPOSIZIONE[inp.espo]?.z0 ?? 0, 2)} m` },
-                  { k: 'ce', v: fx(r.vento.ce) },
-                ],
-              }}
-            >
-              <Select id="vento_espo" value={inp.espo} options={Object.keys(ESPOSIZIONE)} onChange={(v) => set({ espo: v })} />
-            </Field>
+              <Field
+                id="vento_espo"
+                tab="azioni"
+                label="Categoria di esposizione"
+                unit="ce"
+                dettaglio={{
+                  formula: `ce(z) = kr² · ct · ln(z/z0) · [7 + ct · ln(z/z0)] = ${fx(r.vento.ce)}`,
+                  ref: 'NTC2018 §3.3.7 — Tab. 3.3.II',
+                  coeffs: [
+                    { k: 'kr', v: fx(ESPOSIZIONE[inp.espo]?.kr ?? 0, 2) },
+                    { k: 'z0', v: `${fx(ESPOSIZIONE[inp.espo]?.z0 ?? 0, 2)} m` },
+                    { k: 'ce', v: fx(r.vento.ce) },
+                  ],
+                }}
+              >
+                <Select id="vento_espo" value={inp.espo} options={Object.keys(ESPOSIZIONE)} onChange={(v) => set({ espo: v })} />
+              </Field>
 
-            <Field
-              id="vento_cp"
-              tab="azioni"
-              label="Coefficiente di forma cp"
-              unit="—"
-              dettaglio={{
-                formula: `p = qb · ce · cp · cd = ${fx(r.vento.qb, 3)} · ${fx(r.vento.ce)} · ${fx(r.vento.cp)} · ${fx(r.vento.cd)} = ${fx(r.vento.p)} kN/m²`,
-                ref: 'NTC2018 §3.3.4 — All. C',
-                coeffs: [
-                  { k: 'sopravento', v: '+0.80' },
-                  { k: 'sottovento', v: '−0.40' },
-                ],
-              }}
-            >
-              <NumInput id="vento_cp" value={inp.cp} onChange={(v) => set({ cp: v })} />
-            </Field>
+              <Field
+                id="vento_cp"
+                tab="azioni"
+                label="Coefficiente di forma cp"
+                unit="—"
+                dettaglio={{
+                  formula: `p = qb · ce · cp · cd = ${fx(r.vento.qb, 3)} · ${fx(r.vento.ce)} · ${fx(r.vento.cp)} · ${fx(r.vento.cd)} = ${fx(r.vento.p)} kN/m²`,
+                  ref: 'Circolare 2019 §C3.3.8 — casi ordinari; per il resto CNR-DT 207',
+                  coeffs: cpOpzioni.map((o) => ({ k: o.label, v: o.cp.toFixed(2) })),
+                }}
+              >
+                <NumInput id="vento_cp" value={inp.cp} onChange={(v) => set({ cp: v })} />
+              </Field>
 
-            <Field
-              id="vento_cd"
-              tab="azioni"
-              label="Coefficiente dinamico cd"
-              unit="—"
-              errore={err.cd}
-              dettaglio={{
-                formula: 'cd = 1.00 per costruzioni di forma e rigidezza ordinarie',
-                ref: 'NTC2018 §3.3.8',
-              }}
-            >
-              <NumInput id="vento_cd" value={inp.cd} errore={!!err.cd} onChange={(v) => set({ cd: v })} />
-            </Field>
+              {/* il cp resta scritto a mano: qui c'è solo il promemoria dei casi
+                  ordinari, da cui si può pescare il valore con un clic */}
+              <div className="campo-largo">
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  aria-expanded={cpAperto}
+                  aria-controls="vento-cp-elenco"
+                  onClick={() => setCpAperto((v) => !v)}
+                >
+                  <ListBullets size={14} />
+                  Valori di cp di uso corrente
+                </button>
+
+                {cpAperto && (
+                  <div className="cp-elenco" id="vento-cp-elenco">
+                    {cpOpzioni.map((o) => (
+                      <button
+                        key={o.label}
+                        type="button"
+                        className={`cp-voce${num(inp.cp) === o.cp ? ' is-attiva' : ''}`}
+                        title={o.ref}
+                        onClick={() => set({ cp: o.cp.toFixed(2) })}
+                      >
+                        <span className="v">{o.cp > 0 ? `+${o.cp.toFixed(2)}` : o.cp.toFixed(2)}</span>
+                        <span className="t">{o.label}</span>
+                        <span className="r">{o.ref}</span>
+                      </button>
+                    ))}
+                    <p className="note" style={{ marginTop: 8 }}>
+                      Sono i casi ordinari di edifici a pianta rettangolare. Tettoie, coperture curve,
+                      corpi isolati ed effetti locali sui bordi stanno nella <strong>CNR-DT 207</strong>:
+                      il valore lo scrivi tu nel campo qui sopra.
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              <Field
+                id="vento_cd"
+                tab="azioni"
+                label="Coefficiente dinamico cd"
+                unit="—"
+                errore={err.cd}
+                dettaglio={{
+                  formula: 'cd = 1.00 per costruzioni di forma e rigidezza ordinarie',
+                  ref: 'NTC2018 §3.3.8',
+                }}
+              >
+                <NumInput id="vento_cd" value={inp.cd} errore={!!err.cd} onChange={(v) => set({ cd: v })} />
+              </Field>
+            </div>
+
+            <div className="col-aside">
+              <ProfiloVento
+                z={num(inp.z)}
+                qb={r.vento.qb}
+                cp={r.vento.cp}
+                cd={r.vento.cd}
+                kr={ESPOSIZIONE[inp.espo]?.kr ?? 0.2}
+                z0={ESPOSIZIONE[inp.espo]?.z0 ?? 0.1}
+                zmin={ESPOSIZIONE[inp.espo]?.zmin ?? 5}
+              />
+              <Output
+                voci={[
+                  { k: 'vb', v: fx(r.vento.vb, 0), u: 'm/s' },
+                  { k: 'qb', v: fx(r.vento.qb, 3), u: 'kN/m²' },
+                  { k: 'ce(z)', v: fx(r.vento.ce) },
+                  { k: 'p sopravento', v: fx(r.vento.p), u: 'kN/m²' },
+                  { k: 'p sottovento', v: fx(r.vento.pSotto), u: 'kN/m²' },
+                ]}
+              />
+            </div>
           </div>
-
-          <Output
-            voci={[
-              { k: 'vb', v: fx(r.vento.vb, 0), u: 'm/s' },
-              { k: 'qb', v: fx(r.vento.qb, 3), u: 'kN/m²' },
-              { k: 'ce(z)', v: fx(r.vento.ce) },
-              { k: 'p sopravento', v: fx(r.vento.p), u: 'kN/m²' },
-              { k: 'p sottovento', v: fx(r.vento.pSotto), u: 'kN/m²' },
-            ]}
-          />
         </Accordion>
 
         {/* ── carichi variabili ────────────────────────────────────────── */}
@@ -647,7 +732,11 @@ export default function Azioni() {
           id="terre"
           title="Spinta delle terre"
           icon={<Mountains size={18} />}
-          hint={`Ka ${fx(r.terre.ka, 3)} · Sa ${fx(r.terre.Sa, 1)} kN/m`}
+          hint={
+            sismaT.attiva
+              ? `Ka ${fx(r.terre.ka, 3)} · Sa ${fx(r.terre.Sa, 1)} → Ed ${fx(sismaT.Ed, 1)} kN/m`
+              : `Ka ${fx(r.terre.ka, 3)} · Sa ${fx(r.terre.Sa, 1)} kN/m`
+          }
         >
           <div className="panel-split">
             <div className="fields">
@@ -697,19 +786,146 @@ export default function Azioni() {
               <Field
                 id="terre_d"
                 tab="azioni"
-                label="Inclinazione δ del muro"
+                label="Attrito terra-muro δ"
                 unit="°"
                 dettaglio={{
-                  formula: 'δ = 0 → spinta orizzontale; per δ ≠ 0 si applica il coefficiente di Coulomb',
-                  ref: 'NTC2018 §6.5.3.1.1',
+                  formula:
+                    'δ = 0 → spinta orizzontale; con δ > 0 la spinta si inclina di δ sulla normale al paramento',
+                  ref: 'NTC2018 §6.5.3.1.1 — entra nel coefficiente di Coulomb e di Mononobe-Okabe',
                 }}
               >
                 <NumInput id="terre_d" value={inp.delta} onChange={(v) => set({ delta: v })} />
               </Field>
+
+              {/* ── spinta sismica ──────────────────────────────────────── */}
+              <div className="campo-largo">
+                <button
+                  type="button"
+                  className="chip-toggle"
+                  aria-pressed={sismaT.attiva}
+                  title="Somma alla spinta statica l’incremento sismico di Mononobe-Okabe (§7.11.6)"
+                  onClick={() => set({ sismaTerre: !inp.sismaTerre })}
+                >
+                  Spinta sismica — §7.11.6
+                  <span className="val">
+                    {sismaT.attiva ? `Ed ${fx(sismaT.Ed, 1)} kN/m` : 'esclusa'}
+                  </span>
+                </button>
+              </div>
+
+              {sismaT.attiva && (
+                <>
+                  <Field
+                    id="terre_betam"
+                    tab="azioni"
+                    label="Coefficiente di riduzione βm"
+                    unit="—"
+                    errore={err.betam}
+                    dettaglio={{
+                      formula: `kh = βm · amax/g = ${fx(num(inp.betam))} · ${fx(sismaT.amax, 3)} = ${fx(sismaT.kh, 3)}; kv = ±0.5·kh = ${fx(Math.abs(sismaT.kv), 3)}`,
+                      ref: 'NTC2018 §7.11.6.2.1 — Tab. 7.11.II; amax/g = S · ag/g',
+                      coeffs: [
+                        { k: 'amax/g = S·ag/g', v: fx(sismaT.amax, 3) },
+                        { k: 'kh', v: fx(sismaT.kh, 3) },
+                        { k: 'kv', v: fx(sismaT.kv, 3) },
+                      ],
+                    }}
+                  >
+                    <NumInput
+                      id="terre_betam"
+                      value={inp.betam}
+                      errore={!!err.betam}
+                      onChange={(v) => set({ betam: v })}
+                    />
+                  </Field>
+
+                  <Field
+                    id="terre_kh"
+                    tab="azioni"
+                    label="kh del muro"
+                    unit="—"
+                    origine={
+                      <Origine
+                        testo={inp.khManuale.trim() ? 'a mano' : 'da βm · amax'}
+                        titolo={
+                          inp.khManuale.trim()
+                            ? 'Valore imposto a mano: vince su βm · amax/g'
+                            : `kh = βm · amax/g = ${fx(sismaT.kh, 3)}`
+                        }
+                      />
+                    }
+                    dettaglio={{
+                      formula: `θ = atan[kh / (1 ∓ kv)] = ${fx(sismaT.theta, 2)}°`,
+                      ref: 'NTC2018 §7.11.6.2.1 — si tiene il verso di kv che dà la spinta maggiore',
+                      coeffs: [{ k: 'θ', v: `${fx(sismaT.theta, 2)}°` }],
+                    }}
+                  >
+                    <NumInput
+                      id="terre_kh"
+                      value={inp.khManuale}
+                      placeholder={fx(sismaT.kh, 3)}
+                      onChange={(v) => set({ khManuale: v })}
+                    />
+                  </Field>
+
+                  <Field
+                    id="terre_beta"
+                    tab="azioni"
+                    label="Inclinazione del terrapieno β"
+                    unit="°"
+                    errore={err.betaTerre}
+                    dettaglio={{
+                      formula: `Kae = cos²(φ′ − θ − ψ) / {cosθ · cos²ψ · cos(δ + ψ + θ) · [1 + √(sin(φ′+δ)·sin(φ′−θ−β) / (cos(δ+ψ+θ)·cos(β−ψ)))]²} = ${fx(sismaT.kae, 3)}`,
+                      ref: 'NTC2018 §7.11.6.2.1 — Mononobe-Okabe, eq. 7.11.7',
+                      coeffs: [
+                        { k: 'Ka statico', v: fx(r.terre.ka, 3) },
+                        { k: 'Kae sismico', v: fx(sismaT.kae, 3) },
+                      ],
+                    }}
+                  >
+                    <NumInput
+                      id="terre_beta"
+                      value={inp.betaTerre}
+                      errore={!!err.betaTerre}
+                      onChange={(v) => set({ betaTerre: v })}
+                    />
+                  </Field>
+
+                  <Field
+                    id="terre_psi"
+                    tab="azioni"
+                    label="Inclinazione del paramento ψ"
+                    unit="°"
+                    errore={err.psiTerre}
+                    dettaglio={{
+                      formula: `Ed = ½ · γ · H² · (1 ∓ kv) · Kae = ${fx(sismaT.Ed, 1)} kN/m; ΔEd = Ed − Sa = ${fx(sismaT.dEd, 1)} kN/m applicato a H/2`,
+                      ref: 'NTC2018 §7.11.6.3.1 — ψ misurato dalla verticale',
+                      coeffs: [
+                        { k: 'Ed', v: `${fx(sismaT.Ed, 1)} kN/m` },
+                        { k: 'ΔEd', v: `${fx(sismaT.dEd, 1)} kN/m` },
+                        { k: 'Mtot', v: `${fx(sismaT.Mtot, 1)} kNm/m` },
+                      ],
+                    }}
+                  >
+                    <NumInput
+                      id="terre_psi"
+                      value={inp.psiTerre}
+                      errore={!!err.psiTerre}
+                      onChange={(v) => set({ psiTerre: v })}
+                    />
+                  </Field>
+                </>
+              )}
             </div>
 
             <div className="col-aside">
-              <Paramento H={num(inp.H)} ka={r.terre.ka} Sa={r.terre.Sa} za={r.terre.za} />
+              <Paramento
+                H={num(inp.H)}
+                ka={r.terre.ka}
+                Sa={r.terre.Sa}
+                za={r.terre.za}
+                dEd={sismaT.attiva ? sismaT.dEd : undefined}
+              />
               <Output
                 voci={[
                   { k: 'Ka', v: fx(r.terre.ka, 3) },
@@ -718,6 +934,31 @@ export default function Azioni() {
                   { k: 'Mribaltante', v: fx(r.terre.Mrib, 1), u: 'kNm/m' },
                 ]}
               />
+              {sismaT.attiva && (
+                <>
+                  <Output
+                    titolo="Sisma — Mononobe-Okabe"
+                    voci={[
+                      { k: 'kh', v: fx(sismaT.kh, 3) },
+                      { k: 'kv', v: fx(sismaT.kv, 3) },
+                      { k: 'θ', v: fx(sismaT.theta, 2), u: '°' },
+                      { k: 'Kae', v: fx(sismaT.kae, 3) },
+                      { k: 'Ed totale', v: fx(sismaT.Ed, 1), u: 'kN/m' },
+                      { k: 'ΔEd a H/2', v: fx(sismaT.dEd, 1), u: 'kN/m' },
+                      { k: 'M totale', v: fx(sismaT.Mtot, 1), u: 'kNm/m' },
+                    ]}
+                  />
+                  {sismaT.avviso ? (
+                    <p className="field-error">{sismaT.avviso}</p>
+                  ) : (
+                    <p className="note">
+                      La spinta statica resta a H/3 dal piede, l’incremento dinamico ΔEd si applica a
+                      metà altezza (§7.11.6.3.1). Fra kv verso l’alto e verso il basso si tiene quello
+                      che dà la spinta maggiore.
+                    </p>
+                  )}
+                </>
+              )}
             </div>
           </div>
         </Accordion>

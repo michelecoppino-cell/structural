@@ -112,9 +112,29 @@ Sei schede, navigazione laterale su desktop e bottom-bar su mobile (breakpoint u
 
 ### 1. Azioni — NTC2018 cap. 3
 Accordion per Azione sismica, Neve, Vento, Carichi variabili (Tab. 3.1.II) e Spinta delle
-terre. Ogni campo è compatto (etichetta, valore, unità) ed espandibile con il bottone info,
-che mostra **formula con i numeri sostituiti**, coefficienti intermedi e riferimento
-normativo. Il ricalcolo è immediato a ogni modifica: non c'è nessun pulsante "Calcola".
+terre. Ogni campo è compatto (etichetta, valore, unità); l'**(i)** in testa alla scheda apre
+in un colpo solo tutti i dettagli, con **formula a numeri sostituiti**, coefficienti
+intermedi e riferimento normativo — un bottone per campo occupava troppo spazio. Il
+ricalcolo è immediato a ogni modifica: non c'è nessun pulsante "Calcola".
+
+**Neve**: il carico è riferito alla proiezione orizzontale, quindi il disegno lo mostra come
+fascia di spessore costante misurato in verticale — uniforme su ogni falda, non trapezoidale.
+L'inclinazione α è un campo, e accanto a μ1 compare il valore che le corrisponde in
+Tab. 3.4.II, da riprendere con un clic.
+
+**Vento**: il disegno mostra l'andamento della pressione lungo l'altezza — p(z) = qb·ce(z)·cp·cd
+con il tratto costante sotto zmin — e la depressione sottovento. Il cp resta un dato da
+scrivere, ma il pulsante *Valori di cp di uso corrente* elenca i casi ordinari della
+Circolare 2019 §C3.3.8 (parete sopravento e sottovento, pareti laterali, falde in funzione
+di α) da applicare con un clic; per i casi non ordinari il riferimento è la CNR-DT 207.
+
+**Spinta delle terre**: oltre alla spinta statica di Rankine si può attivare la **spinta
+sismica** secondo **Mononobe-Okabe** (§7.11.6): kh = βm · S · ag/g (o imposto a mano),
+kv = ±0.5·kh, θ = atan[kh/(1∓kv)], Kae con attrito terra-muro δ, inclinazione del terrapieno
+β e del paramento ψ. Fra kv verso l'alto e verso il basso si tiene la combinazione che dà la
+spinta maggiore; l'incremento ΔEd = Ed − Sa si applica a metà altezza (§7.11.6.3.1) e il
+momento totale somma Sa·H/3 e ΔEd·H/2. Con θ tale che φ′ − θ − β < 0 il calcolo non ha
+soluzione e la scheda lo dice invece di mostrare un numero.
 
 Il **sito sismico** si sceglie con tre menù a tendina in cascata — **regione → provincia →
 comune** — su tutti i 7899 comuni italiani (107 province, 20 regioni). Il comune scelto
@@ -226,11 +246,23 @@ un'area, poi un'incidenza, poi le moltiplico.
 - Sintassi: `+ − × ÷ ^`, parentesi, `%` come «per cento», virgola o punto decimale,
   argomenti separati da `;`, funzioni (`sqrt`, `min`, `max`, `round`, `ln`, `log`, `exp`,
   trigonometria **in gradi**), costanti `pi` ed `e`.
+- **Grandezze di base già pronte**: `b` (base), `l` (larghezza), `h` (altezza), `gCLS`,
+  `gACC`, `gTERRA` partono **vuote**, con nome, nota e unità già impostati: si compilano
+  quando servono e le altre operazioni le richiamano per nome.
+- **Unità di misura da elenco**: il campo si scrive a mano ma suggerisce mentre si digita, e
+  quello che in elenco non c'è viene segnato come errore e non si salva. L'elenco (kg, kg/mc,
+  kg/mq, kg/ml, kN/cmq, MPa, m, mq, mc…) si cambia dal pulsante *Unità*.
+- **Unità ricavata da sola**: il prodotto e il rapporto fra operazioni con nome compongono
+  l'unità del risultato — `b*h` in m dà `mq`, `b*h*gCLS` con gCLS in kN/mc dà `kN/m`,
+  `sqrt(A)` con A in mq dà `m`. L'unità scritta a mano vince su quella calcolata; una somma
+  fra unità diverse non ne propone nessuna.
 - Le operazioni salvate sono **dati di commessa**: viaggiano nell'Esporta/Importa JSON e
-  finiscono in *Copia per relazione*.
+  finiscono in *Copia txt*.
 
 Il motore (`src/calc/calcolatrice.ts`) è un interprete a discesa ricorsiva scritto in casa —
-nessuna dipendenza, nessun `eval` — con i suoi test in `calcolatrice.test.ts`.
+nessuna dipendenza, nessun `eval`: costruisce l'albero dell'espressione e ci passa due volte,
+una per il valore e una per l'unità, così i due non possono divergere. L'algebra delle unità
+sta in `src/calc/unita.ts`; i test in `calcolatrice.test.ts` e `unita.test.ts`.
 
 ### 6. Normativa
 Indice dei riferimenti: NTC2018 (DM 17/01/2018) e Circolare n. 7 del 2019.
@@ -246,14 +278,20 @@ Indice dei riferimenti: NTC2018 (DM 17/01/2018) e Circolare n. 7 del 2019.
   7, 8) e il PDF del capitolo altrove; i paragrafi aprono il PDF del capitolo, sulla pagina
   indicata se il campo `pagina` è valorizzato (`#page=N`).
 
-L'indice **è parte del sito, non del progetto**: sta in `src/data/normative.ts`, è uguale per
-tutte le commesse e non entra nel JSON esportato. Nuove norme, capitoli e paragrafi si
-aggiungono a mano in quel file, un po' alla volta — le istruzioni sono nel commento in testa.
+- **Aggiunte a mano**: il pulsante *Aggiungi* mette in fondo alla scheda norme e link tuoi —
+  CNR, Eurocodici, circolari regionali, capitolati — con sigla, titolo e indirizzo. A
+  differenza dell'indice di serie queste sono **dati di commessa**: viaggiano nell'Esporta JSON.
+
+L'indice di NTC e Circolare **è parte del sito, non del progetto**: sta in
+`src/data/normative.ts`, è uguale per tutte le commesse e non entra nel JSON esportato. Nuove
+norme, capitoli e paragrafi si aggiungono a mano in quel file, un po' alla volta — le
+istruzioni sono nel commento in testa.
 
 ### Comune a tutte le schede
-- **Mostra formule**: apre in un colpo tutti i pannelli di dettaglio della scheda.
-- **Copia per relazione**: copia negli appunti un blocco di testo con valori, formule e
-  riferimenti normativi, pronto da incollare in Word.
+- **(i)**: apre in un colpo tutti i pannelli di dettaglio della scheda — formule con i numeri
+  sostituiti, coefficienti e riferimenti.
+- **Copia txt**: copia negli appunti un blocco di testo con valori, formule e riferimenti
+  normativi, pronto da incollare in Word.
 - **Esporta / Importa JSON**: l'intero stato del progetto, con numero di versione dello
   schema e migrazione dei file salvati da versioni precedenti. Lo stato si salva in
   `localStorage` con un ritardo di 300 ms, così scrivere in un campo non costa una
@@ -358,8 +396,12 @@ npm test
 - Nel foglio `01 - Verifica a taglio elementi non armati.xlsx` il limite su σcp è scritto
   come `≤ 0.02·fcd` nella cella di controllo, mentre le NTC (§4.1.2.3.5.1) prescrivono
   `σcp ≤ 0.2·fcd`. **L'app applica il limite di normativa, 0.2·fcd.**
-- I coefficienti di forma (μ1 neve, cp vento) sono input: non sono ricavati automaticamente
-  dalla geometria della copertura.
+- I coefficienti di forma (μ1 neve, cp vento) restano **input**: la scheda propone il valore
+  di tabella accanto al campo (μ1 da α, elenco dei cp ordinari) ma non lo impone, perché la
+  geometria reale della copertura l'app non la conosce.
+- L'algebra delle unità della calcolatrice è **simbolica, non dimensionale**: `cm*cm` fa
+  `cmq`, non `0.0001 mq`. I fattori di conversione restano a chi scrive i numeri — una
+  conversione silenziosa dei valori sarebbe peggio di nessuna conversione.
 
 ## Prossimi passi
 

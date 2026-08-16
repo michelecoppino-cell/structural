@@ -42,6 +42,8 @@ export interface InputAzioni {
   // neve
   zneve: string;
   as: string;
+  /** Inclinazione della falda α (°): decide μ1 e il disegno della copertura. */
+  alfaNeve: string;
   mu: string;
   ceN: string;
   ct: string;
@@ -57,7 +59,18 @@ export interface InputAzioni {
   gamma: string;
   phi: string;
   H: string;
+  /** Attrito terra-muro δ (°): entra in Mononobe-Okabe, non in Rankine. */
   delta: string;
+  /** Inclinazione del terrapieno β (°) rispetto all'orizzontale. */
+  betaTerre: string;
+  /** Inclinazione del paramento ψ (°) rispetto alla verticale. */
+  psiTerre: string;
+  /** true = si somma alla spinta statica l'incremento sismico. */
+  sismaTerre: boolean;
+  /** Coefficiente di riduzione βm dell'accelerazione — Tab. 7.11.II. */
+  betam: string;
+  /** kh imposto a mano; vuoto = βm · S · ag/g. */
+  khManuale: string;
 }
 
 /**
@@ -84,6 +97,7 @@ export const AZIONI_DEFAULT: InputAzioni = {
   q: '1.33',
   zneve: 'I — Alpina',
   as: '177',
+  alfaNeve: '15',
   mu: '0.80',
   ceN: '1.00',
   ct: '1.00',
@@ -97,6 +111,11 @@ export const AZIONI_DEFAULT: InputAzioni = {
   phi: '30',
   H: '2.50',
   delta: '0',
+  betaTerre: '0',
+  psiTerre: '0',
+  sismaTerre: false,
+  betam: '1.00',
+  khManuale: '',
 };
 
 /** parseFloat tollerante alla virgola decimale; NaN → 0. */
@@ -137,10 +156,44 @@ export interface RisultatiAzioni {
     /** ag, F0 e TC* del sito per i quattro stati limite — Tab. 3.2.I. */
     statiLimite: { id: StatoLimite; label: string; TR: number; ag: number; F0: number; TCstar: number }[];
   };
-  neve: { qsk: number; qs: number; mu: number; ce: number; ct: number };
+  neve: {
+    qsk: number;
+    qs: number;
+    mu: number;
+    ce: number;
+    ct: number;
+    /** Inclinazione della falda e μ1 che le corrisponde in Tab. 3.4.II. */
+    alfa: number;
+    muSuggerito: number;
+  };
   vento: { vb: number; qb: number; ce: number; cp: number; cd: number; p: number; pSotto: number };
   variabili: { qk: number; Qk: number; Hk: number; psi0: number; psi1: number; psi2: number; categoria: string };
-  terre: { ka: number; Sa: number; za: number; Mrib: number };
+  terre: {
+    ka: number;
+    Sa: number;
+    za: number;
+    Mrib: number;
+    /** Spinta sismica — Mononobe-Okabe, §7.11.6.2.1 e §7.11.6.3.1. */
+    sisma: {
+      attiva: boolean;
+      /** Accelerazione massima attesa al sito, amax/g = S · ag/g. */
+      amax: number;
+      kh: number;
+      kv: number;
+      /** Angolo sismico θ = atan[kh / (1 ∓ kv)], in gradi. */
+      theta: number;
+      /** Coefficiente di spinta attiva in condizioni sismiche. */
+      kae: number;
+      /** Spinta totale in sismica (statica + incremento), kN/m. */
+      Ed: number;
+      /** Solo incremento dinamico ΔEd = Ed − Sa, kN/m. */
+      dEd: number;
+      /** Momento ribaltante totale: Sa a H/3 più ΔEd a H/2. */
+      Mtot: number;
+      /** Vuoto se il calcolo è regolare, altrimenti perché non lo è. */
+      avviso: string;
+    };
+  };
 }
 
 export function calcolaAzioni(inp: InputAzioni): RisultatiAzioni {
@@ -193,6 +246,9 @@ export function calcolaAzioni(inp: InputAzioni): RisultatiAzioni {
   const ceN = num(inp.ceN);
   const ct = num(inp.ct);
   const qs = mu * qsk * ceN * ct;
+  // Tab. 3.4.II: μ1 = 0.80 fino a 30°, poi in calo lineare fino a 0 a 60°
+  const alfaNeve = Math.abs(num(inp.alfaNeve));
+  const muSuggerito = alfaNeve <= 30 ? 0.8 : alfaNeve >= 60 ? 0 : (0.8 * (60 - alfaNeve)) / 30;
 
   // ── azione del vento — §3.3 ────────────────────────────────────────────
   const vb = VB0[inp.zvento] ?? 27;
@@ -213,8 +269,12 @@ export function calcolaAzioni(inp: InputAzioni): RisultatiAzioni {
   const phi = num(inp.phi);
   const ka = Math.tan(((45 - phi / 2) * Math.PI) / 180) ** 2;
   const H = num(inp.H);
-  const Sa = 0.5 * num(inp.gamma) * H * H * ka;
+  const gammaT = num(inp.gamma);
+  const Sa = 0.5 * gammaT * H * H * ka;
   const za = H / 3;
+
+  // ── spinta sismica delle terre — §7.11.6 (Mononobe-Okabe) ──────────────
+  const sismaTerre = calcolaSpintaSismica(inp, { S, ag, phi, H, gammaT, Sa });
 
   return {
     sisma: {
@@ -243,7 +303,7 @@ export function calcolaAzioni(inp: InputAzioni): RisultatiAzioni {
       TD,
       statiLimite,
     },
-    neve: { qsk, qs, mu, ce: ceN, ct },
+    neve: { qsk, qs, mu, ce: ceN, ct, alfa: alfaNeve, muSuggerito },
     vento: { vb, qb, ce, cp, cd, p, pSotto: -p * 0.5 },
     variabili: {
       qk: c[0],
@@ -254,6 +314,95 @@ export function calcolaAzioni(inp: InputAzioni): RisultatiAzioni {
       psi2: c[5],
       categoria: inp.cat,
     },
-    terre: { ka, Sa, za, Mrib: Sa * za },
+    terre: { ka, Sa, za, Mrib: Sa * za, sisma: sismaTerre },
+  };
+}
+
+/* ───────────────── spinta sismica delle terre — §7.11.6 ───────────────── */
+
+const rad = (g: number) => (g * Math.PI) / 180;
+
+/**
+ * Coefficiente di spinta attiva in condizioni sismiche secondo
+ * **Mononobe-Okabe** (NTC2018 §7.11.6.2.1, eq. 7.11.7):
+ *
+ *   K = cos²(φ − θ − ψ) / { cosθ · cos²ψ · cos(δ + ψ + θ) ·
+ *       [1 + √( sin(φ+δ)·sin(φ−θ−β) / (cos(δ+ψ+θ)·cos(β−ψ)) )]² }
+ *
+ * con ψ inclinazione del paramento sulla verticale, β inclinazione del
+ * terrapieno sull'orizzontale, δ attrito terra-muro, θ angolo sismico.
+ * Con θ = 0 e ψ = β = δ = 0 si ritrova il Ka di Rankine: la formula copre
+ * anche il caso statico ed è quella che si degrada con continuità.
+ *
+ * `NaN` quando φ − θ − β < 0: il terrapieno non regge quell'accelerazione e
+ * la radice perde significato — è la condizione da segnalare, non da nascondere.
+ */
+export function coefficienteMO(phi: number, theta: number, delta: number, beta: number, psi: number): number {
+  const f = rad(phi);
+  const t = rad(theta);
+  const d = rad(delta);
+  const b = rad(beta);
+  const y = rad(psi);
+
+  if (phi - theta - beta < 0) return NaN;
+
+  const denomRadice = Math.cos(d + y + t) * Math.cos(b - y);
+  if (denomRadice <= 0) return NaN;
+  const radice = Math.sqrt((Math.sin(f + d) * Math.sin(f - t - b)) / denomRadice);
+  const denom = Math.cos(t) * Math.cos(y) ** 2 * Math.cos(d + y + t) * (1 + radice) ** 2;
+  if (!(denom > 0)) return NaN;
+  return Math.cos(f - t - y) ** 2 / denom;
+}
+
+/**
+ * Spinta in condizioni sismiche: si prova sia kv verso l'alto sia verso il
+ * basso (§7.11.6.2.1 li ammette entrambi) e si tiene la combinazione che dà
+ * la spinta maggiore, che è quella che dimensiona.
+ */
+function calcolaSpintaSismica(
+  inp: InputAzioni,
+  d: { S: number; ag: number; phi: number; H: number; gammaT: number; Sa: number },
+): RisultatiAzioni['terre']['sisma'] {
+  const { S, ag, phi, H, gammaT, Sa } = d;
+  const amax = S * ag; // in g, §7.11.3.5.2
+  const betam = num(inp.betam) || 1;
+  const khScritto = String(inp.khManuale ?? '').trim();
+  const kh = khScritto ? num(khScritto) : betam * amax;
+  const kv = 0.5 * kh; // §7.11.6.2.1: kv = ±0.5·kh
+  const delta = num(inp.delta);
+  const beta = num(inp.betaTerre);
+  const psi = num(inp.psiTerre);
+
+  let migliore = { kae: NaN, Ed: -Infinity, theta: NaN, kv: 0 };
+  for (const segno of [1, -1] as const) {
+    // θ = atan[kh / (1 ∓ kv)]: il segno del verticale cambia sia θ sia il peso
+    const fattore = 1 - segno * kv;
+    if (fattore <= 0) continue;
+    const theta = (Math.atan(kh / fattore) * 180) / Math.PI;
+    const kae = coefficienteMO(phi, theta, delta, beta, psi);
+    if (!Number.isFinite(kae)) continue;
+    const Ed = 0.5 * gammaT * H * H * fattore * kae;
+    if (Ed > migliore.Ed) migliore = { kae, Ed, theta, kv: segno * kv };
+  }
+
+  const trovata = Number.isFinite(migliore.kae);
+  const Ed = trovata ? migliore.Ed : NaN;
+  const dEd = trovata ? Math.max(0, Ed - Sa) : NaN;
+
+  return {
+    attiva: !!inp.sismaTerre,
+    amax,
+    kh,
+    kv: trovata ? migliore.kv : kv,
+    theta: migliore.theta,
+    kae: migliore.kae,
+    Ed,
+    dEd,
+    // la spinta statica resta a H/3, l'incremento dinamico si applica a metà
+    // altezza (§7.11.6.3.1): il momento è la somma dei due contributi
+    Mtot: trovata ? Sa * (H / 3) + dEd * (H / 2) : NaN,
+    avviso: trovata
+      ? ''
+      : `Con kh = ${kh.toFixed(3)} risulta φ′ − θ − β < 0: il terrapieno non è in equilibrio sotto questa accelerazione. Serve un'analisi specifica, oppure una geometria diversa.`,
   };
 }
