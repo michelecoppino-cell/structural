@@ -12,6 +12,7 @@ import {
   CheckCircle,
   Calculator,
   Books,
+  FileText,
 } from '@phosphor-icons/react';
 import { useStore, type TabId } from './state/store';
 import { migra } from './state/store';
@@ -23,6 +24,7 @@ import Verifiche from './tabs/Verifiche';
 import Costi from './tabs/Costi';
 import Calcolatrice from './tabs/Calcolatrice';
 import Normativa from './tabs/Normativa';
+import Esporta from './tabs/Esporta';
 
 const TABS: { id: TabId; label: string; icon: React.ReactNode; sub: string }[] = [
   { id: 'azioni', label: 'Azioni', icon: <CloudSun size={17} />, sub: '5 gruppi · NTC2018 cap. 3' },
@@ -50,6 +52,12 @@ const TABS: { id: TabId; label: string; icon: React.ReactNode; sub: string }[] =
     label: 'Normativa',
     icon: <Books size={17} />,
     sub: 'NTC2018, Circolare 2019 e indice dei capitoli',
+  },
+  {
+    id: 'esporta',
+    label: 'Esporta',
+    icon: <FileText size={17} />,
+    sub: 'Foglio A4 con i soli capitoli spuntati — stampa, PDF, testo',
   },
 ];
 
@@ -151,7 +159,7 @@ export default function App() {
 
           {/* comandi della scheda: stanno quassù per non rubare altezza al
               contenuto, che su cellulare è tutto quello che c'è */}
-          {state.tab !== 'normativa' && state.tab !== 'calcolatrice' && (
+          {state.tab !== 'normativa' && (
             <button
               type="button"
               className="btn btn-secondary btn-icon"
@@ -159,8 +167,8 @@ export default function App() {
               aria-label={state.ui.allDetails[state.tab] ? 'Chiudi le formule' : 'Mostra le formule'}
               title={
                 state.ui.allDetails[state.tab]
-                  ? 'Chiudi formule e riferimenti'
-                  : 'Mostra formule e riferimenti di tutta la scheda'
+                  ? 'Chiudi le spiegazioni'
+                  : 'Mostra formule, spiegazioni e riferimenti di tutta la scheda'
               }
               onClick={() => dispatch({ type: 'toggleAllDetails', tab: state.tab })}
             >
@@ -235,6 +243,7 @@ export default function App() {
             {state.tab === 'costi' && <Costi />}
             {state.tab === 'calcolatrice' && <Calcolatrice />}
             {state.tab === 'normativa' && <Normativa />}
+            {state.tab === 'esporta' && <Esporta />}
           </SlotProvider>
         </main>
       </div>

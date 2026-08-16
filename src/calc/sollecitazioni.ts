@@ -8,7 +8,12 @@
 
 import { CLS, ecmCLS } from '../data/materiali';
 import { GAMMA, PSI_AMBIENTALI } from '../data/ntc2018';
-import { proprietaProfilo, type TipoProfilo } from '../data/profili-acciaio';
+import {
+  propretaSecondoAsse,
+  proprietaProfilo,
+  type AsseProfilo,
+  type TipoProfilo,
+} from '../data/profili-acciaio';
 import type { RisultatiAzioni } from './azioni';
 import { num } from './azioni';
 import { risolviTrave, type RisultatoTrave, type SchemaId } from './trave';
@@ -57,6 +62,8 @@ export interface InputSollecitazioni {
   /** Sezione in acciaio: tipo di profilo e taglia. */
   sezioneTipoProfilo: TipoProfilo;
   sezioneProfilo: string;
+  /** Come è ruotato il profilo: inflesso attorno all'asse forte o al debole. */
+  sezioneAsse: AsseProfilo;
 }
 
 export const SOLLECITAZIONI_DEFAULT: InputSollecitazioni = {
@@ -80,6 +87,7 @@ export const SOLLECITAZIONI_DEFAULT: InputSollecitazioni = {
   sezioneCls: 'C25/30',
   sezioneTipoProfilo: 'IPE',
   sezioneProfilo: 'IPE 200',
+  sezioneAsse: 'forte',
 };
 
 export interface Sorgente {
@@ -309,7 +317,9 @@ export function calcolaSollecitazioni(
     J = (b * h ** 3) / 12 / 1e4; // mm⁴ → cm⁴
   } else if (inp.sezioneMateriale === 'acciaio') {
     E = 210000;
-    J = proprietaProfilo(inp.sezioneTipoProfilo, inp.sezioneProfilo)?.Ix ?? 0;
+    const p = proprietaProfilo(inp.sezioneTipoProfilo, inp.sezioneProfilo);
+    // profilo ruotato: la trave si flette attorno all'asse debole e J è Iy
+    J = p ? propretaSecondoAsse(p, inp.sezioneAsse ?? 'forte').Ix : 0;
   }
 
   // E [MPa] → kN/m² (×1e3), J [cm⁴] → m⁴ (×1e-8)  ⇒  EJ [kNm²] = E·J·1e-5

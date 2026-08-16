@@ -6,7 +6,9 @@ import {
   nomeAmmesso,
   nomiMancanti,
   nomiRichiesti,
+  normalizzaVoci,
   ricalcola,
+  svuotaCompilabili,
   testoVoce,
   valuta,
   valutaConUnita,
@@ -167,9 +169,9 @@ describe('grandezze di partenza', () => {
   it('i pesi di volume arrivano già compilati, le lunghezze no', () => {
     const r = ricalcola(VOCI_DEFAULT);
     const v = Object.fromEntries(r.map((x) => [x.nome, x]));
-    expect(v['γCLS'].valore).toBe(25);
-    expect(v['γACC'].valore).toBe(78.5);
-    expect(v['γTERRA'].valore).toBe(18);
+    expect(v['γC'].valore).toBe(25);
+    expect(v['γS'].valore).toBe(78.5);
+    expect(v['γT'].valore).toBe(18);
     expect(v['b'].espressione).toBe('');
     expect(v['b'].errore).toBe('');
     // la γ greca è un nome ammesso a tutti gli effetti
@@ -178,7 +180,54 @@ describe('grandezze di partenza', () => {
 
   it('la γ si può richiamare in un’espressione', () => {
     const vars = variabili(ricalcola(VOCI_DEFAULT));
-    expect(valuta('0,3*0,5*γCLS', vars)).toEqual({ ok: true, valore: 3.75 });
+    expect(valuta('0,3*0,5*γC', vars)).toEqual({ ok: true, valore: 3.75 });
+  });
+
+  it('la γ si scrive anche con la g latina, per esteso o no', () => {
+    const vars = variabili(ricalcola(VOCI_DEFAULT));
+    expect(valuta('gC', vars)).toEqual({ ok: true, valore: 25 });
+    expect(valuta('gammaC', vars)).toEqual({ ok: true, valore: 25 });
+    expect(valuta('gs', vars)).toEqual({ ok: true, valore: 78.5 });
+    // un nome che non esiste resta un errore, non diventa una γ qualsiasi
+    expect(valuta('gZ', vars).ok).toBe(false);
+    // e il nome vero, se c'è, ha comunque la precedenza sull'alias
+    expect(valuta('gC', { ...vars, gC: 1 })).toEqual({ ok: true, valore: 1 });
+  });
+
+  it('anche il conto dei nomi mancanti conosce la g latina', () => {
+    const vars = variabili(ricalcola(VOCI_DEFAULT));
+    expect(nomiMancanti('b*h*gC', vars)).toEqual(['b', 'h']);
+  });
+});
+
+describe('colonne e migrazione delle voci', () => {
+  it('svuota solo le grandezze compilabili', () => {
+    const voci = svuotaCompilabili([
+      { id: '1', nome: 'b', espressione: '0.3', nota: '', um: 'm', tipo: 'compilabile' },
+      { id: '2', nome: 'γC', espressione: '25', nota: '', um: 'kN/mc', tipo: 'fissa' },
+      { id: '3', nome: 'A', espressione: 'b*h', nota: '', um: 'mq', tipo: 'operazione' },
+    ]);
+    expect(voci.map((v) => v.espressione)).toEqual(['', '25', 'b*h']);
+  });
+
+  it('porta i nomi vecchi su quelli nuovi, formule comprese', () => {
+    const voci = normalizzaVoci([
+      { id: '1', nome: 'gCLS', espressione: '', nota: '', um: 'kN/mc' },
+      { id: '2', nome: 'γCLS', espressione: '25', nota: '', um: 'kN/mc' },
+      { id: '3', nome: 'P', espressione: 'b*h*γCLS', nota: '', um: 'kN/m' },
+    ]);
+    // il doppione con la g latina sparisce, il γ resta con il nome nuovo
+    expect(voci.map((v) => v.nome)).toEqual(['γC', 'P']);
+    expect(voci[1].espressione).toBe('b*h*γC');
+  });
+
+  it('deduce la colonna delle voci salvate prima che esistesse', () => {
+    const voci = normalizzaVoci([
+      { id: '1', nome: 'γMUR', espressione: '18' },
+      { id: '2', nome: 'b', espressione: '0,3' },
+      { id: '3', nome: 'A', espressione: 'b*h' },
+    ]);
+    expect(voci.map((v) => v.tipo)).toEqual(['fissa', 'compilabile', 'operazione']);
   });
 });
 

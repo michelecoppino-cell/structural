@@ -32,11 +32,29 @@ import {
   type RisultatiTaglioArmato,
   type RisultatiTaglioNonArmato,
 } from '../calc/verifiche';
-import { PREIMPOSTATE_DEFAULT, VOCI_DEFAULT, type Preimpostata, type VoceCalcolo } from '../calc/calcolatrice';
+import {
+  PREIMPOSTATE_DEFAULT,
+  RINOMINATE,
+  VOCI_DEFAULT,
+  normalizzaVoci,
+  rinominaInEspressione,
+  svuotaCompilabili,
+  type Preimpostata,
+  type VoceCalcolo,
+} from '../calc/calcolatrice';
 import { UNITA_DEFAULT, normalizzaElenco } from '../calc/unita';
 import type { LinkUtente } from '../data/normative';
 
-export type TabId = 'azioni' | 'sollecitazioni' | 'verifiche' | 'costi' | 'calcolatrice' | 'normativa';
+export type TabId =
+  | 'azioni'
+  | 'sollecitazioni'
+  | 'verifiche'
+  | 'costi'
+  | 'calcolatrice'
+  | 'normativa'
+  | 'esporta';
+/** Capitoli che si possono portare nel foglio di esportazione. */
+export type CapitoloId = 'azioni' | 'sollecitazioni' | 'verifiche' | 'calcolatrice' | 'costi';
 export type MaterialeId = 'cls' | 'acciaio' | 'legno' | 'muratura';
 
 export interface VoceCosto {
@@ -73,6 +91,7 @@ export interface AppState {
   };
   costi: VoceCosto[];
   calcolatrice: StatoCalcolatrice;
+  esportazione: StatoEsportazione;
   /** Norme e link aggiunti a mano nella scheda Normativa. */
   normative: LinkUtente[];
   ui: {
@@ -101,7 +120,18 @@ export interface StatoCalcolatrice {
   tastierino: boolean;
 }
 
-export const SCHEMA_VERSION = 4;
+export interface StatoEsportazione {
+  /** Capitoli spuntati: solo questi finiscono nel foglio. */
+  capitoli: Record<CapitoloId, boolean>;
+  /** Riga di testo libera in testa al foglio (oggetto, riferimento, data). */
+  intestazione: string;
+  /** Nota a piè di foglio, scritta a mano. */
+  nota: string;
+  /** Sfondo a quadretti del foglio, come la carta da calcolo. */
+  quadretti: boolean;
+}
+
+export const SCHEMA_VERSION = 5;
 
 export const STATO_INIZIALE: AppState = {
   schemaVersion: SCHEMA_VERSION,
@@ -139,6 +169,12 @@ export const STATO_INIZIALE: AppState = {
     unita: UNITA_DEFAULT,
     tastierino: false,
   },
+  esportazione: {
+    capitoli: { azioni: true, sollecitazioni: true, verifiche: true, calcolatrice: false, costi: false },
+    intestazione: '',
+    nota: '',
+    quadretti: true,
+  },
   normative: [],
   ui: {
     open: { sisma: true, vari: true, 'soll-risultati': true, 'soll-inerzia': true },
@@ -150,6 +186,7 @@ export const STATO_INIZIALE: AppState = {
       costi: false,
       calcolatrice: false,
       normativa: false,
+      esporta: false,
     },
     verifica: 'taglio-non-armato',
   },
@@ -167,6 +204,7 @@ export type Action =
   | { type: 'acciaioSezione'; patch: Partial<InputAcciaioSezione> }
   | { type: 'costi'; voci: VoceCosto[] }
   | { type: 'calcolatrice'; patch: Partial<StatoCalcolatrice> }
+  | { type: 'esportazione'; patch: Partial<StatoEsportazione> }
   | { type: 'normative'; voci: LinkUtente[] }
   | { type: 'toggleOpen'; id: string }
   | { type: 'toggleExp'; id: string }
@@ -223,6 +261,8 @@ export function reducer(state: AppState, action: Action): AppState {
       return { ...state, costi: action.voci };
     case 'calcolatrice':
       return { ...state, calcolatrice: { ...state.calcolatrice, ...action.patch } };
+    case 'esportazione':
+      return { ...state, esportazione: { ...state.esportazione, ...action.patch } };
     case 'normative':
       return { ...state, normative: action.voci };
     case 'toggleOpen':
@@ -286,13 +326,7 @@ export function migra(raw: Partial<AppState>): AppState {
       // le operazioni salvate sono dati di commessa: si tengono tutte quelle
       // del file, comprese le liste vuote (l'utente può averle cancellate)
       voci: raw.calcolatrice
-        ? (Array.isArray(raw.calcolatrice.voci) ? raw.calcolatrice.voci : []).map((v, i) => ({
-            id: v?.id || `calc-${i}`,
-            nome: v?.nome ?? '',
-            espressione: v?.espressione ?? '',
-            nota: v?.nota ?? '',
-            um: v?.um ?? '',
-          }))
+        ? normalizzaVoci(Array.isArray(raw.calcolatrice.voci) ? raw.calcolatrice.voci : [])
         : base.calcolatrice.voci,
       // anche le formule preimpostate sono dati di commessa: si tengono quelle
       // del file, comprese le liste vuote; i file di prima non ne hanno e
@@ -301,7 +335,8 @@ export function migra(raw: Partial<AppState>): AppState {
         ? raw.calcolatrice.preimpostate.map((v, i) => ({
             id: v?.id || `pre-${i}`,
             nome: v?.nome ?? '',
-            espressione: v?.espressione ?? '',
+            // anche le formule salvate parlano dei γ con il nome vecchio
+            espressione: rinominaInEspressione(v?.espressione ?? '', RINOMINATE),
             nota: v?.nota ?? '',
             um: v?.um ?? '',
           }))
@@ -313,6 +348,11 @@ export function migra(raw: Partial<AppState>): AppState {
           ? raw.calcolatrice.unita
           : base.calcolatrice.unita,
       ),
+    },
+    esportazione: {
+      ...base.esportazione,
+      ...raw.esportazione,
+      capitoli: { ...base.esportazione.capitoli, ...raw.esportazione?.capitoli },
     },
     normative: (Array.isArray(raw.normative) ? raw.normative : []).flatMap((v, i) =>
       v?.url
@@ -331,7 +371,15 @@ export function migra(raw: Partial<AppState>): AppState {
 
 const CHIAVE = 'structural:stato';
 
-const TAB_VALIDE: TabId[] = ['azioni', 'sollecitazioni', 'verifiche', 'costi', 'calcolatrice', 'normativa'];
+const TAB_VALIDE: TabId[] = [
+  'azioni',
+  'sollecitazioni',
+  'verifiche',
+  'costi',
+  'calcolatrice',
+  'normativa',
+  'esporta',
+];
 
 /** Scheda chiesta da `?scheda=…` — le scorciatoie dell'app installata. */
 function tabDaUrl(): TabId | undefined {
@@ -348,7 +396,13 @@ function statoIniziale(): AppState {
   try {
     const salvato = localStorage.getItem(CHIAVE);
     if (salvato) {
-      const stato = migra(JSON.parse(salvato));
+      const ripreso = migra(JSON.parse(salvato));
+      // le grandezze compilabili valgono per la seduta: si riapre con la
+      // colonna di sinistra pulita, mentre i γ e le operazioni restano
+      const stato: AppState = {
+        ...ripreso,
+        calcolatrice: { ...ripreso.calcolatrice, voci: svuotaCompilabili(ripreso.calcolatrice.voci) },
+      };
       return richiesta ? { ...stato, tab: richiesta } : stato;
     }
   } catch {

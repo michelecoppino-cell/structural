@@ -136,6 +136,175 @@ export function SezioneTaglio({
   );
 }
 
+/* ─────────────────── sezione inflessa: i ferri come sono ─────────────────── */
+
+/** Un letto di barre: quante, di che diametro, a quale distanza dal lembo. */
+export interface LettoBarre {
+  n: number;
+  phi: number;
+}
+
+/**
+ * Sezione della trave inflessa con l'armatura disegnata dov'è: i ferri tesi in
+ * basso (fino a due letti), quelli compressi in alto, la staffa che li
+ * racchiude e la zona di calcestruzzo compresso alta 0.8·x, così si vede
+ * subito se l'asse neutro sta tagliando la sezione troppo in basso.
+ *
+ * Le quote sono quelle che si usano nel calcolo: b, h, d (altezza utile),
+ * c e c′ (copriferri), x (asse neutro).
+ */
+export function SezioneArmata({
+  b,
+  h,
+  c,
+  c2,
+  d,
+  x,
+  tesi,
+  compressi,
+  As,
+  As2,
+}: {
+  b: number;
+  h: number;
+  /** Copriferro del lembo teso e di quello compresso (mm). */
+  c: number;
+  c2: number;
+  /** Altezza utile e profondità dell'asse neutro (mm). */
+  d: number;
+  x: number;
+  /** Fino a due letti di barre tese e uno di barre compresse. */
+  tesi: LettoBarre[];
+  compressi: LettoBarre[];
+  As: number;
+  As2: number;
+}) {
+  const W = 260;
+  // altezza abbondante: sotto la quota di b resta la riga dell'armatura tesa
+  const H = 224;
+  const maxW = 116;
+  const maxH = 138;
+  const bOk = b > 0 ? b : 300;
+  const hOk = h > 0 ? h : 500;
+  const k = Math.min(maxW / bOk, maxH / hOk);
+  const w = bOk * k;
+  const ht = hOk * k;
+  const x0 = 74;
+  const y0 = 30;
+  const x1 = x0 + w;
+  const y1 = y0 + ht;
+
+  // il copriferro netto della staffa: si tiene dentro la sezione anche con
+  // valori assurdi, altrimenti il disegno esplode invece di dire «guarda qui»
+  const cc = Math.min(w / 2 - 3, Math.max(3, Math.min(c, c2) * k * 0.6));
+  /** Quota (dal lembo compresso, in mm) → ordinata sul disegno. */
+  const Y = (mm: number) => y0 + Math.min(ht, Math.max(0, mm * k));
+  const yd = Y(d);
+  const yx = Y(Math.max(x, 0));
+
+  /** Barre di un letto, distribuite fra i due lati della staffa. */
+  const letto = (n: number, phi: number, y: number, chiave: string) => {
+    const r = Math.max(1.8, (phi * k) / 2);
+    const q = Math.max(0, Math.min(10, Math.round(n)));
+    const sx = x0 + cc + r;
+    const dx = x1 - cc - r;
+    return Array.from({ length: q }, (_, i) => (
+      <circle
+        key={`${chiave}-${i}`}
+        className="dg-punto"
+        cx={q === 1 ? (x0 + x1) / 2 : sx + ((dx - sx) * i) / (q - 1)}
+        cy={y}
+        r={r}
+      />
+    ));
+  };
+
+  // i letti tesi si appoggiano al copriferro c, il secondo 40 mm più su
+  const yTesi = [Y(hOk - c), Y(hOk - c - 40)];
+  const yCompressi = Y(c2);
+
+  return (
+    <Cornice titolo="Sezione armata — ferri e asse neutro" viewBox={`0 0 ${W} ${H}`}>
+      {/* zona compressa: 0.8·x dal lembo superiore */}
+      {x > 0 && (
+        <rect
+          x={x0}
+          y={y0}
+          width={w}
+          height={Math.max(0, Y(0.8 * x) - y0)}
+          className="dg-area"
+        />
+      )}
+
+      {/* calcestruzzo */}
+      <rect x={x0} y={y0} width={w} height={ht} className="dg-beam" strokeWidth={1.6} fill="none" />
+
+      {/* staffa perimetrale */}
+      <rect
+        x={x0 + cc}
+        y={y0 + cc}
+        width={Math.max(4, w - 2 * cc)}
+        height={Math.max(4, ht - 2 * cc)}
+        rx={3}
+        className="dg-line is-faint"
+        strokeWidth={1.2}
+        fill="none"
+      />
+
+      {compressi.flatMap((l, i) => letto(l.n, l.phi, yCompressi, `c${i}`))}
+      {tesi.flatMap((l, i) => letto(l.n, l.phi, yTesi[i] ?? yTesi[0], `t${i}`))}
+
+      {/* asse neutro */}
+      {x > 0 && (
+        <>
+          <path className="dg-carico" strokeWidth={1.2} strokeDasharray="5 3" d={`M${x0 - 10},${yx} L${x1 + 10},${yx}`} />
+          <text x={x1 + 12} y={yx - 3} className="dg-testo is-accent">
+            x {fx(x, 0)}
+          </text>
+        </>
+      )}
+
+      {/* quota b, sotto */}
+      <path
+        className="dg-axis"
+        strokeWidth={1}
+        d={`M${x0},${y1 + 14} L${x1},${y1 + 14} M${x0},${y1 + 10} L${x0},${y1 + 18} M${x1},${y1 + 10} L${x1},${y1 + 18}`}
+      />
+      <text x={(x0 + x1) / 2} y={y1 + 28} className="dg-testo" textAnchor="middle">
+        b = {fx(b, 0)} mm
+      </text>
+
+      {/* quota h, a sinistra */}
+      <path
+        className="dg-axis"
+        strokeWidth={1}
+        d={`M${x0 - 18},${y0} L${x0 - 18},${y1} M${x0 - 22},${y0} L${x0 - 14},${y0} M${x0 - 22},${y1} L${x0 - 14},${y1}`}
+      />
+      <text x={x0 - 24} y={(y0 + y1) / 2} className="dg-testo" textAnchor="end" dominantBaseline="middle">
+        h {fx(h, 0)}
+      </text>
+
+      {/* quota d, a destra */}
+      <path
+        className="dg-axis"
+        strokeWidth={1}
+        d={`M${x1 + 34},${y0} L${x1 + 34},${yd} M${x1 + 30},${y0} L${x1 + 38},${y0} M${x1 + 30},${yd} L${x1 + 38},${yd}`}
+      />
+      <path className="dg-axis" strokeWidth={1} strokeDasharray="3 3" d={`M${x1},${yd} L${x1 + 34},${yd}`} />
+      <text x={x1 + 40} y={(y0 + yd) / 2} className="dg-testo is-accent" dominantBaseline="middle">
+        d {fx(d, 0)}
+      </text>
+
+      <text x={6} y={16} className="dg-testo">
+        compressa {compressi.map((l) => `${l.n}⌀${fx(l.phi, 0)}`).join(' + ') || '—'} · A′s {fx(As2, 0)} mm²
+      </text>
+      <text x={6} y={H - 6} className="dg-testo is-accent">
+        tesa {tesi.map((l) => `${l.n}⌀${fx(l.phi, 0)}`).join(' + ') || '—'} · As {fx(As, 0)} mm²
+      </text>
+    </Cornice>
+  );
+}
+
 /* ─────────────────────── spettro di risposta ─────────────────────── */
 
 /** Se(T)/g secondo §3.2.3.2.1, con η = 1 (ξ = 5%). */

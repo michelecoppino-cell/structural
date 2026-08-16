@@ -107,7 +107,7 @@ fondo scuro, la stessa geometria della favicon.
 
 ## Struttura dell'app
 
-Sei schede, navigazione laterale su desktop e bottom-bar su mobile (breakpoint unico a
+Sette schede, navigazione laterale su desktop e bottom-bar su mobile (breakpoint unico a
 900 px).
 
 ### 1. Azioni — NTC2018 cap. 3
@@ -195,6 +195,12 @@ comandi in fondo**.
 - **Combinazione**: SLU fondamentale, SLE rara, frequente, quasi permanente
   (§2.5.3), con γG1 = 1.30, γG2 = 1.50, γQ = 1.50 (Tab. 2.6.I, A1-STR) e i ψ della
   categoria d'uso. La tabella dei contributi mostra γ, ψ e qd di ogni azione.
+- **Sezione resistente**: E e J a mano, rettangolo in c.a. `b×h` (con Ecm della classe) o
+  **profilo in acciaio** dal sagomario. Il profilo si può **posare ruotato**: *asse forte* /
+  *asse debole*, con il J dei due assi scritto sul selettore — ruotare un IPE 200 porta J da
+  1943 a 142 cm⁴ e la freccia da 6 a 82 mm. Per i doppi T l'asse debole è calcolato dalla
+  geometria di ali e anima (a mezzo per cento dalle tabelle EN 10365), per gli UPN — che
+  hanno le ali rastremate — è quello di tabella DIN 1026-1.
 - **Diagrammi**: carichi con schema statico, momento flettente, taglio e deformata. Il
   riquadro si misura e il disegno è costruito in **coordinate reali** — nessuno stiramento
   dei vincoli, delle frecce o dei testi al variare della larghezza. Ogni diagramma è quotato:
@@ -211,6 +217,12 @@ calcolo in repository:
 |---|---|---|
 | Taglio, elementi senza armature trasversali | `01 - Verifica a taglio elementi non armati.xlsx` | §4.1.2.3.5.1, eq. 4.1.23 |
 | Taglio, elementi con armature trasversali | `02 - Verifica a taglio elementi armati.xlsx` (foglio `VERIFICA_STAFFE`) | §4.1.2.3.5.2, eq. 4.1.18 / 4.1.19 |
+| Flessione semplice SLU, sezione rettangolare | stress-block rettangolare | §4.1.2.1.2 |
+
+La **flessione** ha accanto ai campi il disegno della **sezione armata**: i ferri tesi dove
+sono (fino a due letti), quelli compressi in alto, la staffa che li racchiude, la zona di
+calcestruzzo compresso alta 0.8·x e l'asse neutro quotato, così si vede subito se x sta
+scendendo troppo.
 
 Il VEd può essere agganciato al taglio massimo calcolato nella scheda Sollecitazioni: con il
 collegamento attivo è un **valore derivato**, calcolato in render e non salvato nello stato,
@@ -246,24 +258,34 @@ un'area, poi un'incidenza, poi le moltiplico.
 - Sintassi: `+ − × ÷ ^`, parentesi, `%` come «per cento», virgola o punto decimale,
   argomenti separati da `;`, funzioni (`sqrt`, `min`, `max`, `round`, `ln`, `log`, `exp`,
   trigonometria **in gradi**), costanti `pi` ed `e`.
-- **Grandezze in pastiglie**: `b`, `l`, `h`, `q` e i pesi di volume `γCLS`, `γACC`, `γTERRA`
-  stanno in riquadri piccoli — almeno tre per riga su cellulare — con il valore scrivibile
-  dentro la pastiglia. Le lunghezze partono vuote, i **pesi di volume arrivano già compilati**
-  con la densità del materiale (25, 78,5 e 18 kN/mc), modificabile come tutto il resto.
-- **L'elenco lo compone chi calcola**: sotto le pastiglie ci sono quelle da aggiungere — le
-  altre di serie che sono state tolte, il catalogo (`s`, `i`, `A`, `F`, `E`, `J`, `γMUR`,
-  `γLEGNO`, `γACQUA`) e una *nuova* vuota con nome e unità da scrivere. Il tastierino ha il
-  tasto `γ`, che su cellulare non si scriverebbe altrimenti.
+- **Due colonne: da compilare e fisse.** A sinistra le grandezze del calcolo di oggi (`b`,
+  `l`, `h`, `q`), che si **svuotano a ogni riapertura** — la trave di ieri non è quella di
+  oggi; a destra le **fisse**, i pesi di volume `γC` (calcestruzzo, 25), `γS` (acciaio, 78,5)
+  e `γT` (terreno, 18 kN/mc), che restano compilate e si correggono come tutte le altre. Ogni
+  voce sta in una pastiglia con il valore scrivibile dentro; il nome apre nome, unità, nota e
+  la **colonna** in cui sta, che si cambia da lì.
+- **La γ si scrive anche con la g**: γ è la g greca e sulla tastiera non c'è, così `gC`,
+  `gS`, `gT` — e per esteso `gammaC` — sono la stessa cosa di `γC`, `γS`, `γT`. Vale nelle
+  espressioni e nel conto delle grandezze che mancano; il nome scritto per davvero, se esiste,
+  ha comunque la precedenza. Il tastierino tiene anche il tasto `γ`.
+- **L'elenco lo compone chi calcola**: sotto ogni colonna ci sono le grandezze da aggiungere —
+  a sinistra `s`, `i`, `A`, `F`, `E`, `J`, a destra `γMUR`, `γLEGNO`, `γACQUA` — più una
+  *nuova* vuota con nome e unità da scrivere. Le operazioni salvate stanno in fondo, in una
+  fascia loro.
 - **Operazioni preimpostate**: formule scritte una volta sui nomi delle grandezze —
-  `q*l^2/8`, `q*l/2`, `b*h^2/6`, `b*h*γCLS`, `5*q*l^4/(384*E*J)` — che si accendono quando
+  `q*l^2/8`, `q*l/2`, `b*h^2/6`, `b*h*γC`, `5*q*l^4/(384*E*J)` — che si accendono quando
   tutte le grandezze che servono sono compilate. Al tocco fanno il calcolo e finiscono nel
   display con nome e unità, pronte da salvare (o si salvano direttamente con il segnalibro).
-  Se ne aggiungono di proprie e si modificano tutte: sono **dati di commessa**.
+  Se ne aggiungono di proprie e si modificano tutte: sono **dati di commessa**. Stanno in
+  griglia: **almeno tre per riga** su desktop, e quella aperta per la modifica si prende la
+  riga intera.
+- **Le spiegazioni stanno dietro l'(i)**: sintassi, funzioni, che cosa fanno le due colonne e
+  come si ricava l'unità compaiono premendo l'(i) in testata, non sempre.
 - **Unità di misura da elenco**: il campo si scrive a mano ma suggerisce mentre si digita, e
   quello che in elenco non c'è viene segnato come errore e non si salva. L'elenco (kg, kg/mc,
   kg/mq, kg/ml, kN/cmq, MPa, m, mq, mc…) si cambia dal pulsante *Unità*.
 - **Unità ricavata da sola**: il prodotto e il rapporto fra operazioni con nome compongono
-  l'unità del risultato — `b*h` in m dà `mq`, `b*h*γCLS` con γCLS in kN/mc dà `kN/m`,
+  l'unità del risultato — `b*h` in m dà `mq`, `b*h*γC` con γC in kN/mc dà `kN/m`,
   `sqrt(A)` con A in mq dà `m`. L'unità scritta a mano vince su quella calcolata; una somma
   fra unità diverse non ne propone nessuna.
 - Le operazioni salvate sono **dati di commessa**: viaggiano nell'Esporta/Importa JSON e
@@ -297,10 +319,33 @@ L'indice di NTC e Circolare **è parte del sito, non del progetto**: sta in
 norme, capitoli e paragrafi si aggiungono a mano in quel file, un po' alla volta — le
 istruzioni sono nel commento in testa.
 
+### 7. Esporta
+Un **foglio A4 a quadretti** vuoto su cui si tira dentro solo quello che serve: in testa ci
+sono i capitoli — *Azioni*, *Sollecitazioni*, *Verifiche*, *Calcolatrice*, *Stime costi* — e
+quelli spuntati compaiono nel foglio, con titoli, blocchi e righe di calcolo. Serve a non
+esportare tutto il progetto quando se ne è compilata una riga.
+
+Il foglio ha una **riga di premessa** e una **nota a piè di pagina** scrivibili lì dentro, e
+porta l'intestazione di commessa (nome, commessa, località, revisione, data). Da lì escono
+tre cose, tutte leggibili **senza questa app**:
+
+| Comando | Che cosa produce |
+|---|---|
+| *Stampa / PDF* | la pagina A4 dalla finestra di stampa del browser — da lì «Salva in PDF»; i quadretti e l'interfaccia non vengono stampati |
+| *Copia testo* | il foglio come testo semplice, da incollare in OneNote, in una mail o in Word |
+| *Scarica HTML* | un file `.html` **autonomo**, stile compreso e nessuna risorsa esterna: si apre con qualunque browser, offline, e si ristampa in PDF |
+
+L'**Esporta JSON** resta quello che era: serve a *riaprire* il lavoro in questa app, non a
+leggerlo. Il contenuto dei due nasce dalla stessa sorgente (`src/calc/relazione.ts`, che
+produce capitoli e blocchi strutturati; `src/calc/esportazione.ts` li impagina), quindi il
+foglio, il *Copia* e la relazione non possono raccontare numeri diversi.
+
 ### Comune a tutte le schede
 - **(i)**: apre in un colpo tutti i pannelli di dettaglio della scheda — formule con i numeri
-  sostituiti, coefficienti e riferimenti. Sta nella **testata**, insieme a *Copia*: sono
-  comandi che valgono per tutte le schede e lassù non rubano altezza al contenuto.
+  sostituiti, coefficienti e riferimenti; nella Calcolatrice apre le **spiegazioni** (sintassi,
+  funzioni, colonne, unità), che altrimenti stanno via. Sta nella **testata**, insieme a
+  *Copia*: sono comandi che valgono per tutte le schede e lassù non rubano altezza al
+  contenuto.
 - **Copia**: copia negli appunti un blocco di testo con valori, formule e riferimenti
   normativi, pronto da incollare in Word.
 - **Esporta / Importa JSON**: l'intero stato del progetto, con numero di versione dello
@@ -338,7 +383,8 @@ src/
     sollecitazioni.ts  combinazioni di carico e collegamento con il solutore
     verifiche.ts   verifiche a taglio (dai fogli Excel)
     calcolatrice.ts  interprete delle espressioni e sequenza dei calcoli salvati
-    relazione.ts   generazione del testo per la relazione
+    relazione.ts   capitoli e blocchi delle schede, e il testo per la relazione
+    esportazione.ts  foglio A4: documento in testo semplice e in HTML autonomo
   data/            tabelle normative e di materiali (ntc2018.ts, materiali.ts)
     normative.ts   indice dei documenti e dei capitoli della scheda Normativa
     comuni.ts      FILE GENERATO: comuni, zona sismica, coordinate
