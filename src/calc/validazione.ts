@@ -101,6 +101,10 @@ export function validaAzioni(inp: InputAzioni): Errori<InputAzioni> {
     vn: num(inp.vn) >= 10 ? undefined : 'La vita nominale VN non può essere minore di 10 anni.',
     q: num(inp.q) >= 1 ? undefined : 'Il fattore di comportamento q non può essere minore di 1.',
     as: nonNegativo(inp.as, 'La quota sul livello del mare'),
+    alfaNeve:
+      num(inp.alfaNeve) >= 0 && num(inp.alfaNeve) <= 75
+        ? undefined
+        : "L'inclinazione della falda deve stare fra 0° e 75°.",
     mu: nonNegativo(inp.mu, 'Il coefficiente di forma μ1'),
     ceN: positivo(inp.ceN, 'Il coefficiente di esposizione CE'),
     ct: positivo(inp.ct, 'Il coefficiente termico Ct'),

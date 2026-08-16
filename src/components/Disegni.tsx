@@ -287,43 +287,247 @@ export function Paramento({ H, ka, Sa, za }: { H: number; ka: number; Sa: number
   );
 }
 
+/* ─────────────────────── vento: andamento in altezza ─────────────────────── */
+
+/** ce(z) secondo §3.3.7, con ct = 1 e il taglio a zmin sotto la quota minima. */
+function ceDi(z: number, kr: number, z0: number, zmin: number): number {
+  const zz = Math.max(z, zmin);
+  const ln = Math.log(zz / z0);
+  return kr * kr * ln * (7 + ln);
+}
+
+/**
+ * Pressione del vento lungo l'altezza: la pressione non è costante, cresce
+ * con ce(z) e resta ferma al valore di zmin nella parte bassa dell'edificio.
+ * A sinistra la spinta sopravento, a destra la depressione sottovento.
+ */
+export function ProfiloVento({
+  z,
+  qb,
+  cp,
+  cd,
+  kr,
+  z0,
+  zmin,
+}: {
+  z: number;
+  qb: number;
+  cp: number;
+  cd: number;
+  kr: number;
+  z0: number;
+  zmin: number;
+}) {
+  const W = 260;
+  const H = 190;
+  const yTerra = H - 26;
+  const yCima = 22;
+  const xEd = 134; // faccia sopravento dell'edificio
+  const larghezza = 42;
+  const scala = 66; // ampiezza massima del diagramma di pressione
+
+  const zTot = Math.max(z, 0.5);
+  /** Quota in metri → ordinata sul disegno. */
+  const quota = (q: number) => yTerra + ((yCima - yTerra) * q) / zTot;
+
+  const n = 24;
+  const punti = Array.from({ length: n + 1 }, (_, i) => {
+    const zi = (zTot * i) / n;
+    const p = qb * ceDi(zi, kr, z0, zmin) * Math.abs(cp) * cd;
+    return { zi, p };
+  });
+  const pMax = Math.max(...punti.map((x) => x.p), 1e-6);
+  const X = (p: number) => xEd - (p / pMax) * scala;
+
+  const profilo = punti.map((x, i) => `${i ? 'L' : 'M'}${X(x.p).toFixed(1)},${quota(x.zi).toFixed(1)}`).join('');
+  const area = `M${xEd},${yTerra} ${profilo.slice(1)} L${xEd},${yCima} Z`;
+
+  const pCima = punti[punti.length - 1].p;
+  const pBase = punti[0].p;
+  // il vento in copertura è depressione: la freccia sottovento esce dalla parete
+  const sotto = pCima * 0.5;
+
+  return (
+    <Cornice titolo="Vento — andamento della pressione in altezza" viewBox={`0 0 ${W} ${H}`}>
+      {/* terreno */}
+      <path className="dg-axis" strokeWidth={1} d={`M10,${yTerra} L${W - 10},${yTerra}`} />
+
+      {/* edificio */}
+      <rect
+        x={xEd}
+        y={yCima}
+        width={larghezza}
+        height={yTerra - yCima}
+        className="dg-beam"
+        strokeWidth={1.6}
+        fill="none"
+      />
+
+      {/* diagramma della pressione sopravento */}
+      <path className="dg-area" d={area} />
+      <path className="dg-line" strokeWidth={1.6} d={profilo} />
+
+      {/* frecce di spinta, a passo costante */}
+      {[0.1, 0.35, 0.6, 0.85, 1].map((t) => {
+        const zi = zTot * t;
+        const p = qb * ceDi(zi, kr, z0, zmin) * Math.abs(cp) * cd;
+        const y = quota(zi);
+        return (
+          <path
+            key={t}
+            className="dg-carico"
+            strokeWidth={1}
+            d={`M${X(p).toFixed(1)},${y.toFixed(1)} L${xEd - 3},${y.toFixed(1)} M${xEd - 9},${(y - 3).toFixed(1)} L${xEd - 2},${y.toFixed(1)} L${xEd - 9},${(y + 3).toFixed(1)}`}
+          />
+        );
+      })}
+
+      {/* depressione sottovento: frecce che tirano via dalla parete */}
+      {[0.25, 0.6, 0.95].map((t) => {
+        const y = quota(zTot * t);
+        const x = xEd + larghezza;
+        return (
+          <path
+            key={t}
+            className="dg-carico is-faint"
+            strokeWidth={1}
+            d={`M${x + 3},${y.toFixed(1)} L${x + 26},${y.toFixed(1)} M${x + 20},${(y - 3).toFixed(1)} L${x + 27},${y.toFixed(1)} L${x + 20},${(y + 3).toFixed(1)}`}
+          />
+        );
+      })}
+
+      {/* quote del diagramma */}
+      {/* sotto zmin la pressione resta quella di zmin: si vede il tratto dritto */}
+      {zmin < zTot && (
+        <path
+          className="dg-axis"
+          strokeWidth={1}
+          strokeDasharray="2 3"
+          d={`M8,${quota(zmin).toFixed(1)} L${xEd},${quota(zmin).toFixed(1)}`}
+        />
+      )}
+
+      <text x={6} y={yCima - 8} className="dg-testo">
+        p(z) = qb·ce(z)·cp·cd
+      </text>
+      <text x={X(pCima) - 4} y={yCima + 4} className="dg-testo is-accent" textAnchor="end">
+        {fx(pCima)} kN/m²
+      </text>
+      <text x={X(pBase) - 4} y={yTerra - 4} className="dg-testo" textAnchor="end">
+        {fx(pBase)}
+      </text>
+      {zmin < zTot && (
+        <text x={6} y={quota(zmin) - 4} className="dg-testo">
+          zmin {fx(zmin, 0)} m
+        </text>
+      )}
+      <text x={xEd + larghezza + 30} y={quota(zTot * 0.6)} className="dg-testo" dominantBaseline="middle">
+        {fx(-sotto)}
+      </text>
+      <text x={xEd + larghezza / 2} y={yTerra + 16} className="dg-testo" textAnchor="middle">
+        z = {fx(z)} m
+      </text>
+    </Cornice>
+  );
+}
+
 /* ─────────────────────── falda e carico neve ─────────────────────── */
 
-export function Falda({ qsk, qs, mu }: { qsk: number; qs: number; mu: number }) {
+/**
+ * Carico neve sulla copertura a due falde.
+ *
+ * Il punto delicato è che qs è riferito alla **proiezione orizzontale**: su
+ * ogni striscia verticale di uguale larghezza grava lo stesso carico, quindi
+ * il diagramma è una fascia di spessore costante *misurato in verticale* sopra
+ * la falda — non un carico che si assottiglia verso il colmo, e nemmeno una
+ * fascia perpendicolare alla falda.
+ */
+export function Falda({
+  qsk,
+  qs,
+  mu,
+  alfa = 15,
+}: {
+  qsk: number;
+  qs: number;
+  mu: number;
+  /** Inclinazione della falda, in gradi. */
+  alfa?: number;
+}) {
   const W = 260;
-  const H = 150;
-  const xa = 26;
+  const H = 172;
+  const xa = 30;
   const xc = W / 2;
-  const xb = W - 26;
-  const yC = 44;
-  const yG = 104;
+  const xb = W - 30;
+  const yG = 122; // quota di gronda
+  // il colmo sale con l'inclinazione, entro i limiti del riquadro
+  const salita = Math.min(52, ((xc - xa) * Math.tan((Math.min(Math.abs(alfa), 75) * Math.PI) / 180)));
+  const yC = yG - salita;
+
+  /** Quota della falda alla generica ascissa. */
+  const yFalda = (x: number) =>
+    x <= xc ? yG + ((yC - yG) * (x - xa)) / (xc - xa) : yC + ((yG - yC) * (x - xc)) / (xb - xc);
+
+  // spessore della fascia di carico: costante in verticale, come qs
+  const spessore = 30;
 
   const frecce = [];
-  const n = 7;
+  const n = 9;
   for (let i = 0; i < n; i++) {
-    const t = i / (n - 1);
-    const x = xa + (xb - xa) * t;
-    // quota della falda sotto la freccia
-    const yFalda = t <= 0.5 ? yG + (yC - yG) * (t / 0.5) : yC + (yG - yC) * ((t - 0.5) / 0.5);
+    const x = xa + ((xb - xa) * i) / (n - 1);
+    const y = yFalda(x);
     frecce.push(
       <path
         key={i}
         className="dg-carico"
         strokeWidth={1}
-        d={`M${x},${18} L${x},${yFalda - 4} M${x - 3},${yFalda - 10} L${x},${yFalda - 3} L${x + 3},${yFalda - 10}`}
+        d={`M${x.toFixed(1)},${(y - spessore).toFixed(1)} L${x.toFixed(1)},${(y - 3).toFixed(1)} M${(x - 3).toFixed(1)},${(y - 9).toFixed(1)} L${x.toFixed(1)},${(y - 2).toFixed(1)} L${(x + 3).toFixed(1)},${(y - 9).toFixed(1)}`}
       />,
     );
   }
 
+  const fascia = [
+    `M${xa},${yG - spessore}`,
+    `L${xc},${yC - spessore}`,
+    `L${xb},${yG - spessore}`,
+    `L${xb},${yG}`,
+    `L${xc},${yC}`,
+    `L${xa},${yG}`,
+    'Z',
+  ].join(' ');
+
   return (
-    <Cornice titolo="Copertura a due falde — carico neve" viewBox={`0 0 ${W} ${H}`}>
+    <Cornice titolo="Carico neve — μ1·qsk sulla proiezione orizzontale" viewBox={`0 0 ${W} ${H}`}>
+      {/* fascia di carico: spessore costante misurato in verticale */}
+      <path className="dg-area" d={fascia} />
+      <path
+        className="dg-carico"
+        strokeWidth={1.2}
+        d={`M${xa},${yG - spessore} L${xc},${yC - spessore} L${xb},${yG - spessore}`}
+      />
       {frecce}
-      <path className="dg-carico" strokeWidth={1} d={`M${xa},18 L${xb},18`} />
+
+      {/* copertura */}
       <path className="dg-beam" strokeWidth={2} fill="none" d={`M${xa},${yG} L${xc},${yC} L${xb},${yG}`} />
-      <path className="dg-vinc" strokeWidth={1.2} fill="none" d={`M${xa},${yG} L${xa},${H - 16} M${xb},${yG} L${xb},${H - 16}`} />
-      <path className="dg-axis" strokeWidth={1} d={`M${xa - 8},${H - 16} L${xb + 8},${H - 16}`} />
+      <path
+        className="dg-vinc"
+        strokeWidth={1.2}
+        fill="none"
+        d={`M${xa},${yG} L${xa},${H - 32} M${xb},${yG} L${xb},${H - 32}`}
+      />
+      <path className="dg-axis" strokeWidth={1} d={`M${xa - 8},${H - 32} L${xb + 8},${H - 32}`} />
+
+      {/* riferimento orizzontale alla gronda, per leggere l'inclinazione */}
+      <path className="dg-axis" strokeWidth={1} strokeDasharray="3 3" d={`M${xa},${yG} L${xb},${yG}`} />
+      <text x={8} y={16} className="dg-testo">
+        α = {fx(alfa, 0)}°
+      </text>
+
+      <text x={xc} y={H - 16} className="dg-testo is-accent" textAnchor="middle">
+        qs = μ1·qsk·CE·Ct = {fx(qs)} kN/m²
+      </text>
       <text x={xc} y={H - 4} className="dg-testo" textAnchor="middle">
-        qs = μ1·qsk·CE·Ct = {fx(qs)} kN/m² (qsk {fx(qsk)}, μ1 {fx(mu)})
+        qsk {fx(qsk)} kN/m² · μ1 {fx(mu)} · uniforme su ogni falda
       </text>
     </Cornice>
   );

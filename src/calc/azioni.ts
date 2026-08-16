@@ -42,6 +42,8 @@ export interface InputAzioni {
   // neve
   zneve: string;
   as: string;
+  /** Inclinazione della falda α (°): decide μ1 e il disegno della copertura. */
+  alfaNeve: string;
   mu: string;
   ceN: string;
   ct: string;
@@ -84,6 +86,7 @@ export const AZIONI_DEFAULT: InputAzioni = {
   q: '1.33',
   zneve: 'I — Alpina',
   as: '177',
+  alfaNeve: '15',
   mu: '0.80',
   ceN: '1.00',
   ct: '1.00',
@@ -137,7 +140,16 @@ export interface RisultatiAzioni {
     /** ag, F0 e TC* del sito per i quattro stati limite — Tab. 3.2.I. */
     statiLimite: { id: StatoLimite; label: string; TR: number; ag: number; F0: number; TCstar: number }[];
   };
-  neve: { qsk: number; qs: number; mu: number; ce: number; ct: number };
+  neve: {
+    qsk: number;
+    qs: number;
+    mu: number;
+    ce: number;
+    ct: number;
+    /** Inclinazione della falda e μ1 che le corrisponde in Tab. 3.4.II. */
+    alfa: number;
+    muSuggerito: number;
+  };
   vento: { vb: number; qb: number; ce: number; cp: number; cd: number; p: number; pSotto: number };
   variabili: { qk: number; Qk: number; Hk: number; psi0: number; psi1: number; psi2: number; categoria: string };
   terre: { ka: number; Sa: number; za: number; Mrib: number };
@@ -193,6 +205,9 @@ export function calcolaAzioni(inp: InputAzioni): RisultatiAzioni {
   const ceN = num(inp.ceN);
   const ct = num(inp.ct);
   const qs = mu * qsk * ceN * ct;
+  // Tab. 3.4.II: μ1 = 0.80 fino a 30°, poi in calo lineare fino a 0 a 60°
+  const alfaNeve = Math.abs(num(inp.alfaNeve));
+  const muSuggerito = alfaNeve <= 30 ? 0.8 : alfaNeve >= 60 ? 0 : (0.8 * (60 - alfaNeve)) / 30;
 
   // ── azione del vento — §3.3 ────────────────────────────────────────────
   const vb = VB0[inp.zvento] ?? 27;
@@ -243,7 +258,7 @@ export function calcolaAzioni(inp: InputAzioni): RisultatiAzioni {
       TD,
       statiLimite,
     },
-    neve: { qsk, qs, mu, ce: ceN, ct },
+    neve: { qsk, qs, mu, ce: ceN, ct, alfa: alfaNeve, muSuggerito },
     vento: { vb, qb, ce, cp, cd, p, pSotto: -p * 0.5 },
     variabili: {
       qk: c[0],

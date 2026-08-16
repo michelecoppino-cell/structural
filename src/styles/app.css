@@ -664,6 +664,56 @@ select.input {
   }
 }
 
+/* promemoria dei cp di uso corrente, nella scheda Azioni */
+.cp-elenco {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 8px;
+  padding: 8px;
+  border: 1px solid var(--border-faint);
+  border-radius: var(--radius-md);
+  background: var(--nested);
+}
+
+.cp-voce {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr);
+  align-items: baseline;
+  gap: 2px 10px;
+  padding: 5px 8px;
+  text-align: left;
+  cursor: pointer;
+  color: var(--text-2);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  font: inherit;
+  font-size: 12.5px;
+}
+
+.cp-voce:hover {
+  background: var(--hover);
+}
+
+.cp-voce.is-attiva {
+  border-color: var(--color-accent);
+  color: var(--color-accent-300);
+}
+
+.cp-voce .v {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--color-accent-300);
+  text-align: right;
+}
+
+.cp-voce .r {
+  grid-column: 2;
+  font-size: 10.5px;
+  color: var(--text-faint);
+}
+
 /* ─────────────────────────── campo espandibile ─────────────────────────── */
 
 .fields {
@@ -1093,6 +1143,10 @@ button.field-origin:hover {
 .dg-carico {
   stroke: var(--diagram-line);
   fill: none;
+}
+
+.dg-carico.is-faint {
+  stroke: var(--diagram-faint);
 }
 
 .dg-testo {
