@@ -728,6 +728,13 @@ select.input {
   grid-template-columns: minmax(0, 1fr);
 }
 
+/* voce che occupa tutta la riga della griglia dei campi: pulsanti e pannelli
+   che si aprono sotto un campo (elenco dei cp, interruttore della spinta
+   sismica) e che non stanno bene in mezza colonna */
+.campo-largo {
+  grid-column: 1 / -1;
+}
+
 /* colonne più fitte: campi con l'etichetta sopra, dove lo spazio è poco */
 .fields.fields-fitti {
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
