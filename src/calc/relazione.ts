@@ -10,6 +10,7 @@ import { COMBINAZIONI, calcolaSollecitazioni } from './sollecitazioni';
 import { SCHEMI_BY_ID } from './trave';
 import { verificaTaglioArmato, verificaTaglioNonArmato } from './verifiche';
 import { valido, validaTaglioArmato, validaTaglioNonArmato } from './validazione';
+import { ricalcola, testoVoce } from './calcolatrice';
 
 const fx = (v: number, d = 2) => (Number.isFinite(v) ? v.toFixed(d) : '—');
 
@@ -104,6 +105,16 @@ export function testoRelazione(state: AppState, tab: TabId): string {
       `  VRd = min(VRsd, VRcd) = ${fx(ar.VRd, 1)} kN — meccanismo governante: ${ar.governa}`,
       `  VEd = ${inp.taglioArmato.VEd} kN → VEd/VRd = ${fx(ar.esito.sfruttamento, 3)} — ${ar.esito.ok ? 'VERIFICATO' : 'NON VERIFICATO'} (margine ${fx(ar.esito.margine, 1)}%)`,
       `  Minimi §4.1.6.1.1: Asw,min = ${fx(ar.AswMin, 0)} mm²/m — ${ar.esitoAswMin.ok ? 'soddisfatto' : 'NON soddisfatto'}; passo max = ${fx(ar.passoMax, 0)} mm — ${ar.esitoPasso.ok ? 'soddisfatto' : 'NON soddisfatto'}`,
+    ].join('\n');
+  }
+
+  if (tab === 'calcolatrice') {
+    const voci = ricalcola(state.calcolatrice.voci);
+    if (!voci.length) return [...intestazione, 'CALCOLI DI PREDIMENSIONAMENTO', '  (nessuna operazione salvata)'].join('\n');
+    return [
+      ...intestazione,
+      'CALCOLI DI PREDIMENSIONAMENTO',
+      ...voci.map((v) => `  ${testoVoce(v)}`),
     ].join('\n');
   }
 
