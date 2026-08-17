@@ -1593,19 +1593,17 @@ button.field-origin:hover {
   border-color: var(--err);
 }
 
-/* ───────────── ≥ 900px: i diagrammi non prendono tutta l'altezza ─────────
-   Su desktop il riquadro dei diagrammi si ferma al 70 % dell'altezza che
-   avanza: le curve restano leggibili e la fascia dei comandi non finisce
-   schiacciata in fondo. I testi non cambiano misura — il viewBox degli SVG è
-   costruito sui pixel reali del riquadro, quindi il disegno si accorcia ma le
-   etichette restano quelle. */
+/* ───────────── ≥ 900px: i diagrammi non prendono tutta la schermata ───────
+   Su desktop il riquadro dei diagrammi si ferma al 70 % sia in altezza sia in
+   larghezza: le curve restano leggibili e i comandi non finiscono schiacciati
+   in fondo. I testi non cambiano misura — il viewBox degli SVG è costruito sui
+   pixel reali del riquadro, quindi il disegno si accorcia ma le etichette
+   restano quelle. La fascia dei comandi, invece, tiene tutta la sua colonna:
+   lì lo spazio serve davvero. */
 
 @media (min-width: 900px) {
-  .soll-layout {
-    /* 0.7fr: la riga dei diagrammi prende il 70 % dell'altezza libera e il
-       resto non viene riempito — la fascia dei comandi risale sotto ai
-       grafici invece di restare incollata in fondo alla finestra */
-    grid-template-rows: minmax(0, 0.7fr) auto;
+  .soll-risultati {
+    max-width: 70%;
   }
 
   /* la colonna di destra resta alta quanto tutto il resto: i due pannelli
@@ -1616,6 +1614,18 @@ button.field-origin:hover {
 
   .soll-comandi {
     grid-column: 1;
+  }
+}
+
+/* L'accorciamento in altezza vale solo dove l'altezza c'è: su una finestra
+   bassa il 70 % lascerebbe ai quattro riquadri meno di quanto serve a starci,
+   e allora i diagrammi si riprendono tutta la colonna. */
+@media (min-width: 900px) and (min-height: 880px) {
+  .soll-layout {
+    /* 0.7fr: la riga dei diagrammi prende il 70 % dell'altezza libera e il
+       resto non viene riempito — la fascia dei comandi risale sotto ai
+       grafici invece di restare incollata in fondo alla finestra */
+    grid-template-rows: minmax(0, 0.7fr) auto;
   }
 }
 

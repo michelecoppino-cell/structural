@@ -226,9 +226,12 @@ comandi in fondo**.
   vista** nella fascia dei comandi, sotto il titolo: aprire e chiudere la tendina costava una
   riga e non faceva guadagnare spazio.
 - **Diagrammi**: carichi con schema statico, momento flettente, taglio e deformata. Su
-  desktop la fascia dei diagrammi si ferma al **70% dell'altezza disponibile**, così i
-  comandi risalgono sotto ai grafici invece di restare incollati in fondo alla finestra; le
+  desktop il riquadro dei diagrammi si ferma al **70% dello spazio disponibile**, in altezza
+  e in larghezza: i comandi risalgono sotto ai grafici invece di restare incollati in fondo
+  alla finestra, e la fascia dei comandi resta invece larga quanto la sua colonna. Le
   etichette non rimpiccioliscono, perché il viewBox è costruito sui pixel reali del riquadro.
+  L'accorciamento in altezza vale solo sopra gli 880 px di finestra: più in basso i quattro
+  riquadri non ci starebbero, e si riprendono tutta la colonna.
   Il riquadro si misura e il disegno è costruito in **coordinate reali** — nessuno stiramento
   dei vincoli, delle frecce o dei testi al variare della larghezza. Ogni diagramma è quotato:
   valore e ascissa del punto notevole, valori agli estremi, RA e RB scritte ai vincoli.
