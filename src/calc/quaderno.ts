@@ -1,0 +1,346 @@
+/**
+ * Il Quaderno: un foglio bianco su cui il calcolo si scrive nell'ordine in cui
+ * lo si pensa, e che è già il documento da stampare.
+ *
+ * Un quaderno è una **sequenza di blocchi**. Ogni blocco è una riga di calcolo,
+ * una nota, uno schema incollato o un capitolo ripreso da un'altra scheda; si
+ * aggiungono in coda e si eliminano, ma non si riordinano — l'ordine racconta
+ * la sequenza reale del calcolo, come su un foglio a mano.
+ *
+ * I blocchi di calcolo **non salvano il proprio valore**: salvano da dove viene
+ * (la grandezza, la formula preimpostata, la scheda) e lo ricalcolano ogni
+ * volta. Correggere la base della trave nel pannello a destra aggiorna da solo
+ * tutto quello che ne discende, senza toccare il quaderno.
+ *
+ * Un blocco di calcolo con un nome valido diventa una variabile per i blocchi
+ * che vengono dopo: `A = b·h` e poi `σ = N/A`, come si scriverebbe a mano.
+ *
+ * L'unità con cui leggere il risultato è del blocco, non della formula: la si
+ * cambia e il **numero si converte** (0,8 MPa → 8,16 kg/cmq). Le uniche cose
+ * che un blocco salva per sé sono il testo di una nota e l'immagine di uno
+ * schema.
+ */
+
+import {
+  formatta,
+  leggiRisultato,
+  nomeAmmesso,
+  nomiMancanti,
+  valutaConUnita,
+  variabili,
+  unitaVariabili,
+  type Preimpostata,
+  type VoceCalcolata,
+} from './calcolatrice';
+import { UNITA_DEFAULT, dimUnita, inBase, unitaCompatibili, type Dim } from './unita';
+
+/**
+ * Che cosa può stare su una pagina:
+ *  - `valore`, `operazione`, `import`: una riga di calcolo collegata alla sua
+ *    fonte (una grandezza del pannello, una formula preimpostata, un risultato
+ *    di un'altra scheda);
+ *  - `formula`: una riga scritta qui, con il suo nome e la sua unità;
+ *  - `nota` e `immagine`: quello che si aggiunge a mano;
+ *  - `capitolo`: un capitolo intero ripreso da un'altra scheda, come faceva la
+ *    spunta della vecchia scheda Esporta.
+ */
+export type TipoBlocco = 'valore' | 'operazione' | 'formula' | 'import' | 'nota' | 'immagine' | 'capitolo';
+
+export interface BloccoQuaderno {
+  id: string;
+  tipo: TipoBlocco;
+  /** Fonte a cui il blocco resta collegato: id della grandezza, della formula, dell'import o del capitolo. */
+  fonte: string;
+  /** Nome del risultato: si può correggere solo sui blocchi `formula`. */
+  nome: string;
+  /** Espressione dei blocchi `formula`. */
+  espressione: string;
+  /** Unità con cui si vuole leggere il risultato; vuota = quella della fonte. */
+  um: string;
+  /** Testo della nota, o didascalia dell'immagine. */
+  testo: string;
+  /** Immagine incollata o trascinata, come data URL. */
+  img: string;
+}
+
+/** Un blocco nuovo, con tutti i campi al loro posto. */
+export function nuovoBlocco(tipo: TipoBlocco, patch: Partial<BloccoQuaderno> = {}): BloccoQuaderno {
+  return {
+    id: `q-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
+    tipo,
+    fonte: '',
+    nome: '',
+    espressione: '',
+    um: '',
+    testo: '',
+    img: '',
+    ...patch,
+  };
+}
+
+/**
+ * Un risultato pronto da tirare dentro dalle altre schede: il taglio delle
+ * Sollecitazioni, l'esito di una verifica. Il valore arriva nell'unità con cui
+ * la scheda di provenienza lo mostra; a convertirlo pensa il quaderno.
+ */
+export interface ImportoScheda {
+  id: string;
+  /** Nome con cui il valore diventa richiamabile nel quaderno. */
+  nome: string;
+  /** Come si chiama nell'elenco del pannello: «M max», «Esito taglio». */
+  etichetta: string;
+  /** Scheda da cui arriva, per il segno di provenienza. */
+  scheda: string;
+  valore: number;
+  um: string;
+  /** Testo al posto del numero, per quello che non è un numero (un esito). */
+  testo?: string;
+}
+
+/** Tutto quello che serve a dare un valore ai blocchi del quaderno. */
+export interface Sorgenti {
+  /** Le grandezze del pannello, già ricalcolate (libreria compresa). */
+  voci: VoceCalcolata[];
+  preimpostate: Preimpostata[];
+  importi: ImportoScheda[];
+  elenco: string[];
+}
+
+/** Un blocco con dentro il suo valore di adesso. */
+export interface BloccoCalcolato {
+  blocco: BloccoQuaderno;
+  /** Numero di passo mostrato sul foglio: 01, 02, … */
+  passo: string;
+  /** true = occupa tutta la riga (nota, immagine, capitolo). */
+  pieno: boolean;
+  /** true = il valore si ricalcola da solo dalla sua fonte. */
+  collegato: boolean;
+  /** Etichetta del tipo di blocco, come compare sulla pastiglia. */
+  etichetta: string;
+  /** Scheda o libreria di provenienza, se il blocco ne ha una. */
+  provenienza: string;
+  /** Nota che accompagna la fonte (la spiegazione della formula). */
+  nota: string;
+  /* ── solo per i blocchi di calcolo ── */
+  nome: string;
+  /** Formula come è scritta, con i nomi delle grandezze. */
+  espressione: string;
+  /** Numero da mostrare, letto nell'unità `um`. */
+  valore: number;
+  /** Valore in unità base: è quello che vedono i blocchi successivi. */
+  valoreBase: number;
+  um: string;
+  /** Unità ricavata dall'operazione, quando non se n'è scelta una. */
+  umAuto: string;
+  /** Unità che porta la fonte (la formula preimpostata, la grandezza, l'import). */
+  umFonte: string;
+  /** Unità fra cui si può scegliere per leggere questo risultato. */
+  umAmmesse: string[];
+  /** true = il valore è un dato scritto, non il risultato di un'operazione:
+   *  l'unità dà la scala al numero invece di convertirlo. */
+  dato: boolean;
+  dim: Dim | null;
+  /** Testo al posto del numero (esiti delle verifiche). */
+  testo: string;
+  errore: string;
+  /** Grandezze che servirebbero e non ci sono ancora. */
+  mancanti: string[];
+  /** true = il nome non entra fra le variabili (vuoto, già usato, non ammesso). */
+  nomeIgnorato: boolean;
+}
+
+const VUOTO = {
+  collegato: false,
+  etichetta: '',
+  provenienza: '',
+  nota: '',
+  nome: '',
+  espressione: '',
+  valore: NaN,
+  valoreBase: NaN,
+  um: '',
+  umAuto: '',
+  umFonte: '',
+  umAmmesse: [] as string[],
+  dato: false,
+  dim: null,
+  testo: '',
+  errore: '',
+  mancanti: [] as string[],
+  nomeIgnorato: false,
+};
+
+/** I blocchi che occupano tutta la riga: hanno un contenuto, non un numero. */
+const PIENI: TipoBlocco[] = ['nota', 'immagine', 'capitolo'];
+
+/**
+ * Ricalcola il quaderno intero, in ordine. Ogni blocco vede le grandezze del
+ * pannello e i risultati dei blocchi che lo precedono; un blocco con un nome
+ * nuovo e valido diventa a sua volta una grandezza richiamabile.
+ */
+export function ricalcolaQuaderno(
+  blocchi: BloccoQuaderno[],
+  { voci, preimpostate, importi, elenco = UNITA_DEFAULT }: Sorgenti,
+): BloccoCalcolato[] {
+  const vars = variabili(voci);
+  const unita = unitaVariabili(voci);
+
+  return blocchi.map((blocco, i) => {
+    const passo = String(i + 1).padStart(2, '0');
+    const pieno = PIENI.includes(blocco.tipo);
+    const base: BloccoCalcolato = { blocco, passo, pieno, ...VUOTO };
+
+    if (blocco.tipo === 'nota') return { ...base, etichetta: 'nota' };
+    if (blocco.tipo === 'immagine') return { ...base, etichetta: 'schema' };
+    if (blocco.tipo === 'capitolo')
+      return { ...base, collegato: true, etichetta: 'capitolo', provenienza: blocco.fonte };
+
+    /* ── i blocchi di calcolo: nome, formula e da dove viene il numero ── */
+
+    let nome = blocco.nome.trim();
+    let espressione = '';
+    let umFonte = '';
+    let etichetta = 'operazione';
+    let provenienza = '';
+    let nota = '';
+    /** Valore già pronto (grandezza, import) invece di una formula da valutare. */
+    let pronto: { valoreBase: number; dim: Dim; testo?: string } | null = null;
+
+    if (blocco.tipo === 'valore') {
+      const v = voci.find((x) => x.id === blocco.fonte);
+      if (!v) return { ...base, etichetta: 'grandezza', errore: 'grandezza non più in elenco' };
+      nome = v.nome.trim();
+      espressione = v.espressione.trim();
+      umFonte = v.umEffettiva;
+      etichetta = 'grandezza';
+      nota = v.nota;
+      const testa = { ...base, collegato: true, etichetta, nome, espressione, nota, um: umFonte, umFonte };
+      if (v.errore) return { ...testa, errore: v.errore };
+      // una grandezza ancora da compilare è un promemoria, non un errore
+      if (!espressione) return { ...testa, mancanti: [nome || 'il valore'] };
+      pronto = { valoreBase: v.valoreBase, dim: v.dim ?? {} };
+    } else if (blocco.tipo === 'operazione') {
+      const p = preimpostate.find((x) => x.id === blocco.fonte);
+      if (!p) return { ...base, etichetta, errore: 'formula non più in elenco' };
+      nome = p.nome.trim();
+      espressione = p.espressione.trim();
+      umFonte = p.um.trim();
+      provenienza = 'formule';
+      nota = p.nota;
+    } else if (blocco.tipo === 'formula') {
+      espressione = blocco.espressione.trim();
+      etichetta = 'formula';
+    } else {
+      const im = importi.find((x) => x.id === blocco.fonte);
+      if (!im) return { ...base, etichetta: 'import', errore: 'valore non più disponibile' };
+      nome = im.nome.trim();
+      // il nome basta: come si chiama nella scheda di provenienza lo dice la nota
+      espressione = '';
+      nota = im.etichetta;
+      umFonte = im.um;
+      etichetta = 'import';
+      provenienza = im.scheda;
+      pronto = { valoreBase: inBase(im.valore, im.um), dim: dimUnita(im.um), testo: im.testo };
+    }
+
+    const umScelta = blocco.um.trim() || umFonte;
+
+    // il valore: o è già pronto (grandezza, import) o si valuta la formula
+    let valore = NaN;
+    let dim: Dim | null = null;
+    let errore = '';
+    let mancanti: string[] = [];
+    let testo = pronto?.testo ?? '';
+
+    if (pronto) {
+      valore = pronto.valoreBase;
+      dim = pronto.dim;
+    } else if (!espressione) {
+      errore = blocco.tipo === 'formula' ? '' : 'formula vuota';
+      mancanti = blocco.tipo === 'formula' ? ['una formula'] : [];
+    } else {
+      mancanti = nomiMancanti(espressione, vars);
+      if (mancanti.length) {
+        // niente errore: mancano dei dati, non è sbagliata
+      } else {
+        const esito = valutaConUnita(espressione, vars, unita);
+        if (esito.ok) {
+          valore = esito.valore;
+          dim = esito.dim;
+        } else errore = esito.errore;
+      }
+    }
+
+    const letto = Number.isFinite(valore) ? leggiRisultato(valore, dim, umScelta, elenco) : null;
+    const dimFinale = letto ? letto.dim : (dim ?? dimUnita(umScelta));
+    const um = letto ? letto.um : umScelta;
+
+    // il nome entra fra le variabili solo se è nuovo: due `M` diversi
+    // renderebbero ambiguo il richiamo, e il primo ha la precedenza
+    const registrabile =
+      !!nome && nomeAmmesso(nome) && !(nome in vars) && !!letto && Number.isFinite(letto.valoreBase);
+    if (registrabile && letto) {
+      vars[nome] = letto.valoreBase;
+      unita[nome] = letto.dim ?? {};
+    }
+
+    return {
+      blocco,
+      passo,
+      pieno,
+      collegato: blocco.tipo !== 'formula',
+      etichetta,
+      provenienza,
+      nota,
+      nome,
+      espressione,
+      valore: letto ? letto.valore : NaN,
+      valoreBase: letto ? letto.valoreBase : NaN,
+      um,
+      umAuto: letto?.umAuto ?? '',
+      umFonte,
+      umAmmesse: dimFinale ? unitaCompatibili(dimFinale, elenco) : [],
+      dato: letto ? letto.dato : true,
+      dim: dimFinale,
+      testo,
+      errore,
+      mancanti,
+      nomeIgnorato: !!nome && !registrabile && !!letto,
+    };
+  });
+}
+
+/**
+ * Riga di testo di un blocco di calcolo, per il «Copia» e per l'HTML:
+ * `nome = formula = risultato unità`. È la stessa riga che si vede sul foglio.
+ */
+export function testoBlocco(b: BloccoCalcolato): string {
+  const testa = b.nome ? `${b.nome} = ` : '';
+  if (b.errore) return `${testa}${b.espressione} — errore: ${b.errore}`;
+  if (b.mancanti.length) return `${testa}${b.espressione || '—'} — manca ${b.mancanti.join(', ')}`;
+  if (b.testo) return `${testa}${b.testo}`;
+  const um = b.um ? ` ${b.um}` : '';
+  const formula = b.espressione && b.espressione !== formatta(b.valore) ? `${b.espressione} = ` : '';
+  return `${testa}${formula}${formatta(b.valore)}${um}`;
+}
+
+/** Rimette in ordine i blocchi che arrivano da un salvataggio. */
+export function normalizzaBlocchi(raw: Partial<BloccoQuaderno>[]): BloccoQuaderno[] {
+  const tipi: TipoBlocco[] = ['valore', 'operazione', 'formula', 'import', 'nota', 'immagine', 'capitolo'];
+  return (Array.isArray(raw) ? raw : []).flatMap((b, i) => {
+    const tipo = tipi.find((t) => t === b?.tipo);
+    if (!tipo) return [];
+    return [
+      {
+        id: b?.id || `q-${i}`,
+        tipo,
+        fonte: b?.fonte ?? '',
+        nome: b?.nome ?? '',
+        espressione: b?.espressione ?? '',
+        um: b?.um ?? '',
+        testo: b?.testo ?? '',
+        img: typeof b?.img === 'string' ? b.img : '',
+      },
+    ];
+  });
+}

@@ -14,7 +14,14 @@ import { COMBINAZIONI, calcolaSollecitazioni } from './sollecitazioni';
 import { SCHEMI_BY_ID } from './trave';
 import { verificaFlessioneCA, verificaTaglioArmato, verificaTaglioNonArmato } from './verifiche';
 import { valido, validaTaglioArmato, validaTaglioNonArmato } from './validazione';
-import { ricalcola, testoVoce, vociDaSelezioni } from './calcolatrice';
+import { ricalcola, testoVoce, vociDaSelezioni, type VoceCalcolata } from './calcolatrice';
+import {
+  ricalcolaQuaderno,
+  testoBlocco,
+  type BloccoCalcolato,
+  type ImportoScheda,
+  type Sorgenti,
+} from './quaderno';
 
 const fx = (v: number, d = 2) => (Number.isFinite(v) ? v.toFixed(d) : '—');
 
@@ -35,9 +42,14 @@ export const CAPITOLI: { id: CapitoloId; titolo: string }[] = [
   { id: 'azioni', titolo: 'Azioni' },
   { id: 'sollecitazioni', titolo: 'Sollecitazioni' },
   { id: 'verifiche', titolo: 'Verifiche' },
-  { id: 'calcolatrice', titolo: 'Calcolatrice' },
+  { id: 'calcolatrice', titolo: 'Grandezze del calcolo' },
   { id: 'costi', titolo: 'Stime costi' },
 ];
+
+/** Titolo di un capitolo dal suo id, per le pastiglie e per il foglio. */
+export function titoloCapitolo(id: string): string {
+  return CAPITOLI.find((c) => c.id === id)?.titolo ?? id;
+}
 
 /* ─────────────────────────── i capitoli, uno per uno ────────────────────── */
 
@@ -212,15 +224,12 @@ function blocchiVerifiche(state: AppState): Blocco[] {
 
 function blocchiCalcolatrice(state: AppState): Blocco[] {
   // anche le grandezze scelte a tendina fanno parte del calcolo: stanno in
-  // testa alla sequenza come nella scheda
-  const voci = ricalcola([
-    ...vociDaSelezioni(state.calcolatrice.selezioni),
-    ...state.calcolatrice.voci,
-  ]).filter((v) => v.espressione.trim());
+  // testa alla sequenza come nel pannello del quaderno
+  const voci = grandezzeQuaderno(state).filter((v) => v.espressione.trim());
   return [
     {
-      titolo: 'Calcoli di predimensionamento',
-      righe: voci.length ? voci.map(testoVoce) : ['(nessuna operazione compilata)'],
+      titolo: 'Grandezze e operazioni compilate',
+      righe: voci.length ? voci.map(testoVoce) : ['(nessuna grandezza compilata)'],
     },
   ];
 }
@@ -235,6 +244,136 @@ function blocchiCosti(state: AppState): Blocco[] {
     { titolo: 'Computo sintetico', righe },
     { titolo: 'Totale', righe: [`TOTALE GENERALE = ${generale.toFixed(2)} €`] },
   ];
+}
+
+/* ───────────────────── il quaderno: sorgenti e foglio ───────────────────── */
+
+/**
+ * Le grandezze del pannello del quaderno, ricalcolate: prima quelle che
+ * nascono dalle scelte di libreria, poi quelle scritte a mano. È la stessa
+ * sequenza che si vede nella colonna a destra, e la sola fonte dei numeri —
+ * la usano il foglio a schermo e l'esportazione, così non raccontano due cose
+ * diverse.
+ */
+export function grandezzeQuaderno(state: AppState): VoceCalcolata[] {
+  const c = state.calcolatrice;
+  return ricalcola([...vociDaSelezioni(c.selezioni), ...c.voci], c.unita);
+}
+
+/**
+ * Quello che si può tirare dentro dalle altre schede, già pronto: il taglio
+ * delle Sollecitazioni, la neve delle Azioni, le resistenze delle Verifiche.
+ * I numeri arrivano nell'unità con cui la scheda di provenienza li mostra; a
+ * portarli in unità base pensa il quaderno.
+ */
+export function importiDaSchede(state: AppState): ImportoScheda[] {
+  const az = calcolaAzioni(state.azioni);
+  const soll = calcolaSollecitazioni(state.sollecitazioni, az);
+  const t = soll.trave;
+  const inp = inputVerifiche(state, Math.abs(t.VmaxAbs.val));
+  const na = verificaTaglioNonArmato(inp.taglioNonArmato);
+  const ar = verificaTaglioArmato(inp.taglioArmato);
+  const fl = verificaFlessioneCA(state.verifiche.flessioneCA);
+  const esito = (ok: boolean, sfr: number) =>
+    `${ok ? 'verificato' : 'NON verificato'} (${(sfr * 100).toFixed(0)}%)`;
+
+  return [
+    { id: 'imp-mmax', nome: 'Mmax', etichetta: 'M max', scheda: 'Sollecitazioni', valore: t.MmaxAbs.val, um: 'kNm' },
+    { id: 'imp-vmax', nome: 'Vmax', etichetta: 'V max', scheda: 'Sollecitazioni', valore: t.VmaxAbs.val, um: 'kN' },
+    { id: 'imp-q', nome: 'qd', etichetta: 'q di progetto', scheda: 'Sollecitazioni', valore: soll.q, um: 'kN/m' },
+    { id: 'imp-luce', nome: 'L', etichetta: 'Luce L', scheda: 'Sollecitazioni', valore: soll.L, um: 'm' },
+    {
+      id: 'imp-fmax',
+      nome: 'fmax',
+      etichetta: 'Freccia max',
+      scheda: 'Sollecitazioni',
+      valore: Math.abs(t.fmax.val) * 1000,
+      um: 'mm',
+    },
+    { id: 'imp-neve', nome: 'qs', etichetta: 'Carico neve qs', scheda: 'Azioni', valore: az.neve.qs, um: 'kN/mq' },
+    { id: 'imp-vento', nome: 'pv', etichetta: 'Pressione vento p', scheda: 'Azioni', valore: az.vento.p, um: 'kN/mq' },
+    { id: 'imp-qk', nome: 'qk', etichetta: 'Variabile qk', scheda: 'Azioni', valore: az.variabili.qk, um: 'kN/mq' },
+    { id: 'imp-terre', nome: 'Sa', etichetta: 'Spinta terre Sa', scheda: 'Azioni', valore: az.terre.Sa, um: 'kN/m' },
+    {
+      id: 'imp-vrd0',
+      nome: 'VRd0',
+      etichetta: 'VRd senza staffe',
+      scheda: 'Verifiche',
+      valore: na.VRd,
+      um: 'kN',
+    },
+    { id: 'imp-vrd', nome: 'VRd', etichetta: 'VRd con staffe', scheda: 'Verifiche', valore: ar.VRd, um: 'kN' },
+    { id: 'imp-mrd', nome: 'MRd', etichetta: 'MRd flessione', scheda: 'Verifiche', valore: fl.MRd, um: 'kNm' },
+    {
+      id: 'imp-esito-taglio',
+      nome: '',
+      etichetta: 'Esito taglio',
+      scheda: 'Verifiche',
+      valore: NaN,
+      um: '',
+      testo: esito(ar.esito.ok, ar.esito.sfruttamento),
+    },
+    {
+      id: 'imp-esito-flessione',
+      nome: '',
+      etichetta: 'Esito flessione',
+      scheda: 'Verifiche',
+      valore: NaN,
+      um: '',
+      testo: esito(fl.esito.ok, fl.esito.sfruttamento),
+    },
+  ];
+}
+
+/** Tutto quello che serve a dare un valore ai blocchi del quaderno. */
+export function sorgentiQuaderno(state: AppState): Sorgenti {
+  return {
+    voci: grandezzeQuaderno(state),
+    preimpostate: state.calcolatrice.preimpostate,
+    importi: importiDaSchede(state),
+    elenco: state.calcolatrice.unita,
+  };
+}
+
+/** Il quaderno ricalcolato: i blocchi con il valore che hanno adesso. */
+export function quadernoCalcolato(state: AppState): BloccoCalcolato[] {
+  return ricalcolaQuaderno(state.quaderno.blocchi, sorgentiQuaderno(state));
+}
+
+/**
+ * Una pagina del foglio, elemento per elemento: è la forma in cui il quaderno
+ * esce, sia a schermo che in stampa, nel testo da incollare e nell'HTML.
+ */
+export type ElementoFoglio =
+  | { tipo: 'capitolo'; id: string; capitolo: Capitolo }
+  | { tipo: 'calcolo'; id: string; passo: string; testo: string; nota: string }
+  | { tipo: 'nota'; id: string; testo: string }
+  | { tipo: 'immagine'; id: string; img: string; didascalia: string };
+
+/**
+ * Il foglio del quaderno, nell'ordine dei blocchi: i capitoli si espandono nei
+ * loro blocchi di relazione, le righe di calcolo diventano testo, note e
+ * schemi restano quello che sono.
+ */
+export function foglioQuaderno(state: AppState): ElementoFoglio[] {
+  return quadernoCalcolato(state).flatMap((b): ElementoFoglio[] => {
+    const id = b.blocco.id;
+    if (b.blocco.tipo === 'capitolo') {
+      const c = CAPITOLI.find((x) => x.id === b.blocco.fonte);
+      if (!c) return [];
+      return [{ tipo: 'capitolo', id, capitolo: { ...c, blocchi: blocchiCapitolo(state, c.id) } }];
+    }
+    if (b.blocco.tipo === 'nota') {
+      const testo = b.blocco.testo.trim();
+      return testo ? [{ tipo: 'nota', id, testo }] : [];
+    }
+    if (b.blocco.tipo === 'immagine') {
+      return b.blocco.img
+        ? [{ tipo: 'immagine', id, img: b.blocco.img, didascalia: b.blocco.testo.trim() }]
+        : [];
+    }
+    return [{ tipo: 'calcolo', id, passo: b.passo, testo: testoBlocco(b), nota: b.nota.trim() }];
+  });
 }
 
 /** I blocchi di un capitolo, calcolati sullo stato corrente. */
@@ -278,16 +417,30 @@ export function testoBlocchi(blocchi: Blocco[]): string[] {
   return blocchi.flatMap((b, i) => [...(i ? [''] : []), b.titolo.toUpperCase(), ...b.righe.map((r) => `  ${r}`)]);
 }
 
+/** Il foglio del quaderno appiattito in righe di testo, nell'ordine dei blocchi. */
+export function testoFoglio(state: AppState): string[] {
+  const righe = foglioQuaderno(state).flatMap((e) => {
+    if (e.tipo === 'capitolo')
+      return [e.capitolo.titolo.toUpperCase(), ''.padEnd(e.capitolo.titolo.length, '─'), ...testoBlocchi(e.capitolo.blocchi), ''];
+    if (e.tipo === 'nota') return [e.testo, ''];
+    if (e.tipo === 'immagine') return [`[schema allegato${e.didascalia ? `: ${e.didascalia}` : ''}]`, ''];
+    return [`${e.passo}  ${e.testo}${e.nota ? `   — ${e.nota}` : ''}`];
+  });
+  return righe.length ? righe : ['(quaderno vuoto)'];
+}
+
 /** Blocco di testo della scheda, pronto da incollare in Word. */
 export function testoRelazione(state: AppState, tab: TabId): string {
   const capitolo = CAPITOLI.find((c) => c.id === tab);
   if (!capitolo) {
-    // schede senza contenuto proprio (normativa, esportazione): si copia tutto
-    // quello che è stato spuntato per il foglio
-    const scelti = CAPITOLI.filter((c) => state.esportazione.capitoli[c.id]).map((c) => c.id);
+    // schede senza un capitolo proprio: dal quaderno si copia il foglio come
+    // è stato composto, dalle altre (la Libreria) lo stesso — è il documento
+    const e = state.quaderno;
     return [
       ...intestazione(state, 'RELAZIONE'),
-      ...capitoli(state, scelti).flatMap((c) => [c.titolo.toUpperCase(), '', ...testoBlocchi(c.blocchi), '']),
+      ...(e.intestazione.trim() ? [e.intestazione.trim(), ''] : []),
+      ...testoFoglio(state),
+      ...(e.nota.trim() ? ['', e.nota.trim()] : []),
     ].join('\n');
   }
   return [...intestazione(state, capitolo.titolo.toUpperCase()), ...testoBlocchi(blocchiCapitolo(state, capitolo.id))].join(

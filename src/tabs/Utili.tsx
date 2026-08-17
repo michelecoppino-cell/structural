@@ -315,7 +315,7 @@ export default function Utili() {
           <>
             fyd e ftd con i γ della famiglia: carpenteria γM0 = {COEFF_DEFAULT.gammaM0} e γM2 ={' '}
             {COEFF_DEFAULT.gammaM2}, armatura γS = {COEFF_DEFAULT.gammaS}, bulloni γM2 ={' '}
-            {COEFF_DEFAULT.gammaM2}. Sono le stesse sigle della tendina «Acciaio» della Calcolatrice.
+            {COEFF_DEFAULT.gammaM2}. Sono le stesse sigle della tendina «Acciaio» del Quaderno.
           </>
         }
       />

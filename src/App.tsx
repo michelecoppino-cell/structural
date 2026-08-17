@@ -10,9 +10,8 @@ import {
   Info,
   ClipboardText,
   CheckCircle,
-  Calculator,
   Books,
-  FileText,
+  NotebookIcon,
 } from '@phosphor-icons/react';
 import { useStore, type TabId } from './state/store';
 import { migra } from './state/store';
@@ -22,9 +21,8 @@ import Azioni from './tabs/Azioni';
 import Sollecitazioni from './tabs/Sollecitazioni';
 import Verifiche from './tabs/Verifiche';
 import Costi from './tabs/Costi';
-import Calcolatrice from './tabs/Calcolatrice';
+import Quaderno from './tabs/Quaderno';
 import Libreria from './tabs/Libreria';
-import Esporta from './tabs/Esporta';
 
 const TABS: { id: TabId; label: string; icon: React.ReactNode; sub: string }[] = [
   { id: 'azioni', label: 'Azioni', icon: <CloudSun size={17} />, sub: '5 gruppi · NTC2018 cap. 3' },
@@ -42,22 +40,16 @@ const TABS: { id: TabId; label: string; icon: React.ReactNode; sub: string }[] =
   },
   { id: 'costi', label: 'Stime costi', icon: <CurrencyEur size={17} />, sub: 'Computo sintetico e incidenze' },
   {
-    id: 'calcolatrice',
-    label: 'Calcolatrice',
-    icon: <Calculator size={17} />,
-    sub: 'Calcoli in sequenza, con nome e nota',
+    id: 'quaderno',
+    label: 'Quaderno',
+    icon: <NotebookIcon size={17} />,
+    sub: 'Foglio di calcolo libero: formule, unità che si convertono, schemi — e da qui esce la stampa',
   },
   {
     id: 'normativa',
     label: 'Libreria',
     icon: <Books size={17} />,
     sub: 'Norme: NTC2018 e Circolare 2019 · Utili: armature, profili, bulloni',
-  },
-  {
-    id: 'esporta',
-    label: 'Esporta',
-    icon: <FileText size={17} />,
-    sub: 'Foglio A4 con i soli capitoli spuntati — stampa, PDF, testo',
   },
 ];
 
@@ -108,8 +100,12 @@ export default function App() {
     }
   };
 
-  /** La scheda Sollecitazioni sta in una schermata sola: niente scroll di pagina. */
-  const fit = state.tab === 'sollecitazioni';
+  /**
+   * Schede che stanno in una schermata sola, senza scroll di pagina: le
+   * Sollecitazioni per il grafico, il Quaderno perché il foglio e il pannello
+   * scorrono per conto loro, come su due scrivanie accostate.
+   */
+  const fit = state.tab === 'sollecitazioni' || state.tab === 'quaderno';
 
   return (
     <div className={`app${fit ? ' is-fit' : ''}`}>
@@ -241,9 +237,8 @@ export default function App() {
             {state.tab === 'sollecitazioni' && <Sollecitazioni />}
             {state.tab === 'verifiche' && <Verifiche />}
             {state.tab === 'costi' && <Costi />}
-            {state.tab === 'calcolatrice' && <Calcolatrice />}
+            {state.tab === 'quaderno' && <Quaderno />}
             {state.tab === 'normativa' && <Libreria />}
-            {state.tab === 'esporta' && <Esporta />}
           </SlotProvider>
         </main>
       </div>

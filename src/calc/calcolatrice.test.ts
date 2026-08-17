@@ -17,6 +17,7 @@ import {
   vociDaSelezioni,
   type VoceCalcolo,
 } from './calcolatrice';
+import { daBase } from './unita';
 
 const v = (src: string, vars: Record<string, number> = {}) => {
   const e = valuta(src, vars);
@@ -182,14 +183,18 @@ describe('grandezze di partenza', () => {
 
   it('la γ si può richiamare in un’espressione', () => {
     const vars = variabili(ricalcola(VOCI_DEFAULT));
-    expect(valuta('0,3*0,5*γC', vars)).toEqual({ ok: true, valore: 3.75 });
+    // i valori girano in unità base: γC scritto 25 kN/mc vale 25000 N/mc, così
+    // il peso per metro viene in N/m e si legge in kN/m senza fattori a mano
+    const e = valuta('0,3*0,5*γC', vars);
+    expect(e.ok && e.valore).toBe(3750);
+    expect(daBase(3750, 'kN/m')).toBeCloseTo(3.75, 9);
   });
 
   it('la γ si scrive anche con la g latina, per esteso o no', () => {
     const vars = variabili(ricalcola(VOCI_DEFAULT));
-    expect(valuta('gC', vars)).toEqual({ ok: true, valore: 25 });
-    expect(valuta('gammaC', vars)).toEqual({ ok: true, valore: 25 });
-    expect(valuta('gs', vars)).toEqual({ ok: true, valore: 78.5 });
+    expect(valuta('gC', vars)).toEqual({ ok: true, valore: 25000 });
+    expect(valuta('gammaC', vars)).toEqual({ ok: true, valore: 25000 });
+    expect(valuta('gs', vars)).toEqual({ ok: true, valore: 78500 });
     // un nome che non esiste resta un errore, non diventa una γ qualsiasi
     expect(valuta('gZ', vars).ok).toBe(false);
     // e il nome vero, se c'è, ha comunque la precedenza sull'alias
@@ -257,7 +262,9 @@ describe('operazioni preimpostate', () => {
     const m = PREIMPOSTATE_DEFAULT.find((p) => p.id === 'pre-m-app')!;
     expect(nomiMancanti(m.espressione, vars)).toEqual([]);
     const esito = valutaConUnita(m.espressione, vars);
-    expect(esito.ok && esito.valore).toBeCloseTo(31.25, 6);
+    // q = 10 kN/m e l = 5 m danno 31250 Nm, cioè i 31,25 kNm di sempre
+    expect(esito.ok && esito.valore).toBeCloseTo(31250, 6);
+    expect(daBase(31250, 'kNm')).toBeCloseTo(31.25, 9);
   });
 
   it('una formula con grandezze non compilate resta in attesa', () => {
@@ -317,6 +324,10 @@ describe('grandezze fisse scelte dalla libreria', () => {
     ]);
     const N = voci[voci.length - 1];
     expect(N.errore).toBe('');
-    expect(N.valore).toBeCloseTo(4 * 201.1 * ((0.85 * 25) / 1.5), -1);
+    // Ar in mmq per fcd in MPa fa una forza: prima veniva il numero grezzo,
+    // ora vengono i newton — e si leggono in kN senza scriverlo
+    expect(N.valoreBase).toBeCloseTo(4 * 201.1 * ((0.85 * 25) / 1.5), -1);
+    expect(N.umEffettiva).toBe('kN');
+    expect(N.valore).toBeCloseTo(11.4, 1);
   });
 });

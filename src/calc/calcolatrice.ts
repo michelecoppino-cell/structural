@@ -19,11 +19,31 @@
  *
  * Le funzioni trigonometriche lavorano in **gradi** (`tan(45)` = 1): in questo
  * ambito gli angoli si scrivono in gradi — α delle staffe, φ′ del terreno.
+ *
+ * ## I numeri viaggiano in unità base
+ *
+ * Ogni grandezza porta con sé la sua unità, e il valore che gira nelle formule
+ * è quello **in unità base** (metri e newton, vedi `unita.ts`): 30 scritti in
+ * cm valgono 0,30, 25 scritti in kN/mc valgono 25000. Così una formula scritta
+ * mescolando le unità torna comunque il numero giusto — `5·q·l⁴/(384·E·J)` con
+ * q in kN/m, l in m, E in MPa e J in cm⁴ dà una lunghezza, e la si legge in
+ * mm — e cambiare l'unità con cui si vuole leggere un risultato **converte il
+ * numero** invece di cambiargli solo l'etichetta.
+ *
+ * L'unità scritta a mano ha due ruoli, secondo che l'operazione un'unità
+ * l'abbia già o no:
+ *  - se l'espressione non porta unità (un numero, o grandezze senza unità) è
+ *    l'unità **del numero scritto**: dà la forma e la scala al valore;
+ *  - se l'espressione porta un'unità propria, è l'unità **con cui leggere** il
+ *    risultato: deve avere la stessa forma, altrimenti si dice che non torna e
+ *    si mostra quella calcolata.
  */
 
 import {
   UNITA_DEFAULT,
   adimensionale,
+  daBase,
+  dimUnita,
   divDim,
   leggiUnita,
   mulDim,
@@ -533,7 +553,7 @@ export const GRANDEZZE_CATALOGO: Omit<VoceCalcolo, 'id'>[] = [
   { nome: 'A', espressione: '', nota: 'area', um: 'mq', tipo: 'compilabile' },
   { nome: 'F', espressione: '', nota: 'forza concentrata', um: 'kN', tipo: 'compilabile' },
   { nome: 'E', espressione: '', nota: 'modulo elastico', um: 'MPa', tipo: 'compilabile' },
-  { nome: 'J', espressione: '', nota: 'momento d’inerzia', um: 'mc', tipo: 'compilabile' },
+  { nome: 'J', espressione: '', nota: 'momento d’inerzia', um: 'cm^4', tipo: 'compilabile' },
   { nome: 'γMUR', espressione: '18', nota: 'peso di volume della muratura', um: 'kN/mc', tipo: 'fissa' },
   { nome: 'γLEGNO', espressione: '5', nota: 'peso di volume del legno', um: 'kN/mc', tipo: 'fissa' },
   { nome: 'γACQUA', espressione: '10', nota: 'peso di volume dell’acqua', um: 'kN/mc', tipo: 'fissa' },
@@ -587,10 +607,14 @@ export const PREIMPOSTATE_DEFAULT: Preimpostata[] = [
   { id: 'pre-m-mens', nome: 'M', espressione: 'q*l^2/2', nota: 'momento all’incastro, mensola', um: 'kNm' },
   { id: 'pre-v-app', nome: 'V', espressione: 'q*l/2', nota: 'taglio agli appoggi', um: 'kN' },
   { id: 'pre-area', nome: 'A', espressione: 'b*h', nota: 'area della sezione rettangolare', um: 'mq' },
-  { id: 'pre-w', nome: 'W', espressione: 'b*h^2/6', nota: 'modulo di resistenza della sezione rettangolare', um: 'mc' },
-  { id: 'pre-j', nome: 'J', espressione: 'b*h^3/12', nota: 'momento d’inerzia della sezione rettangolare', um: '' },
+  { id: 'pre-w', nome: 'W', espressione: 'b*h^2/6', nota: 'modulo di resistenza della sezione rettangolare', um: 'cmc' },
+  { id: 'pre-j', nome: 'J', espressione: 'b*h^3/12', nota: 'momento d’inerzia della sezione rettangolare', um: 'cm^4' },
   { id: 'pre-peso', nome: 'P', espressione: 'b*h*γC', nota: 'peso proprio della trave', um: 'kN/m' },
-  { id: 'pre-freccia', nome: 'f', espressione: '5*q*l^4/(384*E*J)', nota: 'freccia in mezzeria, trave appoggiata', um: '' },
+  // le unità si mescolano senza fattori a mano: q in kN/m, l in m, E in MPa e
+  // J in cm⁴ danno una lunghezza, che si legge in mm
+  { id: 'pre-freccia', nome: 'f', espressione: '5*q*l^4/(384*E*J)', nota: 'freccia in mezzeria, trave appoggiata', um: 'mm' },
+  { id: 'pre-sigma', nome: 'σ', espressione: 'M/W', nota: 'tensione di flessione', um: 'MPa' },
+  { id: 'pre-tau', nome: 'τ', espressione: 'V/A', nota: 'tensione tangenziale media', um: 'MPa' },
 ];
 
 /* ─────────────── grandezze fisse scelte dalla libreria ─────────────── */
@@ -717,24 +741,97 @@ export function nomiMancanti(espressione: string, vars: Record<string, number>):
   return nomiRichiesti(espressione).filter((n) => !risolviNome(n, vars));
 }
 
-export interface VoceCalcolata extends VoceCalcolo {
+/* ─────────────────── da valore in base a numero da leggere ─────────────── */
+
+/** Un risultato pronto da mostrare: il numero, l'unità e come ci si è arrivati. */
+export interface Letto {
+  /** Valore in unità base (m, N): è quello che vedono le formule a valle. */
+  valoreBase: number;
+  /** Numero da mostrare, letto nell'unità `um`. */
   valore: number;
+  /** Unità con cui si legge: la scritta a mano se torna, altrimenti la calcolata. */
+  um: string;
+  /** Unità ricavata dall'operazione ('' se non determinabile o non serve). */
+  umAuto: string;
+  /** Forma dell'unità del risultato; `null` = non determinabile. */
+  dim: Dim | null;
+  /** true = l'unità scritta a mano non ha la forma del risultato. */
+  umIncompatibile: boolean;
+  /** true = l'espressione non portava unità: quella scritta dà la scala al numero. */
+  dato: boolean;
+}
+
+/**
+ * Legge un risultato appena calcolato: decide se l'unità scritta a mano è
+ * l'unità *del numero* (l'espressione non ne portava una: è un dato) o l'unità
+ * *con cui leggerlo* (l'espressione ha già la sua, e allora il numero si
+ * converte). È il punto in cui «voglio questo risultato in kg/cmq» diventa un
+ * numero diverso invece di un'etichetta diversa.
+ */
+export function leggiRisultato(
+  valore: number,
+  dimEspressione: Dim | null,
+  umScritta: string,
+  elenco: string[] = UNITA_DEFAULT,
+): Letto {
+  const scritta = umScritta.trim();
+  const u = scritta ? leggiUnita(scritta) : null;
+  const dato = !dimEspressione || adimensionale(dimEspressione);
+
+  if (dato) {
+    // niente unità dall'operazione: il numero è scritto nell'unità indicata
+    return {
+      valoreBase: valore * (u?.fattore ?? 1),
+      valore,
+      um: scritta,
+      umAuto: '',
+      dim: u ? u.dim : (dimEspressione ?? null),
+      umIncompatibile: false,
+      dato: true,
+    };
+  }
+
+  const dim = dimEspressione;
+  const umAuto = scriviUnita(dim, elenco, valore);
+  const torna = !!u && ugualiDim(u.dim, dim);
+  const um = torna ? scritta : umAuto;
+  return {
+    valoreBase: valore,
+    valore: um ? daBase(valore, um) : valore,
+    um,
+    umAuto,
+    dim,
+    umIncompatibile: !!u && !torna,
+    dato: false,
+  };
+}
+
+export interface VoceCalcolata extends VoceCalcolo {
+  /** Numero da mostrare, letto nell'unità effettiva. */
+  valore: number;
+  /** Valore in unità base (m, N): è quello che gira nelle formule. */
+  valoreBase: number;
+  /** Forma dell'unità del risultato; `null` = non determinabile. */
+  dim: Dim | null;
   errore: string;
   /** Nome valido e non già usato prima: solo allora la voce è richiamabile. */
   nomeValido: boolean;
   /** Unità ricavata dall'operazione ('' se non determinabile o non serve). */
   umCalcolata: string;
-  /** Quella che si vede: la scritta a mano se c'è, altrimenti la calcolata. */
+  /** Quella che si vede: la scritta a mano se torna, altrimenti la calcolata. */
   umEffettiva: string;
   /** true = l'unità scritta a mano non è fra quelle in elenco. */
   umFuoriElenco: boolean;
+  /** true = l'unità scritta non ha la forma del risultato: non si converte. */
+  umIncompatibile: boolean;
 }
 
 /**
  * Ricalcola l'intera sequenza: ogni voce vede le variabili definite dalle voci
  * che la precedono, così correggere l'area a monte aggiorna tutto quello che
  * ne discende senza doverlo riscrivere. Insieme al valore si porta dietro
- * l'unità di misura, che l'operazione successiva riusa.
+ * l'unità di misura, che l'operazione successiva riusa — e i valori passano in
+ * unità base, così le unità si possono mescolare senza sbagliare i conti.
  *
  * Un'espressione vuota non è un errore: è una voce ancora da compilare.
  */
@@ -751,49 +848,51 @@ export function ricalcola(voci: VoceCalcolo[], elenco: string[] = UNITA_DEFAULT)
       !!nome && nomeAmmesso(nome) && !usati.has(nome) && !(nome in COSTANTI) && !(nome.toLowerCase() in FUNZIONI);
 
     const scritta = v.um.trim();
-    const calcolata = esito?.ok && esito.dim ? scriviUnita(esito.dim, elenco) : '';
-    const umEffettiva = scritta || calcolata;
+    const letto = esito?.ok ? leggiRisultato(esito.valore, esito.dim, scritta, elenco) : null;
 
-    if (esito?.ok && nomeValido) {
-      vars[nome] = esito.valore;
-      unita[nome] = leggiUnita(umEffettiva);
+    if (letto && nomeValido) {
+      vars[nome] = letto.valoreBase;
+      unita[nome] = letto.dim ?? {};
       usati.add(nome);
     }
     // `ans` è sempre l'ultimo risultato utile della sequenza
-    if (esito?.ok) {
-      vars.ans = esito.valore;
-      unita.ans = leggiUnita(umEffettiva);
+    if (letto) {
+      vars.ans = letto.valoreBase;
+      unita.ans = letto.dim ?? {};
     }
 
     return {
       ...v,
-      valore: esito?.ok ? esito.valore : NaN,
+      valore: letto ? letto.valore : NaN,
+      valoreBase: letto ? letto.valoreBase : NaN,
+      dim: letto ? letto.dim : null,
       errore: !esito || esito.ok ? '' : esito.errore,
       nomeValido,
-      umCalcolata: calcolata,
-      umEffettiva,
+      umCalcolata: letto?.umAuto ?? '',
+      umEffettiva: letto?.um ?? scritta,
       umFuoriElenco: !!scritta && !unitaInElenco(scritta, elenco),
+      umIncompatibile: !!letto?.umIncompatibile,
     };
   });
 }
 
-/** Variabili disponibili a valle della sequenza (nome → valore). */
+/** Variabili disponibili a valle della sequenza (nome → valore in unità base). */
 export function variabili(voci: VoceCalcolata[]): Record<string, number> {
   const vars: Record<string, number> = {};
-  for (const v of voci) if (v.nomeValido && Number.isFinite(v.valore)) vars[v.nome.trim()] = v.valore;
-  const ultima = [...voci].reverse().find((v) => Number.isFinite(v.valore));
-  if (ultima) vars.ans = ultima.valore;
+  for (const v of voci) if (v.nomeValido && Number.isFinite(v.valoreBase)) vars[v.nome.trim()] = v.valoreBase;
+  const ultima = [...voci].reverse().find((v) => Number.isFinite(v.valoreBase));
+  if (ultima) vars.ans = ultima.valoreBase;
   return vars;
 }
 
-/** Unità delle variabili disponibili a valle della sequenza (nome → unità). */
+/** Forma dell'unità delle variabili disponibili a valle (nome → unità). */
 export function unitaVariabili(voci: VoceCalcolata[]): Record<string, Dim> {
   const out: Record<string, Dim> = {};
   for (const v of voci) {
-    if (v.nomeValido && Number.isFinite(v.valore)) out[v.nome.trim()] = leggiUnita(v.umEffettiva);
+    if (v.nomeValido && Number.isFinite(v.valoreBase)) out[v.nome.trim()] = v.dim ?? dimUnita(v.umEffettiva);
   }
-  const ultima = [...voci].reverse().find((v) => Number.isFinite(v.valore));
-  if (ultima) out.ans = leggiUnita(ultima.umEffettiva);
+  const ultima = [...voci].reverse().find((v) => Number.isFinite(v.valoreBase));
+  if (ultima) out.ans = ultima.dim ?? dimUnita(ultima.umEffettiva);
   return out;
 }
 

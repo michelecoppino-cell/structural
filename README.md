@@ -93,8 +93,9 @@ barra degli indirizzi su PC — e resta con **icona propria** nel launcher: tria
 fondo scuro, la stessa geometria della favicon.
 
 - `public/manifest.webmanifest` — nome, colori, `display: standalone` e le scorciatoie
-  «Calcolatrice» e «Libreria» (aprono l'app direttamente su quella scheda, via
-  `?scheda=…`);
+  «Quaderno» e «Libreria» (aprono l'app direttamente su quella scheda, via
+  `?scheda=…`; i vecchi indirizzi `?scheda=calcolatrice` e `?scheda=esporta` portano al
+  Quaderno);
 - `public/icon.svg`, `icon-192.png`, `icon-512.png`, `icon-maskable-512.png` (zona sicura
   all'80% per i launcher Android che ritagliano) e `apple-touch-icon.png` per iOS. I PNG si
   rigenerano con `node scripts/genera-icone.mjs`, senza dipendenze esterne;
@@ -241,69 +242,106 @@ Acciaio, legno e muratura sono segnaposto — vedi "Prossimi passi".
 Tabella editabile (categoria, descrizione, u.m., quantità, prezzo unitario), totale generale
 e torta di incidenza per macrocategoria.
 
-### 5. Calcolatrice
-Calcoli in sequenza con nome, come si fa a mano in un predimensionamento: mi calcolo
-un'area, poi un'incidenza, poi le moltiplico.
+### 5. Quaderno
+Un **foglio bianco a quadretti** su cui il calcolo si scrive nell'ordine in cui lo si pensa, e
+che è già il documento da stampare: la scheda tiene insieme quello che prima erano la
+*Calcolatrice* e l'*Esporta*. Il riferimento è SMath Studio — foglio libero, non un elenco di
+righe rigide.
 
-- **Da PC si scrive da tastiera** nel campo dell'espressione (Invio salva, Esc pulisce), **da
-  cellulare** c'è il tastierino a video; su desktop lo si richiama con il pulsante
-  *Tastierino*.
-- **Salva operazione con nota**: l'operazione resta salvata *estesa* — la pastiglia mostra il
-  valore, un clic sul nome la apre e fa vedere `operazione = risultato` con i campi (nome,
-  operazione, unità, nota) modificabili.
-- **Nomi richiamabili**: dando un nome a un'operazione (`area`, `incidenza`) la si riusa
-  nelle successive scrivendone il nome; `ans` è l'ultimo risultato. Ogni voce vede solo
-  quelle che la precedono, quindi **correggere un valore a monte aggiorna tutto quello che
-  ne discende**; l'ordine si cambia con le frecce.
-- Sintassi: `+ − × ÷ ^`, parentesi, `%` come «per cento», virgola o punto decimale,
-  argomenti separati da `;`, funzioni (`sqrt`, `min`, `max`, `round`, `ln`, `log`, `exp`,
-  trigonometria **in gradi**), costanti `pi` ed `e`.
-- **Due colonne: da compilare e fisse.** A sinistra le grandezze del calcolo di oggi (`b`,
-  `l`, `h`, `q`), che si **svuotano a ogni riapertura** — la trave di ieri non è quella di
-  oggi; a destra le **fisse**, i pesi di volume `γC` (calcestruzzo, 25), `γS` (acciaio, 78,5)
-  e `γT` (terreno, 18 kN/mc), che restano compilate e si correggono come tutte le altre. Ogni
-  voce sta in una pastiglia con il valore scrivibile dentro; il nome apre nome, unità, nota e
-  la **colonna** in cui sta, che si cambia da lì.
-- **La γ si scrive anche con la g**: γ è la g greca e sulla tastiera non c'è, così `gC`,
-  `gS`, `gT` — e per esteso `gammaC` — sono la stessa cosa di `γC`, `γS`, `γT`. Vale nelle
-  espressioni e nel conto delle grandezze che mancano; il nome scritto per davvero, se esiste,
-  ha comunque la precedenza. Il tastierino tiene anche il tasto `γ`.
-- **Grandezze fisse da libreria**: sopra le due colonne ci sono quattro scelte a tendina che
-  compilano da sé le grandezze che ne discendono, richiamabili per nome come tutte le altre.
-  **CLS** (C8/10 → C90/105) dà `fck`, `fcd`, `fctm`, `fctd` ed `Ecm`; **Acciaio** (S235, S275,
-  S355, S450, B450C, B450A e le classi dei bulloni 4.6 → 10.9) dà `fyd` e `ftd`; **Ferro ⌀** con
-  il numero di ferri dà `Ar`, l'area d'armatura; **Bullone M** (M6 → M36) con il numero di
-  bulloni dà `Ab` (area resistente) e `Abl` (area lorda). I **coefficienti parziali non si
-  vedono**: sono quelli di serie — αcc 0.85, γC 1.5, γS 1.15, γM0 1.05, γM2 1.25 — e chi ne
-  vuole di diversi si scrive la sua grandezza fissa a mano. Lasciando vuota una quantità la sua
-  area non compare; le scelte sono **dati di commessa** e viaggiano nel JSON.
-- **L'elenco lo compone chi calcola**: sotto ogni colonna ci sono le grandezze da aggiungere —
-  a sinistra `s`, `i`, `A`, `F`, `E`, `J`, a destra `γMUR`, `γLEGNO`, `γACQUA` — più una
-  *nuova* vuota con nome e unità da scrivere. Le operazioni salvate stanno in fondo, in una
-  fascia loro.
-- **Operazioni preimpostate**: formule scritte una volta sui nomi delle grandezze —
-  `q*l^2/8`, `q*l/2`, `b*h^2/6`, `b*h*γC`, `5*q*l^4/(384*E*J)` — che si accendono quando
-  tutte le grandezze che servono sono compilate. Al tocco fanno il calcolo e finiscono nel
-  display con nome e unità, pronte da salvare (o si salvano direttamente con il segnalibro).
-  Se ne aggiungono di proprie e si modificano tutte: sono **dati di commessa**. Stanno in
-  griglia: **almeno tre per riga** su desktop, e quella aperta per la modifica si prende la
-  riga intera.
-- **Le spiegazioni stanno dietro l'(i)**: sintassi, funzioni, che cosa fanno le due colonne e
-  come si ricava l'unità compaiono premendo l'(i) in testata, non sempre.
-- **Unità di misura da elenco**: il campo si scrive a mano ma suggerisce mentre si digita, e
-  quello che in elenco non c'è viene segnato come errore e non si salva. L'elenco (kg, kg/mc,
-  kg/mq, kg/ml, kN/cmq, MPa, m, mq, mc…) si cambia dal pulsante *Unità*.
-- **Unità ricavata da sola**: il prodotto e il rapporto fra operazioni con nome compongono
-  l'unità del risultato — `b*h` in m dà `mq`, `b*h*γC` con γC in kN/mc dà `kN/m`,
-  `sqrt(A)` con A in mq dà `m`. L'unità scritta a mano vince su quella calcolata; una somma
-  fra unità diverse non ne propone nessuna.
-- Le operazioni salvate sono **dati di commessa**: viaggiano nell'Esporta/Importa JSON e
-  finiscono in *Copia*.
+Due colonne: a sinistra il **foglio**, a destra il **pannello** di quello che ci si può mettere
+dentro. Scorrono per conto loro, così si tiene il foglio sotto gli occhi mentre si cerca una
+grandezza in fondo al pannello.
 
-Il motore (`src/calc/calcolatrice.ts`) è un interprete a discesa ricorsiva scritto in casa —
-nessuna dipendenza, nessun `eval`: costruisce l'albero dell'espressione e ci passa due volte,
-una per il valore e una per l'unità, così i due non possono divergere. L'algebra delle unità
-sta in `src/calc/unita.ts`; i test in `calcolatrice.test.ts` e `unita.test.ts`.
+**Il foglio.** Porta l'intestazione di commessa (nome, commessa, località, revisione, data),
+una **riga di premessa** e una **nota a piè di pagina**, e in mezzo i blocchi, numerati come i
+passaggi di un calcolo a mano. I blocchi si **aggiungono in coda e si eliminano** (la × che
+compare passandoci sopra), ma non si riordinano: l'ordine racconta la sequenza reale del
+calcolo. I blocchi stretti stanno **due per riga** quando c'è spazio; nota, schema e capitolo
+si prendono la riga intera.
+
+**Il pannello**, sei sezioni ad accordion; tutto quello che sta lì si **trascina** nel foglio o
+si aggiunge con il «+», e ci resta **collegato**:
+
+| Sezione | Che cosa dà |
+|---|---|
+| Grandezze da compilare | `b`, `l`, `h`, `q` e le altre del calcolo di oggi, su due colonne |
+| Grandezze fisse | i pesi di volume `γC`, `γS`, `γT` e le costanti, con la γ scritta col pedice |
+| Grandezze da libreria | le quattro tendine (CLS, acciaio, ferro ⌀, bullone M) e le resistenze che ne discendono |
+| Operazioni preimpostate | una card per formula: in testa il risultato che dà — «A (mq)» — e sotto la formula |
+| Import rapido da altre schede | M max, V max, q di progetto, luce, freccia, neve, vento, VRd, MRd, esiti delle verifiche |
+| Capitoli da altre schede | un capitolo intero di relazione, come faceva la spunta della vecchia Esporta |
+
+Più il **Tastierino**, che scrive nella formula toccata per ultima: serve su cellulare, dove la
+γ e la `^` non ci sono.
+
+**Collegamento live.** Un blocco nato da una grandezza, da una formula o da un import non salva
+un valore proprio: salva **da dove viene** e lo ricalcola. Si corregge `b` nel pannello e tutto
+quello che ne discende si aggiorna da sé, senza toccare il foglio (icona della catena sul
+blocco). Salvano un contenuto proprio solo la **nota** e lo **schema**.
+
+**Blocchi che si scrivono lì.**
+- *Formula*: nome, espressione e unità dentro il blocco. Vede le grandezze del pannello **e i
+  blocchi che la precedono**, quindi si scrive `A = b·h` e poi `σ = M/W`, come a mano.
+- *Nota*: testo libero a larghezza piena.
+- *Screenshot*: uno schema disegnato a mano o preso da un altro programma — si trascina, si
+  incolla con Ctrl+V (anche direttamente sul foglio) o si sceglie da file. L'immagine viene
+  ridotta a 1400 px e tenuta dentro il progetto, quindi finisce anche nell'HTML esportato.
+
+Sintassi delle espressioni: `+ − × ÷ ^`, parentesi, `%` come «per cento», virgola o punto
+decimale, argomenti separati da `;`, funzioni (`sqrt`, `min`, `max`, `round`, `ln`, `log`,
+`exp`, trigonometria **in gradi**), costanti `pi` ed `e`, `ans` come ultimo risultato. **La γ si
+scrive anche con la g**: `gC`, `gammaC` e `γC` sono la stessa cosa.
+
+Le grandezze **da compilare si svuotano a ogni riapertura** — la trave di ieri non è quella di
+oggi — mentre le fisse, le formule, i blocchi del foglio, le note e gli schemi sono **dati di
+commessa**: viaggiano nell'Esporta/Importa JSON.
+
+#### Unità di misura: le converte lui
+È il punto in cui il Quaderno somiglia a SMath. Ogni unità porta due cose, la **forma** (metri e
+newton: `kg/cmq` → `N·m⁻²`) e la **scala** (1 kN = 1000 N, 1 kg/cmq = 98066,5 N/mq), e i valori
+girano **sempre in unità base**.
+
+- **Le unità si possono mescolare** e i conti tornano: la base in cm, il peso di volume in
+  kg/mc, il modulo elastico in MPa e il momento d'inerzia in cm⁴ nella stessa formula. La
+  freccia `5*q*l^4/(384*E*J)` viene giusta senza nessun fattore scritto a mano.
+- **Cambiare l'unità di un blocco converte il numero.** Il selettore accanto al risultato
+  elenca le sole unità con cui *quel* risultato si può leggere: una tensione di 0,8 MPa scritta
+  in kg/cmq diventa 8,16, in kN/mq diventa 800. Il valore che gira nelle formule non cambia:
+  cambia come lo si legge.
+- **L'unità la ricava da sola**: `b*h` in m dà `mq`, `b*h*γC` con γC in kN/mc dà `kN/m`,
+  `sqrt(A)` con A in mq dà `m`. Sceglie l'unità con cui quella grandezza si legge di solito (una
+  forza in kN, un carico in kN/mq) e la tiene ferma; solo se viene un numero assurdo cerca il
+  multiplo comodo — 0,000804 mq diventano 804 mmq.
+- **Un'unità di forma sbagliata viene detta, non applicata**: chiedere un momento in metri non
+  converte niente e il blocco resta sull'unità calcolata.
+- **Un dato scritto a mano è un'altra cosa**: se l'espressione è un numero, l'unità dice in che
+  unità è scritto *quel* numero (30 in cm sono 0,30 m) invece di convertirlo.
+- **Il kg è un kgf** (1 kg = 9,80665 N): nel predimensionamento kg/mc è un peso di volume e
+  kg/cmq una tensione, così 2500 kg/mc fanno 24,5 kN/mc come sui manuali. Per le masse questa
+  scheda non serve.
+- L'elenco delle unità proposte (`m`, `cm`, `mm`, `mq`, `cmq`, `cm^4`, `kN`, `kg`, `t`, `kN/m`,
+  `kN/mq`, `kg/mc`, `kNm`, `MPa`, `kg/cmq`, `kPa`…) si cambia dal pulsante *Unità*, e quello che
+  in elenco non c'è viene segnato come errore.
+
+#### Da qui esce il documento
+Tre uscite, tutte leggibili **senza questa app**, tutte dallo stesso foglio:
+
+| Comando | Che cosa produce |
+|---|---|
+| *Stampa / PDF* | la pagina A4 dalla finestra di stampa del browser — da lì «Salva in PDF»; quadretti, pannello e interfaccia non vengono stampati, e i campi rimasti vuoti non lasciano righe di segnaposto |
+| *Copia testo* | il foglio come testo semplice, da incollare in OneNote, in una mail o in Word |
+| *Scarica HTML* | un file `.html` **autonomo**, stile e schemi compresi e nessuna risorsa esterna: si apre con qualunque browser, offline, e si ristampa in PDF |
+
+L'**Esporta JSON** resta quello che era: serve a *riaprire* il lavoro in questa app, non a
+leggerlo. Il foglio a schermo, il *Copia* e l'HTML nascono dalla stessa sorgente
+(`src/calc/quaderno.ts` per i blocchi, `src/calc/relazione.ts` per i capitoli,
+`src/calc/esportazione.ts` per l'impaginazione), quindi non possono raccontare numeri diversi.
+
+Il motore delle espressioni (`src/calc/calcolatrice.ts`) è un interprete a discesa ricorsiva
+scritto in casa — nessuna dipendenza, nessun `eval`: costruisce l'albero dell'espressione e ci
+passa due volte, una per il valore e una per l'unità, così i due non possono divergere.
+L'algebra e la conversione delle unità stanno in `src/calc/unita.ts`; i test in
+`calcolatrice.test.ts`, `unita.test.ts` e `quaderno.test.ts`.
 
 ### 6. Libreria
 Due fogli, si passa dall'uno all'altro dalle linguette in testa e il foglio aperto si ricorda.
@@ -345,38 +383,17 @@ tutte (`⌀16`, `IPE 200`, `M12`, `C25/30`, `S355`): le tabelle senza risultati 
 - **Profilario bulloni**: filettatura metrica grossa da M6 a M36 con passo, area lorda, **area
   resistente** della parte filettata, apertura di chiave e diametro del foro con gioco normale;
   a fianco le classi di resistenza 4.6 → 10.9 con fyb, ftb e i valori divisi per γM2.
-- **Calcestruzzo** e **acciai**: le stesse sigle delle tendine della Calcolatrice, con i
+- **Calcestruzzo** e **acciai**: le stesse sigle delle tendine del Quaderno, con i
   caratteristici e i valori di progetto già divisi per i γ.
 
 Le tabelle stanno in `src/data/` — `armature.ts`, `bulloni.ts`, `materiali.ts`,
-`profili-acciaio.ts` — e sono le stesse che alimentano le verifiche e le tendine della
-Calcolatrice: un valore si corregge in un posto solo.
-
-### 7. Esporta
-Un **foglio A4 a quadretti** vuoto su cui si tira dentro solo quello che serve: in testa ci
-sono i capitoli — *Azioni*, *Sollecitazioni*, *Verifiche*, *Calcolatrice*, *Stime costi* — e
-quelli spuntati compaiono nel foglio, con titoli, blocchi e righe di calcolo. Serve a non
-esportare tutto il progetto quando se ne è compilata una riga.
-
-Il foglio ha una **riga di premessa** e una **nota a piè di pagina** scrivibili lì dentro, e
-porta l'intestazione di commessa (nome, commessa, località, revisione, data). Da lì escono
-tre cose, tutte leggibili **senza questa app**:
-
-| Comando | Che cosa produce |
-|---|---|
-| *Stampa / PDF* | la pagina A4 dalla finestra di stampa del browser — da lì «Salva in PDF»; i quadretti e l'interfaccia non vengono stampati |
-| *Copia testo* | il foglio come testo semplice, da incollare in OneNote, in una mail o in Word |
-| *Scarica HTML* | un file `.html` **autonomo**, stile compreso e nessuna risorsa esterna: si apre con qualunque browser, offline, e si ristampa in PDF |
-
-L'**Esporta JSON** resta quello che era: serve a *riaprire* il lavoro in questa app, non a
-leggerlo. Il contenuto dei due nasce dalla stessa sorgente (`src/calc/relazione.ts`, che
-produce capitoli e blocchi strutturati; `src/calc/esportazione.ts` li impagina), quindi il
-foglio, il *Copia* e la relazione non possono raccontare numeri diversi.
+`profili-acciaio.ts` — e sono le stesse che alimentano le verifiche e le tendine del
+Quaderno: un valore si corregge in un posto solo.
 
 ### Comune a tutte le schede
 - **(i)**: apre in un colpo tutti i pannelli di dettaglio della scheda — formule con i numeri
-  sostituiti, coefficienti e riferimenti; nella Calcolatrice apre le **spiegazioni** (sintassi,
-  funzioni, colonne, unità), che altrimenti stanno via. Sta nella **testata**, insieme a
+  sostituiti, coefficienti e riferimenti; nel Quaderno apre le **spiegazioni** su come si
+  compone il foglio, che altrimenti stanno via. Sta nella **testata**, insieme a
   *Copia*: sono comandi che valgono per tutte le schede e lassù non rubano altezza al
   contenuto.
 - **Copia**: copia negli appunti un blocco di testo con valori, formule e riferimenti
@@ -415,7 +432,9 @@ src/
     sismica.ts     pericolosità sismica di base: TR, ag/F0/TC*, SS, CC (§3.2)
     sollecitazioni.ts  combinazioni di carico e collegamento con il solutore
     verifiche.ts   verifiche a taglio (dai fogli Excel)
-    calcolatrice.ts  interprete delle espressioni e sequenza dei calcoli salvati
+    calcolatrice.ts  interprete delle espressioni e sequenza delle grandezze
+    unita.ts       forma e scala delle unità di misura, e la loro conversione
+    quaderno.ts    blocchi del foglio e loro ricalcolo dalle fonti collegate
     relazione.ts   capitoli e blocchi delle schede, e il testo per la relazione
     esportazione.ts  foglio A4: documento in testo semplice e in HTML autonomo
   data/            tabelle normative e di materiali (ntc2018.ts, materiali.ts)
@@ -494,9 +513,15 @@ npm test
 - I coefficienti di forma (μ1 neve, cp vento) restano **input**: la scheda propone il valore
   di tabella accanto al campo (μ1 da α, elenco dei cp ordinari) ma non lo impone, perché la
   geometria reale della copertura l'app non la conosce.
-- L'algebra delle unità della calcolatrice è **simbolica, non dimensionale**: `cm*cm` fa
-  `cmq`, non `0.0001 mq`. I fattori di conversione restano a chi scrive i numeri — una
-  conversione silenziosa dei valori sarebbe peggio di nessuna conversione.
+- Le unità del Quaderno sono **dimensionali**: i valori girano in unità base (m, N) e cambiare
+  l'unità di lettura converte il numero. Due conseguenze da tenere a mente: il **kg è un kgf**
+  (1 kg = 9,80665 N), perché in kg/mc e kg/cmq è una forza — per le masse questa scheda non
+  serve; e quando un'unità non è determinabile (una somma fra grandezze diverse) non si
+  converte niente, si mostra il numero come è.
+- Prima della versione 7 dello schema l'algebra era **simbolica**: `cm*cm` faceva `cmq` e i
+  fattori restavano a chi scriveva i numeri. Un progetto salvato allora si riapre, ma le
+  formule che portavano dentro un fattore di conversione scritto a mano (`*1000`, `*1e4`) ora
+  lo contano due volte: vanno ripulite dal fattore, che adesso lo mette il motore.
 
 ## Prossimi passi
 
