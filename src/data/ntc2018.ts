@@ -102,6 +102,71 @@ export const CAT: Record<string, [number, number, number, number, number, number
   'H — Coperture non accessibili': [0.5, 1.2, 1.0, 0.0, 0.0, 0.0],
 };
 
+/**
+ * Urti di veicoli in transito — azioni eccezionali, NTC2018 §3.6.3.3.
+ *
+ * Le forze statiche equivalenti sono quelle della Tab. 3.6.II: `Fdx` agisce
+ * nella direzione di marcia, `Fdy` in quella ortogonale, e le due non si
+ * sommano. `h` è la quota di applicazione sopra il piano viabile (la risultante
+ * si applica su un'area alta 0.25 m e larga 1.50 m, o quanto l'elemento se è
+ * più stretto), `m` e `v` sono la massa e la velocità di riferimento del
+ * veicolo, quelle da cui la tabella nasce e che servono al confronto
+ * energetico di EN 1991-1-7 App. C.
+ */
+export const URTI: Record<
+  string,
+  { Fdx: number; Fdy: number; h: number; m: number; v: number; ref: string }
+> = {
+  'Autostrade e strade extraurbane principali': {
+    Fdx: 1000,
+    Fdy: 500,
+    h: 1.25,
+    m: 30,
+    v: 90,
+    ref: 'NTC2018 §3.6.3.3 — Tab. 3.6.II',
+  },
+  'Strade extraurbane secondarie e urbane di scorrimento': {
+    Fdx: 750,
+    Fdy: 375,
+    h: 1.25,
+    m: 30,
+    v: 70,
+    ref: 'NTC2018 §3.6.3.3 — Tab. 3.6.II',
+  },
+  'Strade urbane di quartiere e locali': {
+    Fdx: 500,
+    Fdy: 250,
+    h: 1.25,
+    m: 30,
+    v: 50,
+    ref: 'NTC2018 §3.6.3.3 — Tab. 3.6.II',
+  },
+  'Cortili e autorimesse — autovetture ≤ 30 kN': {
+    Fdx: 50,
+    Fdy: 25,
+    h: 0.5,
+    m: 1.5,
+    v: 20,
+    ref: 'EN 1991-1-7 §4.3.1 — Tab. 4.1',
+  },
+  'Cortili e autorimesse — automezzi > 30 kN': {
+    Fdx: 150,
+    Fdy: 75,
+    h: 1.25,
+    m: 3.5,
+    v: 20,
+    ref: 'EN 1991-1-7 §4.3.1 — Tab. 4.1',
+  },
+  'Carrelli elevatori e mezzi di servizio': {
+    Fdx: 5,
+    Fdy: 5,
+    h: 0.75,
+    m: 3,
+    v: 10,
+    ref: 'EN 1991-1-7 §4.4 — urto di mezzi di movimentazione',
+  },
+};
+
 /** Coefficienti parziali per le azioni — Tab. 2.6.I (STR, A1). */
 export const GAMMA = {
   /** Permanenti strutturali G1 — sfavorevole. */

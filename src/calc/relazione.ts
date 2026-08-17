@@ -114,6 +114,17 @@ function blocchiAzioni(state: AppState): Blocco[] {
         `za = H/3 = ${fx(az.terre.za)} m; Mrib = ${fx(az.terre.Mrib, 1)} kNm/m`,
       ],
     },
+    {
+      titolo: 'Urti di veicoli in transito — NTC2018 §3.6.3.3',
+      righe: [
+        `Scenario: ${az.urti.scenario}`,
+        `Fdx = ${fx(az.urti.Fdx, 0)} kN (direzione di marcia); Fdy = ${fx(az.urti.Fdy, 0)} kN (ortogonale) — non si sommano`,
+        `Applicazione a h = ${fx(az.urti.h)} m dal piano viabile su area 0.25 × 1.50 m; Mbase = Fd·h = ${fx(az.urti.Mbase, 1)} kNm`,
+        `Confronto energetico (EN 1991-1-7 App. C): m = ${fx(az.urti.m)} t a ${fx(az.urti.v, 0)} km/h, k = ${fx(az.urti.k, 0)} kN/m → Ec = ${fx(az.urti.Ec, 0)} kJ; F = v·√(k·m) = ${fx(az.urti.Fcalc, 0)} kN`,
+        `Forza di progetto adottata: Fd = ${fx(az.urti.Fd, 0)} kN (${state.azioni.urtoDaEnergia ? 'dal calcolo energetico' : 'da Tab. 3.6.II'})`,
+        ...(az.urti.avviso ? [az.urti.avviso] : []),
+      ],
+    },
   ];
 
   if (az.terre.sisma.attiva) blocchi.push(spintaSismica(state, az));
@@ -382,9 +393,10 @@ export function foglioQuaderno(state: AppState): ElementoFoglio[] {
           ]
         : [];
     }
-    return [
-      { tipo: 'calcolo', id, passo: b.passo, testo: testoBlocco(b), nota: b.nota.trim(), livello: livelloEsito(b) },
-    ];
+    // la nota della fonte e l'appunto scritto a mano vanno insieme sotto la
+    // riga: sono tutte e due il commento di quel passaggio
+    const nota = [b.nota.trim(), b.blocco.appunto.trim()].filter(Boolean).join(' — ');
+    return [{ tipo: 'calcolo', id, passo: b.passo, testo: testoBlocco(b), nota, livello: livelloEsito(b) }];
   });
 }
 

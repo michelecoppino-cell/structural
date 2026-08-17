@@ -1,11 +1,12 @@
-import { useMemo, useState } from 'react';
-import { MagnifyingGlass } from '@phosphor-icons/react';
+import { useMemo, useState, type ReactNode } from 'react';
+import { CaretDown, CaretUp, MagnifyingGlass } from '@phosphor-icons/react';
 import { ComandiScheda } from '../components/ComandiScheda';
 import { TABELLA_ARMATURE } from '../data/armature';
 import { BULLONI, CLASSI_BULLONE, TAGLIE_BULLONE } from '../data/bulloni';
 import { ACCIAI, CLS, COEFF_DEFAULT, SIGLE_ACCIAIO, ecmCLS, fctkCLS, fctmCLS } from '../data/materiali';
 import {
   TIPI_PROFILO,
+  pesoProfilo,
   proprietaProfilo,
   taglieDisponibili,
   type TipoProfilo,
@@ -20,11 +21,57 @@ const normalizza = (s: string) =>
     .replace(/[\u0300-\u036f]/g, '');
 
 /**
+ * Una scheda della libreria: si apre e si chiude, così sul tavolo resta solo
+ * la tabella che si sta consultando. Il titolo dice sempre quante righe ci
+ * sono sotto, anche da chiusa.
+ */
+function Scheda({
+  id,
+  titolo,
+  sotto,
+  conta,
+  children,
+}: {
+  id: string;
+  titolo: string;
+  sotto?: string;
+  /** Righe contenute: si legge anche a scheda chiusa. */
+  conta: number;
+  children: ReactNode;
+}) {
+  const [aperta, setAperta] = useState(true);
+  return (
+    <section className="panel utili-scheda">
+      <button
+        type="button"
+        className="utili-testa"
+        aria-expanded={aperta}
+        aria-controls={`${id}-corpo`}
+        onClick={() => setAperta((v) => !v)}
+      >
+        <span className="t">{titolo}</span>
+        {sotto && <span className="d">{sotto}</span>}
+        <span className="n">
+          {conta} {conta === 1 ? 'riga' : 'righe'}
+        </span>
+        <span className="caret">{aperta ? <CaretUp size={14} /> : <CaretDown size={14} />}</span>
+      </button>
+      {aperta && (
+        <div className="panel-body utili-corpo" id={`${id}-corpo`}>
+          {children}
+        </div>
+      )}
+    </section>
+  );
+}
+
+/**
  * Una tabella della libreria: intestazione, righe e — dietro alle quinte — il
  * testo su cui lavora la ricerca, così una tabella che non c'entra sparisce
  * invece di restare vuota.
  */
 function Tabella({
+  id,
   titolo,
   sotto,
   colonne,
@@ -32,47 +79,44 @@ function Tabella({
   testo = 1,
   nota,
 }: {
+  id: string;
   titolo: string;
   sotto?: string;
   colonne: string[];
   righe: { chiave: string; celle: string[] }[];
-  /** Quante colonne di testa sono testo: le altre vanno in colonna, a destra. */
+  /** Quante colonne di testa sono testo: le altre sono numeri, centrati. */
   testo?: number;
   nota?: React.ReactNode;
 }) {
   if (!righe.length) return null;
   return (
-    <section className="panel">
-      <div className="panel-body" style={{ paddingTop: 12 }}>
-        <div className="calc-colonna-testa">
-          <span className="t">{titolo}</span>
-          {sotto && <span className="d">{sotto}</span>}
-        </div>
-        <div className="table-scroll">
-          <table className="table">
-            <thead>
-              <tr>
-                {colonne.map((c) => (
-                  <th key={c}>{c}</th>
+    <Scheda id={id} titolo={titolo} sotto={sotto} conta={righe.length}>
+      <div className="table-scroll">
+        <table className="table">
+          <thead>
+            <tr>
+              {colonne.map((c, i) => (
+                <th key={c} className={i < testo ? undefined : 'num'}>
+                  {c}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {righe.map((r) => (
+              <tr key={r.chiave}>
+                {r.celle.map((c, i) => (
+                  <td key={colonne[i]} className={i < testo ? undefined : 'num'}>
+                    {c}
+                  </td>
                 ))}
               </tr>
-            </thead>
-            <tbody>
-              {righe.map((r) => (
-                <tr key={r.chiave}>
-                  {r.celle.map((c, i) => (
-                    <td key={colonne[i]} className={i < testo ? undefined : 'num'}>
-                      {c}
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        {nota && <p className="note">{nota}</p>}
+            ))}
+          </tbody>
+        </table>
       </div>
-    </section>
+      {nota && <p className="note">{nota}</p>}
+    </Scheda>
   );
 }
 
@@ -112,6 +156,8 @@ export default function Utili() {
               fx(p.h, 1),
               fx(p.b, 1),
               fx(p.A, 2),
+              // il peso al metro: quello che si ordina e che pesa sulla struttura
+              fx(pesoProfilo(p), 1),
               fx(p.Ix, 0),
               fx(p.Wx, 1),
               fx(p.Iy, 0),
@@ -182,7 +228,7 @@ export default function Utili() {
   const trovate = tabelle.reduce((s, t) => s + t.length, 0);
 
   return (
-    <div className="stack">
+    <div className="stack utili">
       <ComandiScheda>
         <div className="norma-ricerca">
           <MagnifyingGlass size={14} />
@@ -203,6 +249,7 @@ export default function Utili() {
       </ComandiScheda>
 
       <Tabella
+        id="utili-armature"
         titolo="Armature"
         sotto="diametri commerciali, peso, piega"
         colonne={['⌀', 'Area (mm²)', 'Peso (kg/m)', 'Mandrino ⌀m (mm)', 'Raggio interno (mm)']}
@@ -217,60 +264,72 @@ export default function Utili() {
         }
       />
 
-      <section className="panel">
-        <div className="panel-body" style={{ paddingTop: 12 }}>
-          <div className="calc-colonna-testa">
-            <span className="t">Profilario acciaio</span>
-            <span className="d">lo stesso sagomario delle Sollecitazioni</span>
-          </div>
-          <div className="calc-catalogo" style={{ margin: '8px 0' }}>
-            {TIPI_PROFILO.map((tp) => (
-              <button
-                key={tp.id}
-                type="button"
-                className="calc-catalogo-chip"
-                aria-pressed={tipo === tp.id}
-                style={tipo === tp.id ? { borderStyle: 'solid', borderColor: 'var(--color-accent)' } : undefined}
-                onClick={() => setTipo(tp.id)}
-              >
-                {tp.label}
-              </button>
-            ))}
-          </div>
-          <div className="table-scroll">
-            <table className="table">
-              <thead>
-                <tr>
-                  {['Profilo', 'h (mm)', 'b (mm)', 'A (cm²)', 'Ix (cm⁴)', 'Wx (cm³)', 'Iy (cm⁴)', 'Wy (cm³)', 'Avz (cm²)'].map(
-                    (c) => (
-                      <th key={c}>{c}</th>
-                    ),
-                  )}
-                </tr>
-              </thead>
-              <tbody>
-                {tabelle[1].map((r) => (
-                  <tr key={r.chiave}>
-                    {r.celle.map((c, i) => (
-                      <td key={i} className={i === 0 ? undefined : 'num'}>
-                        {c}
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          {tabelle[1].length === 0 && <p className="note">Nessun profilo di questo tipo corrisponde alla ricerca.</p>}
-          <p className="note">
-            x è l’asse forte, y quello debole: ruotare il profilo di 90° vuol dire scambiare le due
-            colonne. IPE, HEA, HEB e UPN sono a tabella (EN 10365); angolari e tubi si ricavano dalla
-            geometria esatta della taglia, quindi coprono qualunque misura commerciale.
-          </p>
+      <Scheda
+        id="utili-profili"
+        titolo="Profilario acciaio"
+        sotto="lo stesso sagomario delle Sollecitazioni"
+        conta={tabelle[1].length}
+      >
+        <div className="calc-catalogo" style={{ margin: '2px 0 8px' }}>
+          {TIPI_PROFILO.map((tp) => (
+            <button
+              key={tp.id}
+              type="button"
+              className="calc-catalogo-chip"
+              aria-pressed={tipo === tp.id}
+              style={tipo === tp.id ? { borderStyle: 'solid', borderColor: 'var(--color-accent)' } : undefined}
+              onClick={() => setTipo(tp.id)}
+            >
+              {tp.label}
+            </button>
+          ))}
         </div>
-      </section>
+        <div className="table-scroll">
+          <table className="table">
+            <thead>
+              <tr>
+                {[
+                  'Profilo',
+                  'h (mm)',
+                  'b (mm)',
+                  'A (cm²)',
+                  'Peso (kg/m)',
+                  'Ix (cm⁴)',
+                  'Wx (cm³)',
+                  'Iy (cm⁴)',
+                  'Wy (cm³)',
+                  'Avz (cm²)',
+                ].map((c, i) => (
+                  <th key={c} className={i === 0 ? undefined : 'num'}>
+                    {c}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {tabelle[1].map((r) => (
+                <tr key={r.chiave}>
+                  {r.celle.map((c, i) => (
+                    <td key={i} className={i === 0 ? undefined : 'num'}>
+                      {c}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {tabelle[1].length === 0 && <p className="note">Nessun profilo di questo tipo corrisponde alla ricerca.</p>}
+        <p className="note">
+          Il peso al metro è l’area per 7850 kg/m³. x è l’asse forte, y quello debole: ruotare il
+          profilo di 90° vuol dire scambiare le due colonne. IPE, HEA, HEB e UPN sono a tabella
+          (EN 10365); angolari e tubi si ricavano dalla geometria esatta della taglia, quindi coprono
+          qualunque misura commerciale.
+        </p>
+      </Scheda>
 
       <Tabella
+        id="utili-bulloni"
         titolo="Profilario bulloni"
         sotto="filettatura metrica grossa, ISO 261/262"
         colonne={['Vite', 'd (mm)', 'Passo (mm)', 'A lorda (mm²)', 'Ares (mm²)', 'Chiave (mm)', 'Foro d0 (mm)']}
@@ -285,6 +344,7 @@ export default function Utili() {
       />
 
       <Tabella
+        id="utili-classi-bulloni"
         titolo="Classi di resistenza dei bulloni"
         sotto="NTC2018 Tab. 11.3.XII"
         colonne={['Classe', 'fyb (N/mm²)', 'ftb (N/mm²)', 'fyb/γM2', 'ftb/γM2']}
@@ -293,6 +353,7 @@ export default function Utili() {
       />
 
       <Tabella
+        id="utili-cls"
         titolo="Calcestruzzo"
         sotto="classi di resistenza e valori di progetto"
         colonne={['Classe', 'fck (N/mm²)', 'Rck (N/mm²)', 'fcd', 'fctm', 'fctd', 'Ecm (N/mm²)']}
@@ -306,6 +367,7 @@ export default function Utili() {
       />
 
       <Tabella
+        id="utili-acciai"
         titolo="Acciai"
         sotto="carpenteria, armatura e classi dei bulloni"
         colonne={['Sigla', 'Famiglia', 'fyk (N/mm²)', 'ftk (N/mm²)', 'fyd', 'ftd']}

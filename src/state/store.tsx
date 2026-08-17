@@ -393,7 +393,22 @@ export function migra(raw: Partial<AppState>): AppState {
   };
 }
 
-const CHIAVE = 'structural:stato';
+/** Chiave del salvataggio automatico in localStorage. */
+export const CHIAVE = 'structural:stato';
+
+/**
+ * Butta via il salvataggio automatico: è quello che ripropone i campi già
+ * compilati all'apertura successiva. Va usato insieme all'azione `reset`, che
+ * riporta lo stato in memoria a quello di partenza — cancellare solo il
+ * salvataggio non basta, perché la seduta in corso lo riscriverebbe subito.
+ */
+export function svuotaMemoria(): void {
+  try {
+    localStorage.removeItem(CHIAVE);
+  } catch {
+    // storage non disponibile: non c'era niente da cancellare
+  }
+}
 
 const TAB_VALIDE: TabId[] = ['azioni', 'sollecitazioni', 'verifiche', 'costi', 'quaderno', 'normativa'];
 

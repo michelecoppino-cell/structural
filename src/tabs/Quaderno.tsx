@@ -1,7 +1,8 @@
-import { useMemo, useRef, useState, type DragEvent, type ReactNode } from 'react';
+import { useMemo, useRef, useState, type CSSProperties, type DragEvent, type ReactNode } from 'react';
 import {
   ArrowLeft,
   ArrowRight,
+  ArrowsOutLineHorizontal,
   Backspace,
   CaretDown,
   CaretUp,
@@ -11,6 +12,7 @@ import {
   DownloadSimple,
   GridNine,
   Image as ImageIcon,
+  Info,
   Link as LinkIcon,
   NotePencil,
   PencilSimple,
@@ -38,7 +40,9 @@ import {
   type VoceCalcolata,
 } from '../calc/calcolatrice';
 import {
+  COLONNE_FOGLIO,
   LARGHEZZA_MIN,
+  colonneBlocco,
   larghezzaValida,
   livelloEsito,
   nuovoBlocco,
@@ -1249,8 +1253,27 @@ function BloccoCard({
   const bl = b.blocco;
   const fileRef = useRef<HTMLInputElement>(null);
   const [bersaglio, setBersaglio] = useState(false);
+  /** La nota del passaggio: si apre con la (i) e resta aperta finché serve. */
+  const [notaAperta, setNotaAperta] = useState(false);
   // il semaforo dei rapporti di verifica: colora il numero, non l'intero blocco
   const livello = livelloEsito(b);
+  const colonne = colonneBlocco(bl);
+
+  /**
+   * Una riga già sul foglio si può riprendere in mano: il blocco diventa una
+   * formula scritta qui, con lo stesso nome e la stessa espressione di prima.
+   * Si stacca dalla sua fonte — è il prezzo per poterla correggere — e da lì
+   * in avanti è testo che si edita.
+   */
+  const modificabile = !b.pieno && bl.tipo !== 'formula' && !!b.espressione.trim();
+  const rendiModificabile = () =>
+    onAggiorna({
+      tipo: 'formula',
+      nome: b.nome,
+      espressione: b.espressione,
+      um: bl.um || b.umFonte,
+      appunto: bl.appunto || b.nota,
+    });
 
   const incolla = (dati: DataTransfer | null) => {
     const f = immagineDa(dati);
@@ -1262,6 +1285,7 @@ function BloccoCard({
       className={`quad-blocco${b.pieno ? ' is-pieno' : ''}${b.errore ? ' is-errore' : ''}${
         bersaglio ? ' is-bersaglio' : ''
       }`}
+      style={{ '--span': colonne } as CSSProperties}
       onDragOver={(e) => {
         e.preventDefault();
         setBersaglio(true);
@@ -1290,6 +1314,33 @@ function BloccoCard({
         )}
         {b.provenienza && bl.tipo === 'import' && <span className="fonte">↩ {b.provenienza}</span>}
         <span className="tasti">
+          <button
+            type="button"
+            className={`larghezza${colonne > 1 ? ' is-larga' : ''}`}
+            title={`Occupa ${colonne} ${colonne === 1 ? 'colonna' : 'colonne'} su ${COLONNE_FOGLIO} — premi per cambiare, fino a tenere la riga per sé`}
+            onClick={() => onAggiorna({ colonne: (colonne % COLONNE_FOGLIO) + 1 })}
+          >
+            <ArrowsOutLineHorizontal size={11} weight="bold" />
+            <span className="n">{colonne}</span>
+          </button>
+          <button
+            type="button"
+            className={notaAperta || bl.appunto ? 'is-acceso' : undefined}
+            aria-expanded={notaAperta}
+            title={bl.appunto ? `Nota: ${bl.appunto}` : 'Scrivi una nota su questo passaggio'}
+            onClick={() => setNotaAperta((v) => !v)}
+          >
+            <Info size={11} weight={bl.appunto ? 'fill' : 'regular'} />
+          </button>
+          {modificabile && (
+            <button
+              type="button"
+              title="Modifica la formula: la riga si stacca dalla sua fonte e diventa scrivibile qui"
+              onClick={rendiModificabile}
+            >
+              <PencilSimple size={11} />
+            </button>
+          )}
           <button type="button" disabled={primo} title="Spostalo un passo prima" onClick={() => onScorri(-1)}>
             <ArrowLeft size={11} weight="bold" />
           </button>
@@ -1482,6 +1533,25 @@ function BloccoCard({
           )}
           {b.nota && !b.errore && <div className="quad-nota-riga">{b.nota}</div>}
         </div>
+      )}
+
+      {/* la nota del passaggio: si scrive con la (i) aperta, si legge sempre —
+          anche nella stampa, che è il posto in cui serve davvero */}
+      {notaAperta ? (
+        <textarea
+          className="quad-appunto"
+          value={bl.appunto}
+          rows={2}
+          autoFocus
+          placeholder="Nota su questo passaggio: da dove viene il dato, che ipotesi si è fatta…"
+          aria-label="Nota del passaggio"
+          onChange={(e) => onAggiorna({ appunto: e.target.value })}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') setNotaAperta(false);
+          }}
+        />
+      ) : (
+        bl.appunto.trim() && <div className="quad-appunto-letto">{bl.appunto}</div>
       )}
     </div>
   );

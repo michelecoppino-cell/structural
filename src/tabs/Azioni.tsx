@@ -1,10 +1,10 @@
 import { useState } from 'react';
-import { Waveform, Snowflake, Wind, Stack, Mountains, ListBullets, ArrowSquareOut } from '@phosphor-icons/react';
+import { Waveform, Snowflake, Wind, Stack, Mountains, ListBullets, ArrowSquareOut, Car } from '@phosphor-icons/react';
 import { useCalcoli, useStore } from '../state/store';
 import { num } from '../calc/azioni';
 import { STATI_LIMITE, SUOLI, type StatoLimite } from '../calc/sismica';
 import { validaAzioni } from '../calc/validazione';
-import { ST, CU, ZONE_NEVE, VB0, ESPOSIZIONE, CAT, opzioniCp } from '../data/ntc2018';
+import { ST, CU, ZONE_NEVE, VB0, ESPOSIZIONE, CAT, URTI, opzioniCp } from '../data/ntc2018';
 import { REGIONI, comuniDi, provinceDi } from '../data/comuni';
 import { Accordion, Field, NumInput, Origine, Output, Select } from '../components/ui';
 import { Falda, Paramento, ProfiloVento, Spettro } from '../components/Disegni';
@@ -32,6 +32,7 @@ export default function Azioni() {
   /** Promemoria dei cp ordinari, con la falda calcolata sull'inclinazione data. */
   const cpOpzioni = opzioniCp(r.neve.alfa);
   const sismaT = r.terre.sisma;
+  const urti = r.urti;
   /** Lettura dello spettro al periodo scritto in scheda, se c'è. */
   const per = r.sisma.periodo;
 
@@ -1067,6 +1068,143 @@ export default function Azioni() {
               )}
             </div>
           </div>
+        </Accordion>
+
+        {/* ── urti di veicoli in transito ──────────────────────────────── */}
+        <Accordion
+          id="urti"
+          title="Urti — azioni eccezionali"
+          icon={<Car size={18} />}
+          hint={`${urti.scenario} · Fd ${fx(urti.Fd, 0)} kN a ${fx(urti.h)} m`}
+        >
+          <div className="fields">
+            <Field
+              id="urto_scenario"
+              tab="azioni"
+              label="Scenario di urto"
+              dettaglio={{
+                formula:
+                  'Forze statiche equivalenti: Fdx nella direzione di marcia, Fdy in quella ortogonale — non si sommano',
+                ref: urti.ref,
+                tabella: {
+                  intestazioni: ['Scenario', 'Fdx kN', 'Fdy kN', 'h m', 'm t', 'v km/h'],
+                  righe: Object.entries(URTI).map(([nome, u]) => [nome, u.Fdx, u.Fdy, u.h, u.m, u.v]),
+                  evidenzia: Object.keys(URTI).indexOf(urti.scenario),
+                },
+              }}
+            >
+              <Select
+                id="urto_scenario"
+                value={inp.urtoScenario}
+                options={Object.keys(URTI)}
+                onChange={(v) => set({ urtoScenario: v })}
+              />
+            </Field>
+
+            <Field
+              id="urto_h"
+              tab="azioni"
+              label="Quota di applicazione h"
+              unit="m"
+              origine={<Origine testo={inp.urtoQuota.trim() ? 'inserita a mano' : 'da tabella'} />}
+              dettaglio={{
+                formula: `La risultante si applica su un’area alta 0.25 m e larga 1.50 m, a ${fx(urti.h)} m dal piano viabile; Mbase = Fd · h = ${fx(urti.Fd, 0)} · ${fx(urti.h)} = ${fx(urti.Mbase, 1)} kNm`,
+                ref: 'NTC2018 §3.6.3.3',
+              }}
+            >
+              <NumInput
+                id="urto_h"
+                value={inp.urtoQuota}
+                placeholder={fx(URTI[urti.scenario].h)}
+                onChange={(v) => set({ urtoQuota: v })}
+              />
+            </Field>
+
+            <Field
+              id="urto_m"
+              tab="azioni"
+              label="Massa del veicolo m"
+              unit="t"
+              dettaglio={{
+                formula: `Ec = ½·m·v² = 0.5 · ${fx(urti.m)} · (${fx(urti.v, 0)}/3.6)² = ${fx(urti.Ec, 0)} kJ`,
+                ref: 'EN 1991-1-7 App. C — urto duro',
+              }}
+            >
+              <NumInput
+                id="urto_m"
+                value={inp.urtoMassa}
+                placeholder={fx(URTI[urti.scenario].m)}
+                onChange={(v) => set({ urtoMassa: v })}
+              />
+            </Field>
+
+            <Field
+              id="urto_v"
+              tab="azioni"
+              label="Velocità d’impatto v"
+              unit="km/h"
+              dettaglio={{
+                formula: `F = v·√(k·m) = ${fx(urti.v / 3.6)} · √(${fx(urti.k, 0)} · ${fx(urti.m)}) = ${fx(urti.Fcalc, 0)} kN`,
+                ref: 'EN 1991-1-7 App. C, eq. C.1',
+              }}
+            >
+              <NumInput
+                id="urto_v"
+                value={inp.urtoVelocita}
+                placeholder={fx(URTI[urti.scenario].v, 0)}
+                onChange={(v) => set({ urtoVelocita: v })}
+              />
+            </Field>
+
+            <Field
+              id="urto_k"
+              tab="azioni"
+              label="Rigidezza del veicolo k"
+              unit="kN/m"
+              dettaglio={{
+                formula: `δ = v·√(m/k) = ${fx(urti.delta, 3)} m — schiacciamento del veicolo all’urto`,
+                ref: 'EN 1991-1-7 App. C — k ≈ 300 kN/m per autocarri, 300 kN/m per autovetture',
+              }}
+            >
+              <NumInput id="urto_k" value={inp.urtoRigidezza} onChange={(v) => set({ urtoRigidezza: v })} />
+            </Field>
+
+            <div className="campo-largo">
+              <button
+                type="button"
+                className="chip-toggle"
+                aria-pressed={inp.urtoDaEnergia}
+                title="Adotta la forza calcolata sull’energia invece di quella tabellare: serve quando il caso esce da Tab. 3.6.II"
+                onClick={() => set({ urtoDaEnergia: !inp.urtoDaEnergia })}
+              >
+                Forza di progetto dall’energia
+                <span className="val">{fx(urti.Fcalc, 0)} kN</span>
+              </button>
+            </div>
+          </div>
+
+          <Output
+            voci={[
+              { k: 'Fdx (marcia)', v: fx(urti.Fdx, 0), u: 'kN' },
+              { k: 'Fdy (ortogonale)', v: fx(urti.Fdy, 0), u: 'kN' },
+              { k: 'Ec', v: fx(urti.Ec, 0), u: 'kJ' },
+              { k: 'F da energia', v: fx(urti.Fcalc, 0), u: 'kN' },
+              { k: 'Fd adottata', v: fx(urti.Fd, 0), u: 'kN' },
+              { k: 'Mbase = Fd·h', v: fx(urti.Mbase, 1), u: 'kNm' },
+            ]}
+          />
+
+          {urti.avviso && <p className="field-error">{urti.avviso}</p>}
+          <p className="note">
+            Le due forze non si sommano: si verifica l’elemento per Fdx e, separatamente, per Fdy.
+            L’urto è un’azione eccezionale, quindi entra nella combinazione con γ = 1 e con i
+            variabili ridotti a ψ2 (§2.5.3); per gli elementi esposti si può anche progettare il
+            ritegno (barriera, cordolo) invece dell’elemento stesso. La forza dall’energia è
+            più alta di quella tabellare — {fx(urti.Fcalc, 0)} contro {fx(urti.Fdx, 0)} kN — perché
+            l’urto duro immagina un ostacolo perfettamente rigido, mentre Tab. 3.6.II dà forze{' '}
+            <strong>statiche equivalenti</strong>, che tengono già conto della deformazione del
+            veicolo e della risposta dinamica della struttura: adottarla è una scelta da motivare.
+          </p>
         </Accordion>
       </div>
     </div>

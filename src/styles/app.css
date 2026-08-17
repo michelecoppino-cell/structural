@@ -152,6 +152,13 @@ button {
   flex: none;
 }
 
+/* svuota tutto: è l'unico comando che perde dati, e al passaggio lo dice */
+.btn-svuota:hover:not(:disabled) {
+  color: var(--err);
+  border-color: var(--err);
+  background: var(--err-bg);
+}
+
 .header-sep {
   width: 1px;
   height: 22px;
@@ -1040,6 +1047,38 @@ button.field-origin:hover {
   background: var(--divider-strong);
 }
 
+/* ── scheda Verifiche: tutte le pastiglie allineate a sinistra ──────────
+   I comandi (materiale, verifica, VEd) e gli esiti in testa al pannello
+   partono dallo stesso bordo: niente pastiglie spinte a destra dalla barra
+   o centrate nelle celle */
+
+.ver-comandi {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px 12px;
+  width: 100%;
+  min-width: 0;
+}
+
+.ver-comandi > * {
+  flex: none;
+  margin-left: 0;
+  margin-right: 0;
+}
+
+/* la barra di taglio non si allarga fino a spingere la nota lontana */
+.esito-testa .bar {
+  flex: none;
+  width: 180px;
+}
+
+/* l'esito nelle tabelle di riepilogo sta a sinistra della sua cella */
+.table td > .verdict {
+  margin-right: auto;
+}
+
 /* esito in testa alla verifica, sempre visibile */
 .esito-testa {
   display: flex;
@@ -1392,11 +1431,21 @@ button.field-origin:hover {
 }
 
 /* a schermata piena i riquadri si dividono l'altezza che avanza: il rapporto
-   d'aspetto cede il passo, ma il disegno resta in coordinate reali */
+   d'aspetto cede il passo, ma il disegno resta in coordinate reali. I minimi
+   sono bassi apposta — la fascia deve stare dentro il pannello anche quando il
+   pannello è alto il 70 % della finestra */
+.panel-diagrammi .diagrams.orizzontale > .diagram {
+  min-height: 0;
+}
+
 .panel-diagrammi .diagrams.orizzontale .diagram-canvas {
   flex: 1;
   aspect-ratio: auto;
-  min-height: 60px;
+  min-height: 34px;
+}
+
+.panel-diagrammi > .panel-body {
+  overflow: hidden;
 }
 
 .menu-blocco {
@@ -1495,24 +1544,20 @@ button.field-origin:hover {
   flex-wrap: wrap;
 }
 
-/* geometria e carichi: chiusa a tendina di default, allineata al bordo
-   destro della fascia; aperta, i campi stanno su una griglia fissa a
-   quattro colonne */
+/* geometria e carichi: sempre in vista — un titolo e i campi sotto, su una
+   griglia fissa a quattro colonne, in fila con gli altri blocchi della fascia.
+   Aprirla e chiuderla costava una riga di comando e non faceva guadagnare
+   spazio: i campi ci stanno comunque */
 .soll-blocco-geom {
   flex: none;
-  margin-left: auto;
 }
 
-.geom-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.geom-head .sub-toggle {
-  flex: 1;
-  min-width: 0;
-  margin-top: 0;
+.soll-blocco-geom .geom-misura {
+  margin-left: 6px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--text-faint);
 }
 
 .soll-geom-grid {
@@ -1546,6 +1591,32 @@ button.field-origin:hover {
 
 .mini-campo.is-error .input {
   border-color: var(--err);
+}
+
+/* ───────────── ≥ 900px: i diagrammi non prendono tutta l'altezza ─────────
+   Su desktop il riquadro dei diagrammi si ferma al 70 % dell'altezza che
+   avanza: le curve restano leggibili e la fascia dei comandi non finisce
+   schiacciata in fondo. I testi non cambiano misura — il viewBox degli SVG è
+   costruito sui pixel reali del riquadro, quindi il disegno si accorcia ma le
+   etichette restano quelle. */
+
+@media (min-width: 900px) {
+  .soll-layout {
+    /* 0.7fr: la riga dei diagrammi prende il 70 % dell'altezza libera e il
+       resto non viene riempito — la fascia dei comandi risale sotto ai
+       grafici invece di restare incollata in fondo alla finestra */
+    grid-template-rows: minmax(0, 0.7fr) auto;
+  }
+
+  /* la colonna di destra resta alta quanto tutto il resto: i due pannelli
+     ad accordion non hanno motivo di accorciarsi con i diagrammi */
+  .soll-side {
+    grid-row: 1 / -1;
+  }
+
+  .soll-comandi {
+    grid-column: 1;
+  }
 }
 
 /* ───────────── ≥ 1200px: due colonne per i pannelli impilati ───────────── */
@@ -1899,6 +1970,98 @@ button.field-origin:hover {
 .calc-unita-chip button:hover {
   color: var(--err);
   background: var(--err-bg);
+}
+
+/* ─────────────────── libreria → utili: tabelle di lavoro ─────────────────── */
+
+/* ogni tabella è una scheda che si apre e si chiude: sul tavolo resta solo
+   quella che si sta consultando */
+.utili-testa {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  width: 100%;
+  padding: 11px 14px;
+  background: transparent;
+  border: 0;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.utili-testa .t {
+  font-size: 13.5px;
+  font-weight: 500;
+}
+
+.utili-testa .d {
+  font-size: 11.5px;
+  color: var(--text-faint);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.utili-testa .n {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.utili-testa .caret {
+  display: inline-flex;
+  align-self: center;
+  color: var(--text-muted);
+}
+
+.utili-testa:hover {
+  background: var(--hover);
+}
+
+.utili-corpo {
+  padding-top: 0;
+}
+
+/* i numeri delle tabelle di libreria si leggono incolonnati al centro della
+   cella: sono valori da consultare, non da sommare */
+.utili .table .num,
+.utili .table th.num {
+  text-align: center;
+}
+
+/* scelta del tipo di profilo, sopra il sagomario */
+.calc-catalogo {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.calc-catalogo-chip {
+  padding: 4px 10px;
+  font-size: 12px;
+  color: var(--text-2);
+  background: var(--nested);
+  border: 1px dashed var(--border-panel);
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.calc-catalogo-chip:hover {
+  color: var(--text-1);
+  background: var(--hover);
+}
+
+.calc-catalogo-chip[aria-pressed='true'] {
+  color: var(--color-accent-300);
+  background: var(--accent-05);
+}
+
+.calc-conteggio {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  white-space: nowrap;
 }
 
 /* ─────────────────── scheda Normativa ─────────────────── */
@@ -2282,8 +2445,8 @@ button.field-origin:hover {
 /* i controlli dentro la carta si vestono di chiaro: un campo scuro su un
    foglio bianco sarebbe una toppa */
 .quad-foglio .input {
-  min-height: 26px;
-  font-size: 12.5px;
+  min-height: 23px;
+  font-size: 11px;
   color: var(--inchiostro);
   caret-color: var(--color-accent-600);
   background: rgba(20, 24, 31, 0.03);
@@ -2345,7 +2508,7 @@ button.field-origin:hover {
   border-bottom: 1px dashed var(--segno);
   color: var(--inchiostro);
   font-family: inherit;
-  font-size: 12.5px;
+  font-size: 11.5px;
   padding: 4px 0;
 }
 
@@ -2361,22 +2524,26 @@ button.field-origin:hover {
   gap: 6px;
 }
 
-/* ── i blocchi: a flusso, due per riga quando ci stanno ── */
+/* ── i blocchi: una griglia a tre colonne, come la carta a quadretti ──
+      Ogni blocco occupa le colonne che gli si danno (`--span`, da 1 a 3): una
+      formula sta in una colonna, e quando merita la riga per sé la si allarga.
+      Note, schemi e capitoli prendono tutta la riga di serie. */
 
 .quad-blocchi {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: start;
+  gap: 6px 8px;
 }
 
 .quad-blocco {
   position: relative;
-  flex: 1 1 300px;
-  min-width: 260px;
+  grid-column: span var(--span, 1);
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 7px 9px;
+  gap: 3px;
+  padding: 5px 8px;
   background: rgba(20, 24, 31, 0.02);
   border: 1px solid var(--segno);
   border-radius: var(--radius-md);
@@ -2384,7 +2551,61 @@ button.field-origin:hover {
 }
 
 .quad-blocco.is-pieno {
-  flex-basis: 100%;
+  grid-column: span var(--span, 3);
+}
+
+/* su cellulare il foglio si stringe e le colonne non hanno più senso: un
+   blocco per riga, larghezza scelta o no */
+@media (max-width: 899px) {
+  .quad-blocchi {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .quad-blocco,
+  .quad-blocco.is-pieno {
+    grid-column: 1 / -1;
+  }
+}
+
+/* il comando delle colonne dice, con un numero, quanto è larga la riga */
+.quad-blocco-azioni .tasti .larghezza {
+  gap: 2px;
+}
+
+.quad-blocco-azioni .tasti .larghezza .n {
+  font-size: 9.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.quad-blocco-azioni .tasti .larghezza.is-larga,
+.quad-blocco-azioni .tasti .is-acceso {
+  color: var(--color-accent-700);
+}
+
+/* la nota del passaggio: piccola, sotto la riga, e in stampa resta */
+.quad-appunto {
+  width: 100%;
+  resize: vertical;
+  background: transparent;
+  border: 0;
+  border-top: 1px dashed var(--segno);
+  padding: 3px 0 0;
+  color: var(--inchiostro-2);
+  font-family: inherit;
+  font-size: 10.5px;
+}
+
+.quad-appunto:focus {
+  outline: none;
+  border-color: var(--color-accent-600);
+}
+
+.quad-appunto-letto {
+  font-size: 10.5px;
+  line-height: 1.4;
+  color: var(--inchiostro-3);
+  border-top: 1px dashed var(--segno);
+  padding-top: 3px;
 }
 
 .quad-blocco.is-errore {
@@ -2490,13 +2711,15 @@ button.field-origin:hover {
   gap: 3px;
 }
 
-/* nome, formula e risultato sulla stessa riga: un passaggio = una riga */
+/* nome, formula e risultato sulla stessa riga: un passaggio = una riga.
+   La misura è quella di un foglio scritto in Arial Narrow 11: piccola, tre
+   colonne di calcolo ci stanno senza andare a capo */
 .quad-linea {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
   flex-wrap: wrap;
-  font-size: 13.5px;
+  font-size: 11.5px;
 }
 
 .quad-linea .nome {
@@ -2506,7 +2729,7 @@ button.field-origin:hover {
 .quad-linea .espr,
 .quad-linea .uguale {
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: 10.5px;
   color: var(--inchiostro-2);
 }
 
@@ -2523,7 +2746,7 @@ button.field-origin:hover {
   gap: 5px;
   flex-wrap: nowrap;
   white-space: nowrap;
-  font-size: 14px;
+  font-size: 12px;
 }
 
 /* un rapporto di verifica letto in percento si legge dal colore prima che dal
@@ -2551,11 +2774,11 @@ button.field-origin:hover {
 .quad-um.input,
 .quad-um-libera.input {
   width: auto;
-  min-width: 46px;
-  max-width: 86px;
-  min-height: 22px;
-  padding: 1px 4px;
-  font-size: 11.5px;
+  min-width: 40px;
+  max-width: 78px;
+  min-height: 20px;
+  padding: 1px 3px;
+  font-size: 10.5px;
   font-family: var(--font-mono);
   color: var(--inchiostro-2);
   background: transparent;
@@ -2570,22 +2793,22 @@ button.field-origin:hover {
 }
 
 .quad-in-nome.input {
-  flex: 0 1 76px;
-  width: 76px;
-  min-width: 44px;
-  min-height: 24px;
-  padding-inline: 5px;
+  flex: 0 1 56px;
+  width: 56px;
+  min-width: 36px;
+  min-height: 21px;
+  padding-inline: 4px;
   font-weight: 600;
 }
 
 .quad-in-espr.input {
   /* la formula si stringe prima che il risultato vada a capo: la base è
      piccola apposta, poi cresce con lo spazio che avanza */
-  flex: 1 1 60px;
+  flex: 1 1 48px;
   min-width: 0;
-  min-height: 24px;
+  min-height: 21px;
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: 10.5px;
 }
 
 .quad-errore,
@@ -2607,7 +2830,7 @@ button.field-origin:hover {
 }
 
 .quad-nota-riga {
-  font-size: 10.5px;
+  font-size: 10px;
   color: var(--inchiostro-3);
 }
 
@@ -2621,7 +2844,7 @@ button.field-origin:hover {
   border: 0;
   color: var(--inchiostro);
   font-family: inherit;
-  font-size: 12.5px;
+  font-size: 11.5px;
   padding: 2px 0;
 }
 
@@ -2758,7 +2981,7 @@ button.field-origin:hover {
 }
 
 .quad-cap h2 {
-  font-size: 12.5px;
+  font-size: 11.5px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--color-accent-700);
@@ -2773,7 +2996,7 @@ button.field-origin:hover {
 }
 
 .quad-cap-blocco h3 {
-  font-size: 11.5px;
+  font-size: 11px;
   color: var(--inchiostro-2);
   margin: 6px 0 3px;
   font-weight: 600;
@@ -2787,8 +3010,8 @@ button.field-origin:hover {
 
 .quad-cap-blocco li {
   font-family: var(--font-mono);
-  font-size: 11px;
-  line-height: 1.55;
+  font-size: 10.5px;
+  line-height: 1.5;
   overflow-wrap: anywhere;
 }
 

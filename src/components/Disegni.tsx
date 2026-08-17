@@ -32,6 +32,7 @@ export function SezioneTaglio({
   phiStaffa = 0,
   phiLong = 20,
   nBarre = 0,
+  nBracci = 0,
   passo,
   staffe,
 }: {
@@ -43,6 +44,13 @@ export function SezioneTaglio({
   phiStaffa?: number;
   phiLong?: number;
   nBarre?: number;
+  /**
+   * Bracci della staffa: quante volte l'armatura trasversale attraversa la
+   * sezione. Due sono i lati verticali della staffa perimetrale; dal terzo in
+   * poi sono bracci interni — una staffa in più o una legatura — e vanno
+   * disegnati come tali, non come un ferro longitudinale in più.
+   */
+  nBracci?: number;
   passo?: number;
   staffe?: boolean;
 }) {
@@ -72,6 +80,36 @@ export function SezioneTaglio({
     barre.push(<circle key={i} className="dg-punto" cx={bx} cy={yd} r={rLong} />);
   }
 
+  /**
+   * I bracci interni: dal terzo braccio in poi la staffa attraversa la sezione
+   * anche in mezzo, e quello che si vede in sezione è un tratto verticale con
+   * i suoi ganci, appoggiato a un ferro longitudinale.
+   */
+  const nb = Math.max(0, Math.min(8, Math.round(nBracci)));
+  const spessoreStaffa = Math.max(1.2, phiStaffa * k);
+  const yStaffaSu = y0 + cc;
+  const yStaffaGiu = y1 - cc;
+  const bracciInterni =
+    staffe && nb > 2
+      ? Array.from({ length: nb - 2 }, (_, i) => {
+          // i bracci si spartiscono la larghezza fra i due lati della staffa
+          const bx = x0 + cc + ((w - 2 * cc) * (i + 1)) / (nb - 1);
+          const gancio = Math.max(3, spessoreStaffa * 2.2);
+          return (
+            <path
+              key={`br${i}`}
+              className="dg-line"
+              strokeWidth={spessoreStaffa}
+              fill="none"
+              d={
+                `M${bx - gancio},${yStaffaSu + gancio} L${bx},${yStaffaSu} L${bx},${yStaffaGiu} ` +
+                `L${bx + gancio},${yStaffaGiu - gancio}`
+              }
+            />
+          );
+        })
+      : null;
+
   return (
     <Cornice titolo="Sezione — quote di calcolo" viewBox={`0 0 ${W} ${H}`}>
       {/* calcestruzzo */}
@@ -91,6 +129,7 @@ export function SezioneTaglio({
         />
       )}
 
+      {bracciInterni}
       {barre}
 
       {/* quota bw, sotto */}
@@ -126,7 +165,7 @@ export function SezioneTaglio({
 
       {staffe && passo !== undefined && (
         <text x={x0} y={16} className="dg-testo is-accent">
-          staffe ⌀{fx(phiStaffa, 0)} / {fx(passo, 0)} mm
+          staffe ⌀{fx(phiStaffa, 0)} / {fx(passo, 0)} mm{nb > 0 ? ` · ${nb} bracci` : ''}
         </text>
       )}
       {!staffe && (
