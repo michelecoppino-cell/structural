@@ -33,6 +33,9 @@ import {
   unitaInElenco,
   type Dim,
 } from './unita';
+import { ACCIAI, CLS, COEFF_DEFAULT, ecmCLS, fctkCLS, fctmCLS } from '../data/materiali';
+import { areaBarre } from '../data/armature';
+import { BULLONI } from '../data/bulloni';
 
 const GRADI = Math.PI / 180;
 
@@ -589,6 +592,103 @@ export const PREIMPOSTATE_DEFAULT: Preimpostata[] = [
   { id: 'pre-peso', nome: 'P', espressione: 'b*h*γC', nota: 'peso proprio della trave', um: 'kN/m' },
   { id: 'pre-freccia', nome: 'f', espressione: '5*q*l^4/(384*E*J)', nota: 'freccia in mezzeria, trave appoggiata', um: '' },
 ];
+
+/* ─────────────── grandezze fisse scelte dalla libreria ─────────────── */
+
+/**
+ * Le scelte a tendina della colonna delle grandezze fisse: classe del
+ * calcestruzzo, acciaio, ferro d'armatura e bullone. Vuoto vuol dire «questa
+ * scelta non l'ho fatta»: le grandezze che ne discenderebbero non compaiono.
+ */
+export interface Selezioni {
+  /** Classe di resistenza del calcestruzzo, es. `C25/30`. */
+  cls: string;
+  /** Sigla dell'acciaio: carpenteria, armatura o classe del bullone. */
+  acciaio: string;
+  /** Diametro del ferro d'armatura (mm) e numero di barre. */
+  barraFi: string;
+  barraN: string;
+  /** Taglia del bullone (es. `M12`) e numero di bulloni. */
+  bulloneM: string;
+  bulloneN: string;
+}
+
+export const SELEZIONI_DEFAULT: Selezioni = {
+  cls: '',
+  acciaio: '',
+  barraFi: '12',
+  barraN: '',
+  bulloneM: 'M12',
+  bulloneN: '',
+};
+
+/** Numero scritto in un campo delle scelte: virgola o punto, vuoto = 0. */
+function numero(s: string): number {
+  const v = Number(String(s ?? '').replace(',', '.').trim());
+  return Number.isFinite(v) ? v : 0;
+}
+
+/**
+ * Le grandezze fisse che nascono dalle scelte a tendina. Sono voci come le
+ * altre — hanno nome, valore e unità, e le formule le richiamano per nome — ma
+ * non si scrivono a mano: cambiano quando cambia la scelta. I coefficienti
+ * parziali restano quelli di serie e non compaiono: chi vuole un γ diverso si
+ * aggiunge la sua grandezza fissa a mano.
+ */
+export function vociDaSelezioni(s: Selezioni): VoceCalcolo[] {
+  const out: VoceCalcolo[] = [];
+  // le resistenze si leggono a due decimali e i moduli elastici a numero
+  // intero: sono valori di tabella, non l'esito di un calcolo da conservare
+  // con tutte le cifre
+  const val = (n: number, d = 2) => formatta(arrotonda(n, d));
+
+  const cls = CLS[s.cls?.trim() ?? ''];
+  if (cls) {
+    const { alfacc, gammaC } = COEFF_DEFAULT;
+    const fcd = (alfacc * cls.fck) / gammaC;
+    const fctm = fctmCLS(cls.fck);
+    const fctd = fctkCLS(cls.fck) / gammaC;
+    out.push(
+      { id: 'gen-fck', nome: 'fck', espressione: val(cls.fck), nota: `${s.cls} — resistenza caratteristica a compressione`, um: 'MPa', tipo: 'fissa' },
+      { id: 'gen-fcd', nome: 'fcd', espressione: val(fcd), nota: `${s.cls} — αcc·fck/γC con αcc ${alfacc} e γC ${gammaC}`, um: 'MPa', tipo: 'fissa' },
+      { id: 'gen-fctm', nome: 'fctm', espressione: val(fctm), nota: `${s.cls} — resistenza media a trazione`, um: 'MPa', tipo: 'fissa' },
+      { id: 'gen-fctd', nome: 'fctd', espressione: val(fctd), nota: `${s.cls} — 0.7·fctm/γC con γC ${gammaC}`, um: 'MPa', tipo: 'fissa' },
+      { id: 'gen-ecm', nome: 'Ecm', espressione: val(ecmCLS(cls.fck), 0), nota: `${s.cls} — modulo elastico secante`, um: 'MPa', tipo: 'fissa' },
+    );
+  }
+
+  const acc = ACCIAI[s.acciaio?.trim() ?? ''];
+  if (acc) {
+    out.push(
+      { id: 'gen-fyd', nome: 'fyd', espressione: val(acc.fyk / acc.gammaY), nota: `${s.acciaio} — ${acc.nota}`, um: 'MPa', tipo: 'fissa' },
+      { id: 'gen-ftd', nome: 'ftd', espressione: val(acc.ftk / acc.gammaU), nota: `${s.acciaio} — ${acc.nota}`, um: 'MPa', tipo: 'fissa' },
+    );
+  }
+
+  const fi = numero(s.barraFi);
+  const nBarre = numero(s.barraN);
+  if (fi > 0 && nBarre > 0) {
+    out.push({
+      id: 'gen-ar',
+      nome: 'Ar',
+      espressione: val(areaBarre(fi, nBarre), 1),
+      nota: `armatura ${nBarre}⌀${fi} — area complessiva`,
+      um: 'mmq',
+      tipo: 'fissa',
+    });
+  }
+
+  const bul = BULLONI[s.bulloneM?.trim() ?? ''];
+  const nBulloni = numero(s.bulloneN);
+  if (bul && nBulloni > 0) {
+    out.push(
+      { id: 'gen-ab', nome: 'Ab', espressione: val(bul.Ares * nBulloni, 1), nota: `${nBulloni} ${s.bulloneM} — area resistente complessiva`, um: 'mmq', tipo: 'fissa' },
+      { id: 'gen-abl', nome: 'Abl', espressione: val(bul.A * nBulloni, 1), nota: `${nBulloni} ${s.bulloneM} — area lorda complessiva del gambo`, um: 'mmq', tipo: 'fissa' },
+    );
+  }
+
+  return out;
+}
 
 /**
  * Nomi richiamati da un'espressione: servono a dire quali grandezze mancano

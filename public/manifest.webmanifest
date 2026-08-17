@@ -20,6 +20,6 @@
   ],
   "shortcuts": [
     { "name": "Calcolatrice", "short_name": "Calcolatrice", "url": "/?scheda=calcolatrice" },
-    { "name": "Normativa", "short_name": "Normativa", "url": "/?scheda=normativa" }
+    { "name": "Libreria", "short_name": "Libreria", "url": "/?scheda=normativa" }
   ]
 }

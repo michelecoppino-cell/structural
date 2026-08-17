@@ -72,3 +72,60 @@ export const ACCIAIO_STRUTTURALE: Record<string, { fyk: number; ftk: number }> =
   S355: { fyk: 355, ftk: 510 },
   S450: { fyk: 440, ftk: 550 },
 };
+
+/** Resistenza a trazione media del calcestruzzo fctm (MPa) — §11.2.10.2. */
+export const fctmCLS = (fck: number): number =>
+  fck <= 50 ? 0.3 * fck ** (2 / 3) : 2.12 * Math.log(1 + (fck + 8) / 10);
+
+/** Frattile inferiore della resistenza a trazione fctk = 0.7·fctm (MPa). */
+export const fctkCLS = (fck: number): number => 0.7 * fctmCLS(fck);
+
+/**
+ * Coefficienti parziali di serie: quelli che nel 99% dei casi non si toccano.
+ * Restano qui, fuori dalle tendine, perché la scelta del materiale deve dare
+ * subito le resistenze di progetto senza far scegliere anche αcc e i γM.
+ */
+export const COEFF_DEFAULT = {
+  /** Effetti di lunga durata sulla resistenza a compressione — §4.1.2.1.1. */
+  alfacc: 0.85,
+  /** Calcestruzzo — Tab. 4.1.I. */
+  gammaC: 1.5,
+  /** Acciaio da armatura — Tab. 4.1.I. */
+  gammaS: 1.15,
+  /** Carpenteria, resistenza delle sezioni — §4.2.4.1.1. */
+  gammaM0: 1.05,
+  /** Sezioni indebolite e collegamenti — §4.2.4.1.1, Tab. 4.2.XIV. */
+  gammaM2: 1.25,
+} as const;
+
+/**
+ * Gli acciai di un'unica tendina: carpenteria, armatura e classi dei bulloni.
+ * Ognuno porta con sé i γ con cui si passa dal caratteristico al progetto, così
+ * la scelta della sigla basta a dare fyd e ftd.
+ */
+export interface Acciaio {
+  fyk: number;
+  ftk: number;
+  /** γ con cui si ricava fyd. */
+  gammaY: number;
+  /** γ con cui si ricava ftd. */
+  gammaU: number;
+  famiglia: 'carpenteria' | 'armatura' | 'bullone';
+  nota: string;
+}
+
+export const ACCIAI: Record<string, Acciaio> = {
+  S235: { fyk: 235, ftk: 360, gammaY: 1.05, gammaU: 1.25, famiglia: 'carpenteria', nota: 'carpenteria — γM0 1.05, γM2 1.25' },
+  S275: { fyk: 275, ftk: 430, gammaY: 1.05, gammaU: 1.25, famiglia: 'carpenteria', nota: 'carpenteria — γM0 1.05, γM2 1.25' },
+  S355: { fyk: 355, ftk: 510, gammaY: 1.05, gammaU: 1.25, famiglia: 'carpenteria', nota: 'carpenteria — γM0 1.05, γM2 1.25' },
+  S450: { fyk: 440, ftk: 550, gammaY: 1.05, gammaU: 1.25, famiglia: 'carpenteria', nota: 'carpenteria — γM0 1.05, γM2 1.25' },
+  B450C: { fyk: 450, ftk: 540, gammaY: 1.15, gammaU: 1.15, famiglia: 'armatura', nota: 'armatura ordinaria — γS 1.15' },
+  B450A: { fyk: 450, ftk: 495, gammaY: 1.15, gammaU: 1.15, famiglia: 'armatura', nota: 'armatura in rotoli — γS 1.15' },
+  '4.6': { fyk: 240, ftk: 400, gammaY: 1.25, gammaU: 1.25, famiglia: 'bullone', nota: 'classe bullone — γM2 1.25' },
+  '5.6': { fyk: 300, ftk: 500, gammaY: 1.25, gammaU: 1.25, famiglia: 'bullone', nota: 'classe bullone — γM2 1.25' },
+  '6.8': { fyk: 480, ftk: 600, gammaY: 1.25, gammaU: 1.25, famiglia: 'bullone', nota: 'classe bullone — γM2 1.25' },
+  '8.8': { fyk: 640, ftk: 800, gammaY: 1.25, gammaU: 1.25, famiglia: 'bullone', nota: 'classe bullone — γM2 1.25' },
+  '10.9': { fyk: 900, ftk: 1000, gammaY: 1.25, gammaU: 1.25, famiglia: 'bullone', nota: 'classe bullone — γM2 1.25' },
+};
+
+export const SIGLE_ACCIAIO = Object.keys(ACCIAI);

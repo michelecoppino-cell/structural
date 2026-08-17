@@ -29,12 +29,16 @@ import {
   unitaVariabili,
   valutaConUnita,
   variabili,
+  vociDaSelezioni,
   type Preimpostata,
+  type Selezioni,
   type TipoVoce,
   type VoceCalcolo,
   type VoceCalcolata,
 } from '../calc/calcolatrice';
 import { UNITA_DEFAULT, normalizzaElenco, scriviUnita, unitaInElenco } from '../calc/unita';
+import { ACCIAI, CLS, DIAMETRI, SIGLE_ACCIAIO } from '../data/materiali';
+import { TAGLIE_BULLONE } from '../data/bulloni';
 
 /** Tasti del tastierino: quattro colonne, come una calcolatrice. */
 const TASTI: {
@@ -292,6 +296,166 @@ function RigaVoce({
   );
 }
 
+/**
+ * Le scelte a tendina delle grandezze fisse: si sceglie la sigla — la classe
+ * del calcestruzzo, l'acciaio, il ferro, il bullone — e le grandezze che ne
+ * discendono compaiono già compilate a fianco, pronte da richiamare per nome.
+ * I coefficienti parziali non si vedono: sono quelli di serie, e chi ne vuole
+ * di diversi si aggiunge la sua grandezza fissa a mano.
+ */
+function ScelteLibreria({
+  sel,
+  generate,
+  aiuto,
+  onCambia,
+  onUsa,
+}: {
+  sel: Selezioni;
+  /** Le grandezze già calcolate dalle scelte, in ordine. */
+  generate: VoceCalcolata[];
+  aiuto: boolean;
+  onCambia: (patch: Partial<Selezioni>) => void;
+  onUsa: (nome: string) => void;
+}) {
+  return (
+    <div className="calc-libreria">
+      <div className="calc-colonna-testa">
+        <span className="t">Da libreria</span>
+        <span className="d">scegli la sigla, le resistenze vengono da sé</span>
+      </div>
+
+      {aiuto && (
+        <p className="note" style={{ margin: '2px 0 0' }}>
+          I valori di progetto escono con i coefficienti di serie — αcc 0.85, γC 1.5, γS 1.15, γM0
+          1.05, γM2 1.25 — che qui non si vedono per non riempire la scheda: per cambiarli si scrive
+          la grandezza a mano fra le fisse. Lasciando vuota una quantità la sua area non compare.
+        </p>
+      )}
+
+      <div className="calc-scelte">
+        <div className="mini-campo">
+          <label htmlFor="sel-cls">CLS</label>
+          <select
+            id="sel-cls"
+            className="input"
+            value={sel.cls}
+            title="Classe di resistenza del calcestruzzo: dà fck, fcd, fctm, fctd ed Ecm"
+            onChange={(e) => onCambia({ cls: e.target.value })}
+          >
+            <option value="">— nessuno —</option>
+            {Object.keys(CLS).map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="mini-campo">
+          <label htmlFor="sel-acciaio">Acciaio</label>
+          <select
+            id="sel-acciaio"
+            className="input"
+            value={sel.acciaio}
+            title="Carpenteria, armatura o classe del bullone: dà fyd e ftd"
+            onChange={(e) => onCambia({ acciaio: e.target.value })}
+          >
+            <option value="">— nessuno —</option>
+            {SIGLE_ACCIAIO.map((s) => (
+              <option key={s} value={s}>
+                {s} — {ACCIAI[s].famiglia}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="mini-campo">
+          <label htmlFor="sel-fi">Ferro ⌀</label>
+          <select
+            id="sel-fi"
+            className="input"
+            value={sel.barraFi}
+            title="Diametro del ferro d’armatura"
+            onChange={(e) => onCambia({ barraFi: e.target.value })}
+          >
+            {DIAMETRI.map((d) => (
+              <option key={d} value={d}>
+                ⌀{d}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="mini-campo">
+          <label htmlFor="sel-fi-n">n. ferri</label>
+          <input
+            id="sel-fi-n"
+            className="input"
+            value={sel.barraN}
+            placeholder="—"
+            inputMode="numeric"
+            autoComplete="off"
+            title="Numero di barre: con il diametro compila Ar"
+            onChange={(e) => onCambia({ barraN: e.target.value })}
+          />
+        </div>
+
+        <div className="mini-campo">
+          <label htmlFor="sel-m">Bullone M</label>
+          <select
+            id="sel-m"
+            className="input"
+            value={sel.bulloneM}
+            title="Taglia del bullone a filettatura metrica grossa"
+            onChange={(e) => onCambia({ bulloneM: e.target.value })}
+          >
+            {TAGLIE_BULLONE.map((m) => (
+              <option key={m} value={m}>
+                {m}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="mini-campo">
+          <label htmlFor="sel-m-n">n. bulloni</label>
+          <input
+            id="sel-m-n"
+            className="input"
+            value={sel.bulloneN}
+            placeholder="—"
+            inputMode="numeric"
+            autoComplete="off"
+            title="Numero di bulloni: compila Ab (area resistente) e Abl (area lorda)"
+            onChange={(e) => onCambia({ bulloneN: e.target.value })}
+          />
+        </div>
+      </div>
+
+      {generate.length > 0 ? (
+        <ul className="calc-derivate">
+          {generate.map((v) => (
+            <li key={v.id}>
+              <button
+                type="button"
+                title={`${v.nota} — tocca per usare ${v.nome} nell’espressione`}
+                onClick={() => onUsa(v.nome)}
+              >
+                <span className="n">{v.nome}</span>
+                <strong>{formatta(v.valore)}</strong>
+                {v.umEffettiva && <span className="um">{v.umEffettiva}</span>}
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="note" style={{ margin: '2px 0 0' }}>
+          Nessuna scelta fatta: scegli una classe di calcestruzzo o un acciaio e qui compaiono le
+          resistenze di progetto, richiamabili per nome nelle formule.
+        </p>
+      )}
+    </div>
+  );
+}
+
 export default function Calcolatrice() {
   const { state, dispatch } = useStore();
   const calc = state.calcolatrice;
@@ -302,9 +466,19 @@ export default function Calcolatrice() {
   const [nuovaUnita, setNuovaUnita] = useState('');
   const [nuovaPre, setNuovaPre] = useState({ nome: '', espressione: '', um: '', nota: '' });
 
-  const voci = useMemo(() => ricalcola(calc.voci, calc.unita), [calc.voci, calc.unita]);
-  const vars = useMemo(() => variabili(voci), [voci]);
-  const unitaVars = useMemo(() => unitaVariabili(voci), [voci]);
+  // le grandezze che nascono dalle scelte a tendina non stanno fra le voci
+  // salvate: si ricavano dalle scelte e si mettono in testa alla sequenza, così
+  // ogni formula più in basso le vede
+  const generate = useMemo(() => vociDaSelezioni(calc.selezioni), [calc.selezioni]);
+  const tutte = useMemo(
+    () => ricalcola([...generate, ...calc.voci], calc.unita),
+    [generate, calc.voci, calc.unita],
+  );
+  /** Le derivate dalle scelte e, a seguire, le voci scritte a mano (1:1 con `calc.voci`). */
+  const derivate = tutte.slice(0, generate.length);
+  const voci = tutte.slice(generate.length);
+  const vars = useMemo(() => variabili(tutte), [tutte]);
+  const unitaVars = useMemo(() => unitaVariabili(tutte), [tutte]);
   const anteprima = useMemo(
     () => valutaConUnita(calc.espressione, vars, unitaVars),
     [calc.espressione, vars, unitaVars],
@@ -388,7 +562,7 @@ export default function Calcolatrice() {
 
   // grandezze proposte: quelle di serie che mancano più il catalogo, divise
   // per colonna — a sinistra si aggiungono lunghezze, a destra pesi di volume
-  const nomiUsati = new Set(voci.map((v) => v.nome.trim()));
+  const nomiUsati = new Set(tutte.map((v) => v.nome.trim()));
   const proposte = [...VOCI_DEFAULT.map(({ id: _id, ...g }) => g), ...GRANDEZZE_CATALOGO].filter(
     (g) => !nomiUsati.has(g.nome),
   );
@@ -397,7 +571,7 @@ export default function Calcolatrice() {
     fisse: proposte.filter((g) => g.tipo === 'fissa'),
   };
 
-  const nomeGiaUsato = voci.some((v) => v.nomeValido && v.nome.trim() === calc.nome.trim());
+  const nomeGiaUsato = tutte.some((v) => v.nomeValido && v.nome.trim() === calc.nome.trim());
   const nomeErrato = !!calc.nome.trim() && (!nomeAmmesso(calc.nome) || nomeGiaUsato);
 
   const setUnita = (u: string[]) => set({ unita: normalizzaElenco(u) });
@@ -708,6 +882,14 @@ export default function Calcolatrice() {
               discende.
             </p>
           )}
+
+          <ScelteLibreria
+            sel={calc.selezioni}
+            generate={derivate}
+            aiuto={aiuto}
+            onCambia={(patch) => set({ selezioni: { ...calc.selezioni, ...patch } })}
+            onUsa={inserisci}
+          />
 
           <div className="calc-colonne">
             {COLONNE.map((col) => {

@@ -23,7 +23,7 @@ import Sollecitazioni from './tabs/Sollecitazioni';
 import Verifiche from './tabs/Verifiche';
 import Costi from './tabs/Costi';
 import Calcolatrice from './tabs/Calcolatrice';
-import Normativa from './tabs/Normativa';
+import Libreria from './tabs/Libreria';
 import Esporta from './tabs/Esporta';
 
 const TABS: { id: TabId; label: string; icon: React.ReactNode; sub: string }[] = [
@@ -49,9 +49,9 @@ const TABS: { id: TabId; label: string; icon: React.ReactNode; sub: string }[] =
   },
   {
     id: 'normativa',
-    label: 'Normativa',
+    label: 'Libreria',
     icon: <Books size={17} />,
-    sub: 'NTC2018, Circolare 2019 e indice dei capitoli',
+    sub: 'Norme: NTC2018 e Circolare 2019 · Utili: armature, profili, bulloni',
   },
   {
     id: 'esporta',
@@ -242,7 +242,7 @@ export default function App() {
             {state.tab === 'verifiche' && <Verifiche />}
             {state.tab === 'costi' && <Costi />}
             {state.tab === 'calcolatrice' && <Calcolatrice />}
-            {state.tab === 'normativa' && <Normativa />}
+            {state.tab === 'normativa' && <Libreria />}
             {state.tab === 'esporta' && <Esporta />}
           </SlotProvider>
         </main>

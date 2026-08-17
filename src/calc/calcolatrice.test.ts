@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   PREIMPOSTATE_DEFAULT,
+  SELEZIONI_DEFAULT,
   VOCI_DEFAULT,
   formatta,
   nomeAmmesso,
@@ -13,6 +14,7 @@ import {
   valuta,
   valutaConUnita,
   variabili,
+  vociDaSelezioni,
   type VoceCalcolo,
 } from './calcolatrice';
 
@@ -262,5 +264,59 @@ describe('operazioni preimpostate', () => {
     const vars = variabili(ricalcola(VOCI_DEFAULT));
     const w = PREIMPOSTATE_DEFAULT.find((p) => p.id === 'pre-w')!;
     expect(nomiMancanti(w.espressione, vars)).toEqual(['b', 'h']);
+  });
+});
+
+describe('grandezze fisse scelte dalla libreria', () => {
+  it('senza scelte non genera niente', () => {
+    expect(vociDaSelezioni(SELEZIONI_DEFAULT)).toEqual([]);
+  });
+
+  it('il calcestruzzo dà fck, fcd, fctm, fctd ed Ecm con i coefficienti di serie', () => {
+    const g = vociDaSelezioni({ ...SELEZIONI_DEFAULT, cls: 'C25/30' });
+    const val = (n: string) => Number(g.find((x) => x.nome === n)?.espressione);
+    expect(g.map((x) => x.nome)).toEqual(['fck', 'fcd', 'fctm', 'fctd', 'Ecm']);
+    expect(val('fck')).toBe(25);
+    expect(val('fcd')).toBeCloseTo((0.85 * 25) / 1.5, 2);
+    expect(val('fctm')).toBeCloseTo(0.3 * 25 ** (2 / 3), 2);
+    expect(val('fctd')).toBeCloseTo((0.7 * 0.3 * 25 ** (2 / 3)) / 1.5, 2);
+    expect(val('Ecm')).toBeCloseTo(31476, 0);
+    // i coefficienti parziali non compaiono come grandezze
+    expect(g.some((x) => /γ|alfa/i.test(x.nome))).toBe(false);
+  });
+
+  it('l’acciaio dà solo fyd e ftd, con i γ della sua famiglia', () => {
+    const carp = vociDaSelezioni({ ...SELEZIONI_DEFAULT, acciaio: 'S275' });
+    expect(carp.map((x) => x.nome)).toEqual(['fyd', 'ftd']);
+    expect(Number(carp[0].espressione)).toBeCloseTo(275 / 1.05, 2);
+    expect(Number(carp[1].espressione)).toBeCloseTo(430 / 1.25, 2);
+
+    const bul = vociDaSelezioni({ ...SELEZIONI_DEFAULT, acciaio: '8.8' });
+    expect(Number(bul[0].espressione)).toBeCloseTo(640 / 1.25, 2);
+    expect(Number(bul[1].espressione)).toBeCloseTo(800 / 1.25, 2);
+  });
+
+  it('ferri e bulloni compilano le aree solo se c’è la quantità', () => {
+    expect(vociDaSelezioni({ ...SELEZIONI_DEFAULT, barraFi: '16' })).toEqual([]);
+    const ferri = vociDaSelezioni({ ...SELEZIONI_DEFAULT, barraFi: '16', barraN: '4' });
+    expect(ferri[0].nome).toBe('Ar');
+    expect(Number(ferri[0].espressione)).toBeCloseTo(4 * 201.1, 1);
+    expect(ferri[0].um).toBe('mmq');
+
+    const bulloni = vociDaSelezioni({ ...SELEZIONI_DEFAULT, bulloneM: 'M12', bulloneN: '2' });
+    expect(bulloni.map((x) => x.nome)).toEqual(['Ab', 'Abl']);
+    expect(Number(bulloni[0].espressione)).toBeCloseTo(2 * 84.3, 1);
+    expect(Number(bulloni[1].espressione)).toBeCloseTo(2 * 113.1, 1);
+  });
+
+  it('le grandezze generate si richiamano per nome nelle formule', () => {
+    const generate = vociDaSelezioni({ ...SELEZIONI_DEFAULT, cls: 'C25/30', barraFi: '16', barraN: '4' });
+    const voci = ricalcola([
+      ...generate,
+      { id: 'x', nome: 'N', espressione: 'Ar*fcd', nota: '', um: '', tipo: 'operazione' },
+    ]);
+    const N = voci[voci.length - 1];
+    expect(N.errore).toBe('');
+    expect(N.valore).toBeCloseTo(4 * 201.1 * ((0.85 * 25) / 1.5), -1);
   });
 });
