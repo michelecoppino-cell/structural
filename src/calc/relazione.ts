@@ -14,7 +14,7 @@ import { COMBINAZIONI, calcolaSollecitazioni } from './sollecitazioni';
 import { SCHEMI_BY_ID } from './trave';
 import { verificaFlessioneCA, verificaTaglioArmato, verificaTaglioNonArmato } from './verifiche';
 import { valido, validaTaglioArmato, validaTaglioNonArmato } from './validazione';
-import { ricalcola, testoVoce } from './calcolatrice';
+import { ricalcola, testoVoce, vociDaSelezioni } from './calcolatrice';
 
 const fx = (v: number, d = 2) => (Number.isFinite(v) ? v.toFixed(d) : '—');
 
@@ -203,7 +203,12 @@ function blocchiVerifiche(state: AppState): Blocco[] {
 }
 
 function blocchiCalcolatrice(state: AppState): Blocco[] {
-  const voci = ricalcola(state.calcolatrice.voci).filter((v) => v.espressione.trim());
+  // anche le grandezze scelte a tendina fanno parte del calcolo: stanno in
+  // testa alla sequenza come nella scheda
+  const voci = ricalcola([
+    ...vociDaSelezioni(state.calcolatrice.selezioni),
+    ...state.calcolatrice.voci,
+  ]).filter((v) => v.espressione.trim());
   return [
     {
       titolo: 'Calcoli di predimensionamento',

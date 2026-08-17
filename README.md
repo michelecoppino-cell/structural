@@ -93,7 +93,7 @@ barra degli indirizzi su PC — e resta con **icona propria** nel launcher: tria
 fondo scuro, la stessa geometria della favicon.
 
 - `public/manifest.webmanifest` — nome, colori, `display: standalone` e le scorciatoie
-  «Calcolatrice» e «Normativa» (aprono l'app direttamente su quella scheda, via
+  «Calcolatrice» e «Libreria» (aprono l'app direttamente su quella scheda, via
   `?scheda=…`);
 - `public/icon.svg`, `icon-192.png`, `icon-512.png`, `icon-maskable-512.png` (zona sicura
   all'80% per i launcher Android che ritagliano) e `apple-touch-icon.png` per iOS. I PNG si
@@ -268,6 +268,15 @@ un'area, poi un'incidenza, poi le moltiplico.
   `gS`, `gT` — e per esteso `gammaC` — sono la stessa cosa di `γC`, `γS`, `γT`. Vale nelle
   espressioni e nel conto delle grandezze che mancano; il nome scritto per davvero, se esiste,
   ha comunque la precedenza. Il tastierino tiene anche il tasto `γ`.
+- **Grandezze fisse da libreria**: sopra le due colonne ci sono quattro scelte a tendina che
+  compilano da sé le grandezze che ne discendono, richiamabili per nome come tutte le altre.
+  **CLS** (C8/10 → C90/105) dà `fck`, `fcd`, `fctm`, `fctd` ed `Ecm`; **Acciaio** (S235, S275,
+  S355, S450, B450C, B450A e le classi dei bulloni 4.6 → 10.9) dà `fyd` e `ftd`; **Ferro ⌀** con
+  il numero di ferri dà `Ar`, l'area d'armatura; **Bullone M** (M6 → M36) con il numero di
+  bulloni dà `Ab` (area resistente) e `Abl` (area lorda). I **coefficienti parziali non si
+  vedono**: sono quelli di serie — αcc 0.85, γC 1.5, γS 1.15, γM0 1.05, γM2 1.25 — e chi ne
+  vuole di diversi si scrive la sua grandezza fissa a mano. Lasciando vuota una quantità la sua
+  area non compare; le scelte sono **dati di commessa** e viaggiano nel JSON.
 - **L'elenco lo compone chi calcola**: sotto ogni colonna ci sono le grandezze da aggiungere —
   a sinistra `s`, `i`, `A`, `F`, `E`, `J`, a destra `γMUR`, `γLEGNO`, `γACQUA` — più una
   *nuova* vuota con nome e unità da scrivere. Le operazioni salvate stanno in fondo, in una
@@ -296,7 +305,10 @@ nessuna dipendenza, nessun `eval`: costruisce l'albero dell'espressione e ci pas
 una per il valore e una per l'unità, così i due non possono divergere. L'algebra delle unità
 sta in `src/calc/unita.ts`; i test in `calcolatrice.test.ts` e `unita.test.ts`.
 
-### 6. Normativa
+### 6. Libreria
+Due fogli, si passa dall'uno all'altro dalle linguette in testa e il foglio aperto si ricorda.
+
+#### Foglio «Norme»
 Indice dei riferimenti: NTC2018 (DM 17/01/2018) e Circolare n. 7 del 2019.
 
 - **Due livelli apribili**: di default si vedono solo i titoli delle norme; aprendo una norma
@@ -318,6 +330,27 @@ L'indice di NTC e Circolare **è parte del sito, non del progetto**: sta in
 `src/data/normative.ts`, è uguale per tutte le commesse e non entra nel JSON esportato. Nuove
 norme, capitoli e paragrafi si aggiungono a mano in quel file, un po' alla volta — le
 istruzioni sono nel commento in testa.
+
+#### Foglio «Utili»
+Le tabelle che si tengono a bordo tavolo, con una **ricerca sola** che filtra le righe di
+tutte (`⌀16`, `IPE 200`, `M12`, `C25/30`, `S355`): le tabelle senza risultati spariscono.
+
+- **Armature**: diametri commerciali da ⌀4 a ⌀32 con area, peso al metro (7850 kg/m³),
+  **diametro minimo del mandrino di piega** — 4⌀ fino a ⌀16, 7⌀ oltre, EC2 §8.3 Tab. 8.1N — e
+  raggio interno di curvatura, che ne è la metà.
+- **Profilario acciaio**: lo stesso sagomario delle Sollecitazioni — IPE, HEA, HEB, UPN a
+  tabella (EN 10365), angolari e tubi (quadri, rettangolari, tondi) ricavati dalla geometria
+  esatta della taglia — con h, b, A, Ix, Wx, Iy, Wy, Avz: asse forte e asse debole affiancati,
+  che è quello che serve quando si ruota il profilo.
+- **Profilario bulloni**: filettatura metrica grossa da M6 a M36 con passo, area lorda, **area
+  resistente** della parte filettata, apertura di chiave e diametro del foro con gioco normale;
+  a fianco le classi di resistenza 4.6 → 10.9 con fyb, ftb e i valori divisi per γM2.
+- **Calcestruzzo** e **acciai**: le stesse sigle delle tendine della Calcolatrice, con i
+  caratteristici e i valori di progetto già divisi per i γ.
+
+Le tabelle stanno in `src/data/` — `armature.ts`, `bulloni.ts`, `materiali.ts`,
+`profili-acciaio.ts` — e sono le stesse che alimentano le verifiche e le tendine della
+Calcolatrice: un valore si corregge in un posto solo.
 
 ### 7. Esporta
 Un **foglio A4 a quadretti** vuoto su cui si tira dentro solo quello che serve: in testa ci
@@ -386,7 +419,10 @@ src/
     relazione.ts   capitoli e blocchi delle schede, e il testo per la relazione
     esportazione.ts  foglio A4: documento in testo semplice e in HTML autonomo
   data/            tabelle normative e di materiali (ntc2018.ts, materiali.ts)
-    normative.ts   indice dei documenti e dei capitoli della scheda Normativa
+    normative.ts   indice dei documenti e dei capitoli del foglio Norme
+    armature.ts    diametri, pesi, mandrini di piega e raggi di curvatura
+    bulloni.ts     profilario metrico e classi di resistenza delle viti
+    profili-acciaio.ts  sagomario IPE/HEA/HEB/UPN, angolari e tubi
     comuni.ts      FILE GENERATO: comuni, zona sismica, coordinate
     parametri-sismici.ts  FILE GENERATO: ag/F0/TC* per comune e per TR
   components/      pattern di UI riusabili e diagrammi SVG

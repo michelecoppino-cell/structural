@@ -2197,6 +2197,59 @@ button.field-origin:hover {
   margin-bottom: 0;
 }
 
+/* ── scelte di libreria: tendine dei materiali e grandezze che ne discendono ── */
+.calc-libreria {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.calc-scelte {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 8px 10px;
+  align-items: end;
+}
+
+.calc-derivate {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+}
+
+.calc-derivate button {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 4px 10px;
+  min-height: 28px;
+  font-size: 11.5px;
+  font-family: var(--font-mono);
+  color: var(--text-1);
+  background: var(--hover-soft);
+  border: 1px solid var(--border-faint);
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.calc-derivate button:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent-300);
+}
+
+.calc-derivate .n {
+  color: var(--text-2);
+}
+
+.calc-derivate .um {
+  font-size: 10.5px;
+  color: var(--text-faint);
+}
+
 /* catalogo: le grandezze che si possono aggiungere, una per pastiglia */
 .calc-catalogo {
   display: flex;

@@ -35,11 +35,13 @@ import {
 import {
   PREIMPOSTATE_DEFAULT,
   RINOMINATE,
+  SELEZIONI_DEFAULT,
   VOCI_DEFAULT,
   normalizzaVoci,
   rinominaInEspressione,
   svuotaCompilabili,
   type Preimpostata,
+  type Selezioni,
   type VoceCalcolo,
 } from '../calc/calcolatrice';
 import { UNITA_DEFAULT, normalizzaElenco } from '../calc/unita';
@@ -116,6 +118,8 @@ export interface StatoCalcolatrice {
   preimpostate: Preimpostata[];
   /** Unità di misura proposte: si scrivono a mano ma devono stare qui dentro. */
   unita: string[];
+  /** Scelte a tendina (CLS, acciaio, ferro, bullone) da cui nascono le fisse. */
+  selezioni: Selezioni;
   /** Tastierino a video: su cellulare c'è sempre, su desktop è a richiesta. */
   tastierino: boolean;
 }
@@ -131,7 +135,7 @@ export interface StatoEsportazione {
   quadretti: boolean;
 }
 
-export const SCHEMA_VERSION = 5;
+export const SCHEMA_VERSION = 6;
 
 export const STATO_INIZIALE: AppState = {
   schemaVersion: SCHEMA_VERSION,
@@ -167,6 +171,7 @@ export const STATO_INIZIALE: AppState = {
     voci: VOCI_DEFAULT,
     preimpostate: PREIMPOSTATE_DEFAULT,
     unita: UNITA_DEFAULT,
+    selezioni: SELEZIONI_DEFAULT,
     tastierino: false,
   },
   esportazione: {
@@ -348,6 +353,9 @@ export function migra(raw: Partial<AppState>): AppState {
           ? raw.calcolatrice.unita
           : base.calcolatrice.unita,
       ),
+      // le scelte a tendina sono dati di commessa: i file di prima non le
+      // hanno e ripartono da quelle di serie
+      selezioni: { ...base.calcolatrice.selezioni, ...raw.calcolatrice?.selezioni },
     },
     esportazione: {
       ...base.esportazione,
