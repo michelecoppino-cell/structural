@@ -28,6 +28,7 @@ import {
   PREIMPOSTATE_DEFAULT,
   VOCI_DEFAULT,
   formatta,
+  formattaIn,
   ricalcola,
   vociDaSelezioni,
   type Preimpostata,
@@ -39,6 +40,7 @@ import {
 import {
   LARGHEZZA_MIN,
   larghezzaValida,
+  livelloEsito,
   nuovoBlocco,
   ricalcolaQuaderno,
   type BloccoCalcolato,
@@ -56,6 +58,13 @@ import { TIPI_PROFILO, taglieDisponibili, type TipoProfilo } from '../data/profi
 
 /** Un valore scritto come numero e basta: non si ripete il risultato. */
 const SOLO_NUMERO = /^[+-]?[\d\s.,]+$/;
+
+/** Che cosa dice il colore di un rapporto letto in percento. */
+const SEMAFORO = {
+  ok: 'sotto l’80 %: c’è margine',
+  limite: 'fra l’80 e il 100 %: al limite',
+  fuori: 'oltre il 100 %: non verificato',
+} as const;
 
 /** Larghezza massima di uno schema incollato: oltre, il file diventa enorme. */
 const LATO_MAX = 1400;
@@ -1240,6 +1249,8 @@ function BloccoCard({
   const bl = b.blocco;
   const fileRef = useRef<HTMLInputElement>(null);
   const [bersaglio, setBersaglio] = useState(false);
+  // il semaforo dei rapporti di verifica: colora il numero, non l'intero blocco
+  const livello = livelloEsito(b);
 
   const incolla = (dati: DataTransfer | null) => {
     const f = immagineDa(dati);
@@ -1444,7 +1455,7 @@ function BloccoCard({
               </>
             )}
 
-            <span className="quad-esito">
+            <span className={`quad-esito${livello ? ` is-${livello}` : ''}`}>
               {b.errore ? (
                 <span className="quad-errore" title={b.errore}>
                   <WarningCircle size={12} /> {b.errore}
@@ -1456,7 +1467,7 @@ function BloccoCard({
               ) : (
                 <>
                   <span className="uguale">=</span>
-                  <strong>{formatta(b.valore)}</strong>
+                  <strong title={livello ? SEMAFORO[livello] : undefined}>{formattaIn(b.valore, b.um)}</strong>
                   <UnitaBlocco b={b} onAggiorna={onAggiorna} />
                 </>
               )}

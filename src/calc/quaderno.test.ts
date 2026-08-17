@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   LARGHEZZA_MIN,
   larghezzaValida,
+  livelloEsito,
   normalizzaBlocchi,
   nuovoBlocco,
   ricalcolaQuaderno,
@@ -187,6 +188,44 @@ describe('blocchi del quaderno', () => {
     expect(larghezzaValida(undefined)).toBe(0);
     expect(larghezzaValida('mezza')).toBe(0);
     expect(normalizzaBlocchi([{ tipo: 'immagine', larghezza: 45 } as Partial<BloccoQuaderno>])[0].larghezza).toBe(45);
+  });
+});
+
+describe('rapporti letti in percento', () => {
+  const conPercento = (espressione: string) =>
+    ricalcolaQuaderno(
+      [
+        nuovoBlocco('formula', { nome: 'M', espressione: '170', um: 'kNm' }),
+        nuovoBlocco('formula', { nome: 'MRd', espressione: '255', um: 'kNm' }),
+        nuovoBlocco('formula', { nome: 'Verifica', espressione, um: '%' }),
+      ],
+      sorgenti([]),
+    )[2];
+
+  it('il rapporto fra due momenti letto in % fa 67, non 0,67', () => {
+    const b = conPercento('M/MRd');
+    expect(b.valore).toBeCloseTo(66.667, 2);
+    expect(b.um).toBe('%');
+    // il valore che gira nelle formule a valle resta il numero puro
+    expect(b.valoreBase).toBeCloseTo(0.66667, 4);
+    expect(b.dato).toBe(false);
+    expect(testoBlocco(b)).toBe('Verifica = M/MRd = 66.7 %');
+  });
+
+  it('un numero scritto a mano con il % resta quello che si è scritto', () => {
+    const b = conPercento('80');
+    expect(b.valore).toBe(80);
+    expect(b.dato).toBe(true);
+    expect(testoBlocco(b)).toBe('Verifica = 80 %');
+  });
+
+  it('il semaforo: verde sotto l’80 %, giallo fino al 100, rosso oltre', () => {
+    expect(livelloEsito(conPercento('M/MRd'))).toBe('ok');
+    expect(livelloEsito(conPercento('0.9*MRd/MRd'))).toBe('limite');
+    expect(livelloEsito(conPercento('MRd/MRd'))).toBe('limite');
+    expect(livelloEsito(conPercento('1.2*MRd/MRd'))).toBe('fuori');
+    // niente semaforo dove non c'è una percentuale
+    expect(livelloEsito(ricalcolaQuaderno([nuovoBlocco('formula', { espressione: '2*3' })], sorgenti([]))[0])).toBe('');
   });
 });
 

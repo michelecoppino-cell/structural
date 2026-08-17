@@ -139,6 +139,10 @@ const SIMBOLI: Record<string, Unita> = {
   knm: { dim: { N: 1, m: 1 }, fattore: 1e3 },
   kncm: { dim: { N: 1, m: 1 }, fattore: 10 },
   knmm: { dim: { N: 1, m: 1 }, fattore: 1 },
+  // ── numeri puri con una scala: il rapporto di una verifica si legge in
+  //    percento, e 0,67 letto in % fa 67 ──
+  '%': { dim: {}, fattore: 0.01 },
+  '‰': { dim: {}, fattore: 0.001 },
 };
 
 /**
@@ -264,7 +268,7 @@ export function leggiUnita(testo: string): Unita {
 
     // nome del simbolo: lettere e simboli di valuta o gradi
     let j = i;
-    while (j < src.length && /[\p{L}°%€$_]/u.test(src[j])) j += 1;
+    while (j < src.length && /[\p{L}°%‰€$_]/u.test(src[j])) j += 1;
     if (j === i) return { dim: {}, fattore: 1 }; // carattere inatteso
     const nome = src.slice(i, j);
     i = j;

@@ -465,13 +465,40 @@ function dimDi(n: Nodo, vars: Record<string, number>, unita: Record<string, Dim>
   }
 }
 
+/**
+ * L'espressione richiama almeno una grandezza che un'unità ce l'ha. Serve a
+ * riconoscere i rapporti: `M/MRd` è adimensionale come `170`, ma nasce da
+ * grandezze con unità — e allora l'unità scritta a mano (il `%`) è il modo di
+ * *leggerlo*, non la scala di un numero scritto.
+ */
+function conUnita(n: Nodo, unita: Record<string, Dim>): boolean {
+  switch (n.t) {
+    case 'num':
+      return false;
+    case 'var':
+      return !adimensionale(unita[n.nome] ?? {});
+    case 'neg':
+    case 'pct':
+      return conUnita(n.a, unita);
+    case 'fn':
+      return n.args.some((a) => conUnita(a, unita));
+    case 'bin':
+      return conUnita(n.a, unita) || conUnita(n.b, unita);
+  }
+}
+
 /* ─────────────────────────── interfaccia pubblica ─────────────────────────── */
 
 export type Esito = { ok: true; valore: number } | { ok: false; errore: string };
 
-/** Come `Esito`, ma porta anche l'unità ricavata dai nomi richiamati. */
+/**
+ * Come `Esito`, ma porta anche l'unità ricavata dai nomi richiamati e il segno
+ * che distingue un numero puro da un **rapporto**: `170` e `M/MRd` hanno tutti
+ * e due unità vuota, ma il secondo è un numero che *viene* da grandezze con
+ * unità che si sono semplificate — ed è quello che si legge in percento.
+ */
 export type EsitoUnita =
-  | { ok: true; valore: number; dim: Dim | null }
+  | { ok: true; valore: number; dim: Dim | null; rapporto: boolean }
   | { ok: false; errore: string };
 
 /** Valuta un'espressione con le variabili date. Non solleva mai: torna l'errore. */
@@ -496,7 +523,9 @@ export function valutaConUnita(
     const albero = new Parser(tokenizza(src), vars).analizza();
     const valore = valoreDi(albero, vars);
     if (!Number.isFinite(valore)) return { ok: false, errore: 'risultato non finito (divisione per zero?)' };
-    return { ok: true, valore, dim: dimDi(albero, vars, unita) };
+    const dim = dimDi(albero, vars, unita);
+    const rapporto = !!dim && adimensionale(dim) && conUnita(albero, unita);
+    return { ok: true, valore, dim, rapporto };
   } catch (e) {
     return { ok: false, errore: e instanceof ErroreCalcolo ? e.message : 'espressione non valida' };
   }
@@ -805,10 +834,13 @@ export function leggiRisultato(
   dimEspressione: Dim | null,
   umScritta: string,
   elenco: string[] = UNITA_DEFAULT,
+  /** true = numero puro ma **calcolato** da grandezze con unità: un rapporto. */
+  rapporto = false,
 ): Letto {
   const scritta = umScritta.trim();
   const u = scritta ? leggiUnita(scritta) : null;
-  const dato = !dimEspressione || adimensionale(dimEspressione);
+  // un rapporto non è un dato scritto: 0,67 letto in % fa 67, non 0,67 %
+  const dato = !rapporto && (!dimEspressione || adimensionale(dimEspressione));
 
   if (dato) {
     // niente unità dall'operazione: il numero è scritto nell'unità indicata
@@ -823,7 +855,8 @@ export function leggiRisultato(
     };
   }
 
-  const dim = dimEspressione;
+  // qui l'unità c'è (o è quella vuota di un rapporto): il numero si converte
+  const dim = dimEspressione ?? {};
   const umAuto = scriviUnita(dim, elenco, valore);
   const torna = !!u && ugualiDim(u.dim, dim);
   const um = torna ? scritta : umAuto;
@@ -880,7 +913,7 @@ export function ricalcola(voci: VoceCalcolo[], elenco: string[] = UNITA_DEFAULT)
       !!nome && nomeAmmesso(nome) && !usati.has(nome) && !(nome in COSTANTI) && !(nome.toLowerCase() in FUNZIONI);
 
     const scritta = v.um.trim();
-    const letto = esito?.ok ? leggiRisultato(esito.valore, esito.dim, scritta, elenco) : null;
+    const letto = esito?.ok ? leggiRisultato(esito.valore, esito.dim, scritta, elenco, esito.rapporto) : null;
 
     if (letto && nomeValido) {
       vars[nome] = letto.valoreBase;
@@ -1005,6 +1038,19 @@ export function formatta(v: number): string {
   if (a !== 0 && (a >= 1e9 || a < 1e-6)) return v.toExponential(4).replace('e', '·10^');
   const s = v.toFixed(a >= 1000 ? 2 : a >= 1 ? 4 : 6);
   return s.replace(/\.?0+$/, '');
+}
+
+/**
+ * Il numero come si scrive in quell'unità. Le percentuali si leggono a colpo
+ * d'occhio, non si misurano: un rapporto di verifica è «66,7 %», non
+ * «66,68238 %» — le cifre in più non dicono niente di più.
+ */
+export function formattaIn(valore: number, um: string): string {
+  if (!Number.isFinite(valore)) return '—';
+  const u = um.trim();
+  if (u !== '%' && u !== '‰') return formatta(valore);
+  const s = valore.toFixed(Math.abs(valore) >= 100 ? 0 : 1);
+  return s.replace(/\.0$/, '');
 }
 
 /** Riga estesa «nome = espressione = risultato», per la relazione e l'export. */
