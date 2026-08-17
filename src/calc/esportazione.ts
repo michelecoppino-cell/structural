@@ -85,7 +85,9 @@ ${b.righe.map((r) => `        <li>${escape(r)}</li>`).join('\n')}
         // l'immagine è dentro il file come data URL: il documento resta un
         // file solo, che si apre offline e si allega a una mail
         return `  <figure class="schema">
-    <img alt="${escape(el.didascalia || 'schema')}" src="${escape(el.img)}">
+    <img alt="${escape(el.didascalia || 'schema')}"${
+      el.larghezza ? ` style="width:${el.larghezza}%"` : ''
+    } src="${escape(el.img)}">
 ${el.didascalia ? `    <figcaption>${escape(el.didascalia)}</figcaption>` : ''}
   </figure>`;
       return `  <p class="calcolo"><span class="passo">${escape(el.passo)}</span>${escape(el.testo)}${

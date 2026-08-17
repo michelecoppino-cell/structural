@@ -18,6 +18,7 @@ import {
   type VoceCalcolo,
 } from './calcolatrice';
 import { daBase } from './unita';
+import { HEA, IPE } from '../data/profili-acciaio';
 
 const v = (src: string, vars: Record<string, number> = {}) => {
   const e = valuta(src, vars);
@@ -314,6 +315,37 @@ describe('grandezze fisse scelte dalla libreria', () => {
     expect(bulloni.map((x) => x.nome)).toEqual(['Ab', 'Abl']);
     expect(Number(bulloni[0].espressione)).toBeCloseTo(2 * 84.3, 1);
     expect(Number(bulloni[1].espressione)).toBeCloseTo(2 * 113.1, 1);
+  });
+
+  it('il profilo del sagomario dà area, inerzie e moduli dei due assi', () => {
+    // senza taglia non c'è profilo: il tipo di serie da solo non genera niente
+    expect(vociDaSelezioni({ ...SELEZIONI_DEFAULT, profiloTipo: 'IPE' })).toEqual([]);
+
+    const g = vociDaSelezioni({ ...SELEZIONI_DEFAULT, profiloTipo: 'IPE', profiloTaglia: 'IPE 200' });
+    expect(g.map((x) => x.nome)).toEqual(['Ap', 'Ix', 'Wx', 'Iy', 'Wy', 'Avz', 'hp', 'bp']);
+    const p = IPE['IPE 200'];
+    const val = (n: string) => Number(g.find((x) => x.nome === n)?.espressione);
+    expect(val('Ap')).toBeCloseTo(p.A, 2);
+    expect(val('Ix')).toBeCloseTo(p.Ix, 0);
+    expect(val('Wx')).toBeCloseTo(p.Wx, 1);
+    expect(val('hp')).toBeCloseTo(200, 1);
+    expect(g.map((x) => x.um)).toEqual(['cmq', 'cm^4', 'cmc', 'cm^4', 'cmc', 'cmq', 'mm', 'mm']);
+    // sono costanti di tabella, non grandezze da compilare
+    expect(g.every((x) => x.tipo === 'fissa')).toBe(true);
+  });
+
+  it('inerzia e modulo del profilo entrano nelle formule con la loro unità', () => {
+    const generate = vociDaSelezioni({ ...SELEZIONI_DEFAULT, profiloTipo: 'HEA', profiloTaglia: 'HEA 200' });
+    const voci = ricalcola([
+      ...generate,
+      { id: 'm', nome: 'M', espressione: '100', nota: '', um: 'kNm', tipo: 'compilabile' },
+      { id: 's', nome: 'σ', espressione: 'M/Wx', nota: '', um: 'MPa', tipo: 'operazione' },
+    ]);
+    const sigma = voci[voci.length - 1];
+    expect(sigma.errore).toBe('');
+    // 100 kNm su Wx in cm³ fa una tensione, letta in MPa senza conversioni a mano
+    expect(sigma.valore).toBeCloseTo(100e6 / (HEA['HEA 200'].Wx * 1000), 0);
+    expect(sigma.umEffettiva).toBe('MPa');
   });
 
   it('le grandezze generate si richiamano per nome nelle formule', () => {
