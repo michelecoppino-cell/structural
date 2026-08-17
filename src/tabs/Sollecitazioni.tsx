@@ -130,8 +130,6 @@ export default function Sollecitazioni() {
   const geomOpen = state.ui.allDetails.sollecitazioni;
   /** Il dettaglio della combinazione sta sotto il riepilogo, a scomparsa. */
   const combOpen = !!state.ui.exp['soll-combinazione'];
-  /** I campi di geometria e carichi restano chiusi finché non servono. */
-  const geomFieldsOpen = !!state.ui.exp['soll-geometria'];
 
   const err = validaSollecitazioni(inp);
   const tutte = sorgenti(inp, az);
@@ -498,70 +496,59 @@ export default function Sollecitazioni() {
               </div>
 
               <div className="soll-blocco soll-blocco-geom">
-                <div className="geom-head">
-                  <button
-                    type="button"
-                    className="sub-toggle"
-                    aria-expanded={geomFieldsOpen}
-                    aria-controls="soll-geom-grid"
-                    onClick={() => dispatch({ type: 'toggleExp', id: 'soll-geometria' })}
-                  >
-                    {geomFieldsOpen ? <CaretUp size={13} /> : <CaretDown size={13} />}
-                    <span className="t">Geometria e carichi</span>
-                    <span className="n">
-                      {verticale ? 'H' : 'L'} {fx(r.L)} m
-                    </span>
-                  </button>
+                <span className="kicker">
+                  Geometria e carichi
+                  <span className="geom-misura">
+                    {verticale ? 'H' : 'L'} {fx(r.L)} m
+                  </span>
+                </span>
+                <div className="soll-geom-grid" id="soll-geom-grid">
+                  <MiniCampo
+                    id="soll_L"
+                    label={verticale ? 'H (m)' : 'L (m)'}
+                    value={inp.L}
+                    errore={err.L}
+                    onChange={(v) => set({ L: v })}
+                  />
+                  <MiniCampo
+                    id="soll_i"
+                    label="Interasse (m)"
+                    value={inp.interasse}
+                    errore={err.interasse}
+                    onChange={(v) => set({ interasse: v })}
+                  />
+                  {verticale && (
+                    <MiniCampo
+                      id="soll_A"
+                      label="Area infl. (m²)"
+                      value={inp.areaInfluenza}
+                      errore={err.areaInfluenza}
+                      onChange={(v) => set({ areaInfluenza: v })}
+                    />
+                  )}
+                  <MiniCampo
+                    id="soll_pp"
+                    label="G1 (kN/m²)"
+                    value={inp.pp}
+                    errore={err.pp}
+                    onChange={(v) => set({ pp: v })}
+                  />
+                  <MiniCampo
+                    id="soll_g2"
+                    label="G2 (kN/m²)"
+                    value={inp.g2}
+                    errore={err.g2}
+                    onChange={(v) => set({ g2: v })}
+                  />
+                  <MiniCampo id="soll_P" label="P (kN)" value={inp.P} onChange={(v) => set({ P: v })} />
+                  <MiniCampo
+                    id="soll_aP"
+                    label="x di P (m)"
+                    value={inp.aP}
+                    errore={err.aP}
+                    onChange={(v) => set({ aP: v })}
+                  />
                 </div>
-                {geomFieldsOpen && (
-                  <div className="soll-geom-grid" id="soll-geom-grid">
-                    <MiniCampo
-                      id="soll_L"
-                      label={verticale ? 'H (m)' : 'L (m)'}
-                      value={inp.L}
-                      errore={err.L}
-                      onChange={(v) => set({ L: v })}
-                    />
-                    <MiniCampo
-                      id="soll_i"
-                      label="Interasse (m)"
-                      value={inp.interasse}
-                      errore={err.interasse}
-                      onChange={(v) => set({ interasse: v })}
-                    />
-                    {verticale && (
-                      <MiniCampo
-                        id="soll_A"
-                        label="Area infl. (m²)"
-                        value={inp.areaInfluenza}
-                        errore={err.areaInfluenza}
-                        onChange={(v) => set({ areaInfluenza: v })}
-                      />
-                    )}
-                    <MiniCampo
-                      id="soll_pp"
-                      label="G1 (kN/m²)"
-                      value={inp.pp}
-                      errore={err.pp}
-                      onChange={(v) => set({ pp: v })}
-                    />
-                    <MiniCampo
-                      id="soll_g2"
-                      label="G2 (kN/m²)"
-                      value={inp.g2}
-                      errore={err.g2}
-                      onChange={(v) => set({ g2: v })}
-                    />
-                    <MiniCampo id="soll_P" label="P (kN)" value={inp.P} onChange={(v) => set({ P: v })} />
-                    <MiniCampo
-                      id="soll_aP"
-                      label="x di P (m)"
-                      value={inp.aP}
-                      errore={err.aP}
-                      onChange={(v) => set({ aP: v })}
-                    />
-                  </div>
-                )}
               </div>
             </div>
 

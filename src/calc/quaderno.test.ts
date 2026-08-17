@@ -1,6 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import {
+  COLONNE_FOGLIO,
   LARGHEZZA_MIN,
+  colonneBlocco,
+  colonneValide,
   larghezzaValida,
   livelloEsito,
   normalizzaBlocchi,
@@ -188,6 +191,33 @@ describe('blocchi del quaderno', () => {
     expect(larghezzaValida(undefined)).toBe(0);
     expect(larghezzaValida('mezza')).toBe(0);
     expect(normalizzaBlocchi([{ tipo: 'immagine', larghezza: 45 } as Partial<BloccoQuaderno>])[0].larghezza).toBe(45);
+  });
+
+  it('le colonne di un blocco restano fra 1 e 3; 0 vuol dire «come viene»', () => {
+    expect(colonneValide(2)).toBe(2);
+    expect(colonneValide(7)).toBe(COLONNE_FOGLIO);
+    expect(colonneValide(0)).toBe(0);
+    expect(colonneValide(undefined)).toBe(0);
+    expect(colonneValide('tutta')).toBe(0);
+  });
+
+  it('senza scelta una riga di calcolo sta in una colonna, note e schemi in tutte', () => {
+    expect(colonneBlocco(nuovoBlocco('formula'))).toBe(1);
+    expect(colonneBlocco(nuovoBlocco('valore', { fonte: 'v-b' }))).toBe(1);
+    expect(colonneBlocco(nuovoBlocco('nota'))).toBe(COLONNE_FOGLIO);
+    expect(colonneBlocco(nuovoBlocco('immagine'))).toBe(COLONNE_FOGLIO);
+    // la scelta esplicita vince su tutte e due
+    expect(colonneBlocco(nuovoBlocco('formula', { colonne: 3 }))).toBe(3);
+    expect(colonneBlocco(nuovoBlocco('nota', { colonne: 1 }))).toBe(1);
+  });
+
+  it('la nota scritta su un passaggio viaggia con il blocco', () => {
+    const b = normalizzaBlocchi([
+      { tipo: 'formula', espressione: '2+2', appunto: 'ipotesi di carico ridotta' } as Partial<BloccoQuaderno>,
+    ]);
+    expect(b[0].appunto).toBe('ipotesi di carico ridotta');
+    // un salvataggio di prima non ce l'ha, e non deve diventare "undefined"
+    expect(normalizzaBlocchi([{ tipo: 'nota' } as Partial<BloccoQuaderno>])[0].appunto).toBe('');
   });
 });
 

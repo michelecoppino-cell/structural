@@ -5,7 +5,7 @@
  * Riferimenti: NTC2018 (DM 17/01/2018) cap. 3.
  */
 
-import { ST, CU, ZONE_NEVE, VB0, ESPOSIZIONE, CAT } from '../data/ntc2018';
+import { ST, CU, ZONE_NEVE, VB0, ESPOSIZIONE, CAT, URTI } from '../data/ntc2018';
 import {
   PVR,
   coefficienteCC,
@@ -76,6 +76,19 @@ export interface InputAzioni {
   betam: string;
   /** kh imposto a mano; vuoto = βm · S · ag/g. */
   khManuale: string;
+  // urti — azioni eccezionali §3.6.3
+  /** Scenario di urto: chiave della tabella URTI. */
+  urtoScenario: string;
+  /** Massa del veicolo di riferimento (t); vuoto = quella dello scenario. */
+  urtoMassa: string;
+  /** Velocità d'impatto (km/h); vuoto = quella dello scenario. */
+  urtoVelocita: string;
+  /** Rigidezza equivalente del veicolo k (kN/m) per il confronto energetico. */
+  urtoRigidezza: string;
+  /** Quota di applicazione sopra il piano viabile (m); vuoto = da tabella. */
+  urtoQuota: string;
+  /** true = si adotta la forza calcolata invece di quella tabellare. */
+  urtoDaEnergia: boolean;
 }
 
 /**
@@ -122,6 +135,12 @@ export const AZIONI_DEFAULT: InputAzioni = {
   sismaTerre: false,
   betam: '1.00',
   khManuale: '',
+  urtoScenario: 'Strade urbane di quartiere e locali',
+  urtoMassa: '',
+  urtoVelocita: '',
+  urtoRigidezza: '300',
+  urtoQuota: '',
+  urtoDaEnergia: false,
 };
 
 /** parseFloat tollerante alla virgola decimale; NaN → 0. */
@@ -204,6 +223,40 @@ export interface RisultatiAzioni {
       avviso: string;
     };
   };
+  urti: RisultatiUrti;
+}
+
+/**
+ * Urto di un veicolo in transito — §3.6.3.3. La tabella dà le forze statiche
+ * equivalenti; il confronto energetico dice se, con la massa e la velocità del
+ * caso in esame, quella forza è ancora dalla parte giusta.
+ */
+export interface RisultatiUrti {
+  scenario: string;
+  /** Forza equivalente nella direzione di marcia (kN) — Tab. 3.6.II. */
+  Fdx: number;
+  /** Forza equivalente in direzione ortogonale alla marcia (kN). */
+  Fdy: number;
+  /** Quota di applicazione sopra il piano viabile (m). */
+  h: number;
+  /** Massa (t) e velocità (km/h) effettivamente usate nel calcolo. */
+  m: number;
+  v: number;
+  /** Rigidezza equivalente del veicolo (kN/m). */
+  k: number;
+  /** Energia cinetica ½·m·v² (kJ). */
+  Ec: number;
+  /** Forza d'urto da urto duro: F = v·√(k·m) — EN 1991-1-7 App. C. */
+  Fcalc: number;
+  /** Schiacciamento corrispondente δ = v·√(m/k) (m). */
+  delta: number;
+  /** Forza di progetto adottata (kN): quella tabellare o quella calcolata. */
+  Fd: number;
+  /** Momento alla base per un elemento incastrato al piano viabile (kNm/m). */
+  Mbase: number;
+  ref: string;
+  /** Vuoto se il calcolo è coerente, altrimenti che cosa non torna. */
+  avviso: string;
 }
 
 export function calcolaAzioni(inp: InputAzioni): RisultatiAzioni {
@@ -332,6 +385,61 @@ export function calcolaAzioni(inp: InputAzioni): RisultatiAzioni {
       categoria: inp.cat,
     },
     terre: { ka, Sa, za, Mrib: Sa * za, sisma: sismaTerre },
+    urti: calcolaUrto(inp),
+  };
+}
+
+/* ───────────────────── urti di veicoli — §3.6.3.3 ───────────────────── */
+
+/**
+ * Urto duro secondo EN 1991-1-7 App. C: il veicolo è una massa `m` che corre a
+ * `v` contro una struttura rigida e si schiaccia con rigidezza `k`, quindi
+ *
+ *   F = v · √(k · m)      δ = v · √(m / k)      Ec = ½ · m · v²
+ *
+ * La forza di progetto resta però quella tabellare di §3.6.3.3, e non è un
+ * errore che sia più bassa di quella così calcolata: le forze di tabella sono
+ * **statiche equivalenti**, e tengono già conto della deformazione plastica del
+ * veicolo e della risposta dinamica della struttura, che l'urto duro — dove
+ * l'ostacolo è perfettamente rigido — ignora. La forza dall'energia si adotta
+ * solo se la si chiede: è una scelta di chi firma, non un automatismo.
+ */
+export function calcolaUrto(inp: InputAzioni): RisultatiUrti {
+  const tab = URTI[inp.urtoScenario] ?? URTI['Strade urbane di quartiere e locali'];
+  const scritto = (v: string | undefined, difetto: number) =>
+    String(v ?? '').trim() ? num(v) : difetto;
+
+  const m = Math.max(0, scritto(inp.urtoMassa, tab.m)); // t
+  const vKmh = Math.max(0, scritto(inp.urtoVelocita, tab.v)); // km/h
+  const k = Math.max(0, num(inp.urtoRigidezza)); // kN/m
+  const h = Math.max(0, scritto(inp.urtoQuota, tab.h)); // m
+
+  const v = vKmh / 3.6; // m/s
+  const Ec = 0.5 * m * v * v; // t·(m/s)² = kJ
+  // F = v·√(k·m) con k in kN/m e m in t dà direttamente kN
+  const Fcalc = k > 0 && m > 0 ? v * Math.sqrt(k * m) : 0;
+  const delta = k > 0 && m > 0 ? v * Math.sqrt(m / k) : 0;
+
+  const Fd = inp.urtoDaEnergia && Fcalc > 0 ? Fcalc : tab.Fdx;
+
+  return {
+    scenario: inp.urtoScenario in URTI ? inp.urtoScenario : 'Strade urbane di quartiere e locali',
+    Fdx: tab.Fdx,
+    Fdy: tab.Fdy,
+    h,
+    m,
+    v: vKmh,
+    k,
+    Ec,
+    Fcalc,
+    delta,
+    Fd,
+    Mbase: Fd * h,
+    ref: tab.ref,
+    avviso:
+      inp.urtoDaEnergia && !(Fcalc > 0)
+        ? 'Per ricavare la forza dall’energia servono massa, velocità e rigidezza maggiori di zero: intanto vale quella di tabella.'
+        : '',
   };
 }
 

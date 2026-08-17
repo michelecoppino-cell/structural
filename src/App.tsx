@@ -12,9 +12,10 @@ import {
   CheckCircle,
   Books,
   NotebookIcon,
+  Trash,
 } from '@phosphor-icons/react';
 import { useStore, type TabId } from './state/store';
-import { migra } from './state/store';
+import { migra, svuotaMemoria } from './state/store';
 import { testoRelazione, esitiVerifiche } from './calc/relazione';
 import { SlotProvider } from './components/ComandiScheda';
 import Azioni from './tabs/Azioni';
@@ -90,6 +91,22 @@ export default function App() {
     }
   };
 
+  /**
+   * Riparte da foglio bianco: butta via il salvataggio automatico — quello che
+   * all'apertura ripropone i campi già compilati — e riporta tutte le schede ai
+   * valori di partenza. È l'unica cosa dell'app che perde dati, quindi chiede
+   * conferma e ricorda che il progetto si può salvare prima con «Esporta JSON».
+   */
+  const svuota = () => {
+    const ok = window.confirm(
+      'Svuotare tutto?\n\nSi cancella il salvataggio automatico e tutte le schede tornano ai valori iniziali: azioni, sollecitazioni, verifiche, computo, quaderno e formule scritte a mano.\n\nL’operazione non si può annullare — per conservare il lavoro, annulla e usa prima «Esporta JSON».',
+    );
+    if (!ok) return;
+    svuotaMemoria();
+    dispatch({ type: 'reset' });
+    flash('Tutto svuotato: si riparte da zero');
+  };
+
   const copia = async () => {
     const txt = testoRelazione(state, state.tab);
     try {
@@ -151,6 +168,15 @@ export default function App() {
           <button type="button" className="btn btn-secondary" title="Esporta JSON" onClick={esporta}>
             <DownloadSimple size={14} />
             <span>Esporta JSON</span>
+          </button>
+          <button
+            type="button"
+            className="btn btn-secondary btn-svuota"
+            title="Cancella il salvataggio automatico e riporta tutte le schede ai valori iniziali"
+            onClick={svuota}
+          >
+            <Trash size={14} />
+            <span>Svuota tutto</span>
           </button>
 
           {/* comandi della scheda: stanno quassù per non rubare altezza al

@@ -102,32 +102,37 @@ export default function Verifiche() {
     <div className="stack">
       {/* ── comandi della scheda, in testa ─────────────────────────────── */}
       <ComandiScheda>
-        <Seg<MaterialeId>
-          label="Materiale"
-          value={v.materiale}
-          onChange={(m) => dispatch({ type: 'verifiche', patch: { materiale: m } })}
-          options={MATERIALI}
-        />
-        {!!lista.length && attiva && (
-          <Seg<string>
-            label="Verifica"
-            ruolo="tabs"
-            idPannello="pannello-verifica"
-            value={attiva.id}
-            onChange={(id) => dispatch({ type: 'verificaAttiva', id })}
-            options={lista.map((x) => ({ ...x, nota: sfruttamento(x.id) }))}
+        {/* le pastiglie della scheda — materiale, verifica, VEd — stanno tutte
+            in fila a sinistra: si leggono in un colpo d'occhio, invece di
+            spargersi per la barra */}
+        <div className="ver-comandi">
+          <Seg<MaterialeId>
+            label="Materiale"
+            value={v.materiale}
+            onChange={(m) => dispatch({ type: 'verifiche', patch: { materiale: m } })}
+            options={MATERIALI}
           />
-        )}
-        <button
-          type="button"
-          className="chip-toggle"
-          aria-pressed={collegato}
-          onClick={() => dispatch({ type: 'verifiche', patch: { collegaSollecitazioni: !collegato } })}
-          title="Usa il taglio massimo calcolato nella scheda Sollecitazioni"
-        >
-          VEd da Sollecitazioni
-          <span className="val">{fx(VEdSollecitazioni, 1)} kN</span>
-        </button>
+          {!!lista.length && attiva && (
+            <Seg<string>
+              label="Verifica"
+              ruolo="tabs"
+              idPannello="pannello-verifica"
+              value={attiva.id}
+              onChange={(id) => dispatch({ type: 'verificaAttiva', id })}
+              options={lista.map((x) => ({ ...x, nota: sfruttamento(x.id) }))}
+            />
+          )}
+          <button
+            type="button"
+            className="chip-toggle"
+            aria-pressed={collegato}
+            onClick={() => dispatch({ type: 'verifiche', patch: { collegaSollecitazioni: !collegato } })}
+            title="Usa il taglio massimo calcolato nella scheda Sollecitazioni"
+          >
+            VEd da Sollecitazioni
+            <span className="val">{fx(VEdSollecitazioni, 1)} kN</span>
+          </button>
+        </div>
       </ComandiScheda>
 
       {v.materiale === 'cls' && attiva?.id === 'taglio-non-armato' && (
@@ -553,7 +558,8 @@ export default function Verifiche() {
                   c={num(inp.taglioArmato.c)}
                   phiStaffa={num(inp.taglioArmato.phiStaffa)}
                   phiLong={num(inp.taglioArmato.phiLong)}
-                  nBarre={num(inp.taglioArmato.nBracci) + 1}
+                  nBarre={Math.max(2, num(inp.taglioArmato.nBracci))}
+                  nBracci={num(inp.taglioArmato.nBracci)}
                   passo={num(inp.taglioArmato.passo)}
                   staffe
                 />

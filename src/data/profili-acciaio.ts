@@ -355,6 +355,19 @@ export function proprietaProfilo(tipo: TipoProfilo, taglia: string): ProprietaPr
   return undefined;
 }
 
+/** Peso specifico dell'acciaio da carpenteria (kg/m³) — NTC2018 §3.1.2. */
+export const PESO_ACCIAIO = 7850;
+
+/**
+ * Peso al metro del profilo (kg/m), dall'area della sezione: è il numero con
+ * cui si ordina il materiale e si stima il peso proprio della struttura.
+ * Confrontato con i sagomari commerciali torna entro il mezzo per cento — la
+ * differenza sono i raccordi, che stanno già dentro l'area tabellare.
+ */
+export function pesoProfilo(p: ProprietaProfilo): number {
+  return (p.A / 1e4) * PESO_ACCIAIO;
+}
+
 /** Elenco delle taglie disponibili per il menù a tendina, per tipo di profilo. */
 export function taglieDisponibili(tipo: TipoProfilo): string[] {
   switch (tipo) {

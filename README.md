@@ -112,8 +112,8 @@ Sette schede, navigazione laterale su desktop e bottom-bar su mobile (breakpoint
 900 px).
 
 ### 1. Azioni — NTC2018 cap. 3
-Accordion per Azione sismica, Neve, Vento, Carichi variabili (Tab. 3.1.II) e Spinta delle
-terre. Ogni campo è compatto (etichetta, valore, unità); l'**(i)** in testa alla scheda apre
+Accordion per Azione sismica, Neve, Vento, Carichi variabili (Tab. 3.1.II), Spinta delle
+terre e Urti. Ogni campo è compatto (etichetta, valore, unità); l'**(i)** in testa alla scheda apre
 in un colpo solo tutti i dettagli, con **formula a numeri sostituiti**, coefficienti
 intermedi e riferimento normativo — un bottone per campo occupava troppo spazio. Il
 ricalcolo è immediato a ogni modifica: non c'è nessun pulsante "Calcola".
@@ -136,6 +136,26 @@ kv = ±0.5·kh, θ = atan[kh/(1∓kv)], Kae con attrito terra-muro δ, inclinazi
 spinta maggiore; l'incremento ΔEd = Ed − Sa si applica a metà altezza (§7.11.6.3.1) e il
 momento totale somma Sa·H/3 e ΔEd·H/2. Con θ tale che φ′ − θ − β < 0 il calcolo non ha
 soluzione e la scheda lo dice invece di mostrare un numero.
+
+**Urti — azioni eccezionali** (§3.6.3.3): si sceglie lo scenario e la scheda dà le forze
+statiche equivalenti di Tab. 3.6.II — `Fdx` nella direzione di marcia, `Fdy` in quella
+ortogonale, che **non si sommano** — con la quota di applicazione sopra il piano viabile e il
+momento alla base `Fd·h`. Accanto c'è il **confronto energetico** di EN 1991-1-7 App. C sui
+dati del caso in esame (massa, velocità, rigidezza del veicolo): `Ec = ½·m·v²`,
+`F = v·√(k·m)`, `δ = v·√(m/k)`. La forza dall'energia è normalmente **più alta** di quella
+tabellare, e non è un errore: l'urto duro immagina un ostacolo perfettamente rigido, mentre
+la tabella dà forze statiche equivalenti che tengono già conto della deformazione del veicolo
+e della risposta dinamica della struttura. Adottare quella calcolata è una scelta esplicita —
+un pulsante — non un automatismo.
+
+| Scenario | Fdx | Fdy | h |
+|---|---|---|---|
+| Autostrade e strade extraurbane principali | 1000 kN | 500 kN | 1.25 m |
+| Strade extraurbane secondarie e urbane di scorrimento | 750 kN | 375 kN | 1.25 m |
+| Strade urbane di quartiere e locali | 500 kN | 250 kN | 1.25 m |
+| Cortili e autorimesse — autovetture ≤ 30 kN | 50 kN | 25 kN | 0.50 m |
+| Cortili e autorimesse — automezzi > 30 kN | 150 kN | 75 kN | 1.25 m |
+| Carrelli elevatori e mezzi di servizio | 5 kN | 5 kN | 0.75 m |
 
 Il **sito sismico** si sceglie con tre menù a tendina in cascata — **regione → provincia →
 comune** — su tutti i 7899 comuni italiani (107 province, 20 regioni). Il comune scelto
@@ -202,8 +222,14 @@ comandi in fondo**.
   1943 a 142 cm⁴ e la freccia da 6 a 82 mm. Per i doppi T l'asse debole è calcolato dalla
   geometria di ali e anima (a mezzo per cento dalle tabelle EN 10365), per gli UPN — che
   hanno le ali rastremate — è quello di tabella DIN 1026-1.
-- **Diagrammi**: carichi con schema statico, momento flettente, taglio e deformata. Il
-  riquadro si misura e il disegno è costruito in **coordinate reali** — nessuno stiramento
+- **Geometria e carichi**: L (o H), interasse, G1, G2, P e la sua ascissa stanno **sempre in
+  vista** nella fascia dei comandi, sotto il titolo: aprire e chiudere la tendina costava una
+  riga e non faceva guadagnare spazio.
+- **Diagrammi**: carichi con schema statico, momento flettente, taglio e deformata. Su
+  desktop la fascia dei diagrammi si ferma al **70% dell'altezza disponibile**, così i
+  comandi risalgono sotto ai grafici invece di restare incollati in fondo alla finestra; le
+  etichette non rimpiccioliscono, perché il viewBox è costruito sui pixel reali del riquadro.
+  Il riquadro si misura e il disegno è costruito in **coordinate reali** — nessuno stiramento
   dei vincoli, delle frecce o dei testi al variare della larghezza. Ogni diagramma è quotato:
   valore e ascissa del punto notevole, valori agli estremi, RA e RB scritte ai vincoli.
 
@@ -230,6 +256,12 @@ collegamento attivo è un **valore derivato**, calcolato in render e non salvato
 che conserva solo il numero scritto a mano. Il campo porta il badge `↩ da Sollecitazioni`,
 che premuto scollega il valore.
 
+Nel **taglio armato** il disegno segue il numero di bracci: due sono i lati verticali della
+staffa perimetrale, dal terzo in poi si aggiungono **bracci interni** — il tratto verticale
+con i suoi ganci, non un ferro longitudinale in più — con un ferro longitudinale per ciascuno.
+Le pastiglie della scheda (materiale, verifica visibile, VEd da Sollecitazioni) stanno tutte
+in fila a sinistra della barra.
+
 Ogni verifica riporta esito, margine percentuale e barra di sfruttamento; sono verificati
 anche i minimi di normativa (Asw,min = 1.5·bw e passo massimo min(330; 0.8·d), §4.1.6.1.1).
 I dati in ingresso sono **controllati**: passo delle staffe o luce nulli, d maggiore di h,
@@ -254,10 +286,21 @@ grandezza in fondo al pannello.
 
 **Il foglio.** Porta l'intestazione di commessa (nome, commessa, località, revisione, data),
 una **riga di premessa** e una **nota a piè di pagina**, e in mezzo i blocchi, numerati come i
-passaggi di un calcolo a mano. I blocchi si **aggiungono in coda e si eliminano** (la × che
-compare passandoci sopra), ma non si riordinano: l'ordine racconta la sequenza reale del
-calcolo. I blocchi stretti stanno **due per riga** quando c'è spazio; nota, schema e capitolo
-si prendono la riga intera.
+passaggi di un calcolo a mano. Si aggiungono dove servono — in coda o fra due blocchi già
+scritti — si **riordinano** (maniglia, frecce o trascinamento) e si eliminano con la ×.
+
+I blocchi stanno su una **griglia a tre colonne**, e ognuno decide quante ne occupa: il
+comando con il numero, fra i tasti del blocco, gira fra 1, 2 e 3, così una formula o un testo
+si può tenere **la riga per sé**. Note, schemi e capitoli partono a riga intera. Il corpo del
+testo è quello di un foglio scritto in Arial Narrow 11: piccolo, perché tre colonne di calcolo
+ci stiano senza andare a capo.
+
+Ogni blocco porta due comandi in più: la **(i)** apre la sua **nota** — il perché del
+passaggio, che a rileggere il foglio fra sei mesi è l'unica cosa che non si ricostruisce, e
+che finisce anche nel testo copiato e nell'HTML esportato — e la **matita** prende in mano una
+riga già scritta: una formula preimpostata, una grandezza o un import diventano una formula
+scrivibile lì, con lo stesso nome, la stessa espressione e la stessa unità. Si stacca dalla
+fonte — è il prezzo per poterla correggere — e da lì in avanti è testo che si edita.
 
 **Il pannello**, sei sezioni ad accordion; tutto quello che sta lì si **trascina** nel foglio o
 si aggiunge con il «+», e ci resta **collegato**:
@@ -372,14 +415,18 @@ istruzioni sono nel commento in testa.
 #### Foglio «Utili»
 Le tabelle che si tengono a bordo tavolo, con una **ricerca sola** che filtra le righe di
 tutte (`⌀16`, `IPE 200`, `M12`, `C25/30`, `S355`): le tabelle senza risultati spariscono.
+Ogni tabella è una **scheda che si apre e si chiude** — il titolo dice quante righe ci sono
+sotto anche da chiusa — e i numeri stanno **centrati nella cella**: sono valori da consultare,
+non da sommare.
 
 - **Armature**: diametri commerciali da ⌀4 a ⌀32 con area, peso al metro (7850 kg/m³),
   **diametro minimo del mandrino di piega** — 4⌀ fino a ⌀16, 7⌀ oltre, EC2 §8.3 Tab. 8.1N — e
   raggio interno di curvatura, che ne è la metà.
 - **Profilario acciaio**: lo stesso sagomario delle Sollecitazioni — IPE, HEA, HEB, UPN a
   tabella (EN 10365), angolari e tubi (quadri, rettangolari, tondi) ricavati dalla geometria
-  esatta della taglia — con h, b, A, Ix, Wx, Iy, Wy, Avz: asse forte e asse debole affiancati,
-  che è quello che serve quando si ruota il profilo.
+  esatta della taglia — con h, b, A, **peso al metro** (l'area per 7850 kg/m³: quello che si
+  ordina e che pesa sulla struttura), Ix, Wx, Iy, Wy, Avz: asse forte e asse debole
+  affiancati, che è quello che serve quando si ruota il profilo.
 - **Profilario bulloni**: filettatura metrica grossa da M6 a M36 con passo, area lorda, **area
   resistente** della parte filettata, apertura di chiave e diametro del foro con gioco normale;
   a fianco le classi di resistenza 4.6 → 10.9 con fyb, ftb e i valori divisi per γM2.
@@ -402,6 +449,10 @@ Quaderno: un valore si corregge in un posto solo.
   schema e migrazione dei file salvati da versioni precedenti. Lo stato si salva in
   `localStorage` con un ritardo di 300 ms, così scrivere in un campo non costa una
   serializzazione per carattere.
+- **Svuota tutto**: cancella il salvataggio automatico — quello che alla riapertura ripropone
+  i campi già compilati — e riporta ogni scheda ai valori iniziali. È l'unico comando che
+  perde dati: chiede conferma e ricorda di usare prima *Esporta JSON* per conservare il
+  lavoro.
 - **Intestazione di scheda sticky**: resta in vista mentre si scorre e ospita i comandi
   della scheda attiva (materiale, verifica visibile, combinazione, orientamento); dove la
   scheda non ha comandi propri sparisce del tutto.

@@ -62,6 +62,18 @@ export interface BloccoQuaderno {
   um: string;
   /** Testo della nota, o didascalia dell'immagine. */
   testo: string;
+  /**
+   * Nota scritta a mano su questo passaggio: il «perché» che a rileggere il
+   * foglio fra sei mesi è l'unica cosa che non si ricostruisce. Si apre con
+   * la (i) del blocco e finisce anche nella stampa, sotto la riga.
+   */
+  appunto: string;
+  /**
+   * Quante colonne occupa sulla griglia del foglio (1…3); 0 = come viene:
+   * una colonna per una riga di calcolo, tutte e tre per note, schemi e
+   * capitoli. È il modo di dire «questa formula sta da sola sulla sua riga».
+   */
+  colonne: number;
   /** Immagine incollata o trascinata, come data URL. */
   img: string;
   /**
@@ -82,11 +94,23 @@ export function nuovoBlocco(tipo: TipoBlocco, patch: Partial<BloccoQuaderno> = {
     espressione: '',
     um: '',
     testo: '',
+    appunto: '',
+    colonne: 0,
     img: '',
     larghezza: 0,
     ...patch,
   };
 }
+
+/** Colonne occupate da un blocco sulla griglia a tre del foglio. */
+export function colonneBlocco(b: BloccoQuaderno): number {
+  const scelte = Math.round(Number(b.colonne));
+  if (Number.isFinite(scelte) && scelte >= 1 && scelte <= COLONNE_FOGLIO) return scelte;
+  return PIENI.includes(b.tipo) ? COLONNE_FOGLIO : 1;
+}
+
+/** Colonne della griglia del foglio: tre, come su un quaderno a quadretti. */
+export const COLONNE_FOGLIO = 3;
 
 /**
  * Un risultato pronto da tirare dentro dalle altre schede: il taglio delle
@@ -365,6 +389,13 @@ export function larghezzaValida(v: unknown): number {
   return Math.round(Math.min(100, Math.max(LARGHEZZA_MIN, n)));
 }
 
+/** Colonne di un blocco riportate fra 1 e 3; 0 = lascia decidere al tipo. */
+export function colonneValide(v: unknown): number {
+  const n = typeof v === 'number' ? v : Number(v);
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  return Math.min(COLONNE_FOGLIO, Math.max(1, Math.round(n)));
+}
+
 /** Rimette in ordine i blocchi che arrivano da un salvataggio. */
 export function normalizzaBlocchi(raw: Partial<BloccoQuaderno>[]): BloccoQuaderno[] {
   const tipi: TipoBlocco[] = ['valore', 'operazione', 'formula', 'import', 'nota', 'immagine', 'capitolo'];
@@ -380,6 +411,8 @@ export function normalizzaBlocchi(raw: Partial<BloccoQuaderno>[]): BloccoQuadern
         espressione: b?.espressione ?? '',
         um: b?.um ?? '',
         testo: b?.testo ?? '',
+        appunto: b?.appunto ?? '',
+        colonne: colonneValide(b?.colonne),
         img: typeof b?.img === 'string' ? b.img : '',
         larghezza: larghezzaValida(b?.larghezza),
       },
