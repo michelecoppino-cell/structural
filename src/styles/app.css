@@ -1190,6 +1190,18 @@ button.field-origin:hover {
   fill: var(--diagram-faint);
 }
 
+/* lettura puntuale su un diagramma: verticale di quota e nodo evidenziato */
+.dg-quota {
+  stroke: var(--color-accent-400);
+  stroke-dasharray: 3 3;
+  fill: none;
+}
+
+.dg-nodo {
+  fill: var(--color-accent-400);
+  stroke: none;
+}
+
 /* Disegni di supporto (sezione, spettro, paramento, falda): la larghezza è
    limitata perché il disegno è a scala fissa — allargandolo crescerebbero
    anche le scritte, che devono restare della misura del resto dell'interfaccia. */
@@ -1244,6 +1256,21 @@ button.field-origin:hover {
   color: var(--text-faint);
   line-height: 1.5;
   max-width: var(--reading-max);
+}
+
+/* rimando a un servizio esterno dentro una nota */
+.link-esterno {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--color-accent-300);
+  text-decoration: none;
+  border-bottom: 1px solid var(--accent-45);
+  white-space: nowrap;
+}
+
+.link-esterno:hover {
+  border-bottom-color: var(--color-accent);
 }
 
 .placeholder {

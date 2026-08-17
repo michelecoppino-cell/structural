@@ -4,8 +4,11 @@ import {
   coefficienteCC,
   coefficienteSS,
   interpolaTR,
+  ordinateSpettro,
   periodoRitorno,
   risolviSito,
+  spettroElastico,
+  spettroProgetto,
 } from './sismica';
 import { calcolaAzioni, AZIONI_DEFAULT } from './azioni';
 import { COMUNI, REGIONI, comuniDi, provinceDi, trovaComune } from '../data/comuni';
@@ -199,5 +202,65 @@ describe('spettro di progetto con i default della scheda', () => {
     expect(scuola.VR).toBe(75);
     expect(scuola.TR).toBeCloseTo(712, 0);
     expect(scuola.ag).toBeGreaterThan(r.ag);
+  });
+});
+
+describe('§3.2.3.2.1 — lettura dello spettro a un periodo assegnato', () => {
+  const forma = { ag: 0.2, S: 1.4, F0: 2.5, TB: 0.15, TC: 0.45, TD: 2.4 };
+  const plateau = forma.ag * forma.S * forma.F0;
+
+  it('sui quattro rami vale la eq. 3.2.4', () => {
+    // T = 0: Se parte da ag·S; nel plateau resta ag·S·F0
+    expect(spettroElastico(0, forma)).toBeCloseTo(forma.ag * forma.S, 6);
+    expect(spettroElastico(0.3, forma)).toBeCloseTo(plateau, 6);
+    expect(spettroElastico(forma.TB, forma)).toBeCloseTo(plateau, 6);
+    // TC ≤ T < TD: decresce come TC/T; T ≥ TD: come TC·TD/T²
+    expect(spettroElastico(0.9, forma)).toBeCloseTo(plateau * (forma.TC / 0.9), 6);
+    expect(spettroElastico(3, forma)).toBeCloseTo(plateau * ((forma.TC * forma.TD) / 9), 6);
+    // continuo nei punti di raccordo
+    expect(spettroElastico(forma.TD - 1e-6, forma)).toBeCloseTo(spettroElastico(forma.TD, forma), 6);
+  });
+
+  it('Sd è Se/q, ma non scende sotto 0.2·ag — §3.2.3.5', () => {
+    expect(spettroProgetto(0.3, forma, 2)).toBeCloseTo(plateau / 2, 6);
+    expect(spettroProgetto(8, forma, 4)).toBeCloseTo(0.2 * forma.ag, 6);
+  });
+
+  it('ordinateSpettro dichiara ramo, minimo e valori in m/s²', () => {
+    const o = ordinateSpettro(0.3, forma, 2);
+    expect(o.ramo).toContain('plateau');
+    expect(o.Se).toBeCloseTo(plateau, 6);
+    expect(o.SeMS2).toBeCloseTo(plateau * 9.81, 6);
+    expect(o.Sd).toBeCloseTo(plateau / 2, 6);
+    expect(o.minimo).toBe(false);
+    expect(ordinateSpettro(8, forma, 4).minimo).toBe(true);
+    expect(ordinateSpettro(0.05, forma, 2).ramo).toContain('T < TB');
+    expect(ordinateSpettro(1, forma, 2).ramo).toContain('velocità costante');
+    expect(ordinateSpettro(3, forma, 2).ramo).toContain('spostamento costante');
+  });
+
+  it('la scheda legge lo spettro solo se il periodo è scritto', () => {
+    expect(calcolaAzioni(AZIONI_DEFAULT).sisma.periodo).toBeUndefined();
+    const r = calcolaAzioni({ ...AZIONI_DEFAULT, Tsp: '0,40' }).sisma;
+    expect(r.periodo?.T).toBeCloseTo(0.4, 6);
+    expect(r.periodo?.Se).toBeCloseTo(spettroElastico(0.4, r.forma), 6);
+    expect(r.periodo?.Sd).toBeCloseTo(spettroProgetto(0.4, r.forma, r.q), 6);
+    // dentro il plateau Se(T) coincide con ag·S·F0 e Sd(T) con Sd(T1)
+    expect(r.periodo!.Se).toBeCloseTo(r.SePlateau, 6);
+    expect(r.periodo!.Sd).toBeCloseTo(r.Sd, 6);
+  });
+
+  it('i parametri scritti a mano cambiano anche la lettura a T', () => {
+    const base = calcolaAzioni({ ...AZIONI_DEFAULT, Tsp: '1.0' }).sisma;
+    const forzato = calcolaAzioni({
+      ...AZIONI_DEFAULT,
+      Tsp: '1.0',
+      agManuale: '0.30',
+      F0: '2.60',
+      TCstar: '0.40',
+    }).sisma;
+    expect(forzato.manuali).toEqual({ ag: true, F0: true, TCstar: true });
+    expect(forzato.ag).toBeCloseTo(0.3, 6);
+    expect(forzato.periodo!.Se).toBeGreaterThan(base.periodo!.Se);
   });
 });
