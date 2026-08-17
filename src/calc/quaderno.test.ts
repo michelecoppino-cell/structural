@@ -153,6 +153,43 @@ describe('blocchi del quaderno', () => {
     expect(r[2].valore).toBeCloseTo(0.15, 9);
   });
 
+  it('una grandezza tirata dal pannello non è un doppione di sé stessa', () => {
+    const r = ricalcolaQuaderno(
+      [
+        nuovoBlocco('valore', { fonte: 'v-b' }),
+        nuovoBlocco('valore', { fonte: 'v-h' }),
+        // due volte la stessa grandezza: stesso numero, nessuna ambiguità
+        nuovoBlocco('valore', { fonte: 'v-b' }),
+      ],
+      sorgenti(TRAVE),
+    );
+    expect(r.map((b) => b.nomeIgnorato)).toEqual([false, false, false]);
+    // e resta richiamabile: il valore è quello del pannello
+    const [, , , sigma] = ricalcolaQuaderno(
+      [
+        nuovoBlocco('valore', { fonte: 'v-b' }),
+        nuovoBlocco('valore', { fonte: 'v-h' }),
+        nuovoBlocco('valore', { fonte: 'v-b' }),
+        nuovoBlocco('formula', { nome: 'A', espressione: 'b*h' }),
+      ],
+      sorgenti(TRAVE),
+    );
+    expect(sigma.valore).toBeCloseTo(0.15, 9);
+  });
+
+  it('l’avviso resta dove il nome copre davvero un numero diverso', () => {
+    const r = ricalcolaQuaderno(
+      [
+        nuovoBlocco('valore', { fonte: 'v-b' }),
+        // stesso nome del pannello, ma un altro numero: qui l'ambiguità c'è
+        nuovoBlocco('formula', { nome: 'b', espressione: '0,9', um: 'm' }),
+      ],
+      sorgenti(TRAVE),
+    );
+    expect(r[0].nomeIgnorato).toBe(false);
+    expect(r[1].nomeIgnorato).toBe(true);
+  });
+
   it('una fonte che non c’è più lo dice invece di sparire', () => {
     const [b] = ricalcolaQuaderno([nuovoBlocco('valore', { fonte: 'v-mai-esistita' })], sorgenti(TRAVE));
     expect(b.errore).toContain('non più in elenco');

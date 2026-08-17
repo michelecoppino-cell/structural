@@ -208,6 +208,17 @@ const VUOTO = {
 const PIENI: TipoBlocco[] = ['nota', 'immagine', 'capitolo'];
 
 /**
+ * Due numeri sono «lo stesso numero» se differiscono meno di un miliardesimo
+ * relativo: lo stesso valore passato per una conversione di unità può tornare
+ * indietro con l'ultimo bit diverso, e non è un valore diverso.
+ */
+function stessoNumero(a: number, b: number): boolean {
+  if (a === b) return true;
+  if (!Number.isFinite(a) || !Number.isFinite(b)) return false;
+  return Math.abs(a - b) <= 1e-9 * Math.max(Math.abs(a), Math.abs(b), 1e-12);
+}
+
+/**
  * Ricalcola il quaderno intero, in ordine. Ogni blocco vede le grandezze del
  * pannello e i risultati dei blocchi che lo precedono; un blocco con un nome
  * nuovo e valido diventa a sua volta una grandezza richiamabile.
@@ -321,6 +332,16 @@ export function ricalcolaQuaderno(
       unita[nome] = letto.dim ?? {};
     }
 
+    /**
+     * L'avviso «questo nome è già usato più su» ha senso solo quando dietro allo
+     * stesso nome c'è un **numero diverso**: allora sì che il richiamo più in
+     * basso è ambiguo. Una grandezza tirata dal pannello, invece, *è* la sua
+     * variabile — b sul foglio e b nel pannello sono lo stesso b — e segnalarla
+     * come doppione era un falso allarme su ogni blocco collegato.
+     */
+    const doppioneVero =
+      !!nome && !registrabile && !!letto && !stessoNumero(vars[nome], letto.valoreBase);
+
     return {
       blocco,
       passo,
@@ -342,7 +363,7 @@ export function ricalcolaQuaderno(
       testo,
       errore,
       mancanti,
-      nomeIgnorato: !!nome && !registrabile && !!letto,
+      nomeIgnorato: doppioneVero,
     };
   });
 }
