@@ -77,6 +77,14 @@ describe('foglio del quaderno', () => {
     const stato = con({ blocchi: [nuovoBlocco('immagine', { img, testo: 'schema statico' })] });
     expect(documentoTesto(stato)).toContain('[schema allegato: schema statico]');
     expect(documentoHtml(stato)).toContain(`src="${img}"`);
+    // senza misura scelta lo schema resta largo quanto la colonna
+    expect(documentoHtml(stato)).not.toContain('style="width');
+  });
+
+  it('la misura data allo schema sul foglio vale anche nel file esportato', () => {
+    const img = 'data:image/png;base64,iVBORw0KGgo=';
+    const stato = con({ blocchi: [nuovoBlocco('immagine', { img, testo: 'pianta', larghezza: 45 })] });
+    expect(documentoHtml(stato)).toContain('style="width:45%"');
   });
 
   it('quello che si scrive a mano nel foglio non rompe l’HTML', () => {

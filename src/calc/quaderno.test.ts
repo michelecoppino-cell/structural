@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
+  LARGHEZZA_MIN,
+  larghezzaValida,
   normalizzaBlocchi,
   nuovoBlocco,
   ricalcolaQuaderno,
@@ -171,6 +173,34 @@ describe('blocchi del quaderno', () => {
     expect(b.map((x) => x.tipo)).toEqual(['formula', 'nota']);
     expect(b[1].id).toBe('q-9');
     expect(b[0].img).toBe('');
+    // un salvataggio di prima non ha la misura degli schemi: intera colonna
+    expect(b[0].larghezza).toBe(0);
+  });
+
+  it('la larghezza di uno schema resta fra il minimo leggibile e la colonna intera', () => {
+    expect(larghezzaValida(60)).toBe(60);
+    expect(larghezzaValida(60.4)).toBe(60);
+    expect(larghezzaValida(140)).toBe(100);
+    expect(larghezzaValida(3)).toBe(LARGHEZZA_MIN);
+    // 0, il vuoto e il non-numero vogliono dire «tutta la colonna»
+    expect(larghezzaValida(0)).toBe(0);
+    expect(larghezzaValida(undefined)).toBe(0);
+    expect(larghezzaValida('mezza')).toBe(0);
+    expect(normalizzaBlocchi([{ tipo: 'immagine', larghezza: 45 } as Partial<BloccoQuaderno>])[0].larghezza).toBe(45);
+  });
+});
+
+describe('riordino dei blocchi', () => {
+  it('spostare un blocco sopra a chi lo usa fa tornare il conto', () => {
+    const area = nuovoBlocco('formula', { nome: 'A', espressione: '2*3', um: 'mq' });
+    const forza = nuovoBlocco('formula', { nome: 'N', espressione: 'A*10', um: 'kN' });
+    // scritti al contrario: N non trova ancora A
+    const prima = ricalcolaQuaderno([forza, area], sorgenti([]));
+    expect(prima[0].mancanti).toEqual(['A']);
+
+    const dopo = ricalcolaQuaderno([area, forza], sorgenti([]));
+    expect(dopo[1].mancanti).toEqual([]);
+    expect(dopo[1].valore).toBeCloseTo(60, 6);
   });
 });
 

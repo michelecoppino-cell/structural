@@ -1,10 +1,13 @@
 import { useMemo, useRef, useState, type DragEvent, type ReactNode } from 'react';
 import {
+  ArrowLeft,
+  ArrowRight,
   Backspace,
   CaretDown,
   CaretUp,
   Check,
   ClipboardText,
+  DotsSixVertical,
   DownloadSimple,
   GridNine,
   Image as ImageIcon,
@@ -34,6 +37,8 @@ import {
   type VoceCalcolata,
 } from '../calc/calcolatrice';
 import {
+  LARGHEZZA_MIN,
+  larghezzaValida,
   nuovoBlocco,
   ricalcolaQuaderno,
   type BloccoCalcolato,
@@ -45,6 +50,7 @@ import { documentoHtml, documentoTesto, nomeFile, oggi } from '../calc/esportazi
 import { UNITA_DEFAULT, normalizzaElenco, unitaInElenco } from '../calc/unita';
 import { ACCIAI, CLS, DIAMETRI, SIGLE_ACCIAIO } from '../data/materiali';
 import { TAGLIE_BULLONE } from '../data/bulloni';
+import { TIPI_PROFILO, taglieDisponibili, type TipoProfilo } from '../data/profili-acciaio';
 
 /* ─────────────────────────── cose di servizio ─────────────────────────── */
 
@@ -66,10 +72,16 @@ function Nome({ nome }: { nome: string }) {
   );
 }
 
-/** Payload del drag & drop: che cosa si sta trascinando nel quaderno. */
+/**
+ * Payload del drag & drop: che cosa si sta trascinando nel quaderno. Con
+ * `sposta` valorizzato non è roba nuova che arriva dal pannello, ma un blocco
+ * già sul foglio che sta cambiando posto.
+ */
 interface Trascinato {
   tipo: TipoBlocco;
   fonte: string;
+  /** id del blocco che si sta spostando, per il riordino. */
+  sposta?: string;
 }
 
 const MIME = 'application/x-quaderno';
@@ -222,6 +234,15 @@ function RigaGrandezza({
         <span className="quad-gr-um" title={v.umEffettiva}>
           {v.umEffettiva}
         </span>
+        <button
+          type="button"
+          className={`quad-gr-edita${aperta ? ' is-aperta' : ''}`}
+          aria-expanded={aperta}
+          title={aperta ? 'Chiudi la modifica' : 'Edita nome, unità, nota e colonna'}
+          onClick={onApri}
+        >
+          {aperta ? <Check size={11} weight="bold" /> : <PencilSimple size={11} />}
+        </button>
         <button type="button" className="quad-gr-piu" title="Metti nel quaderno" onClick={onAggiungi}>
           <Plus size={11} weight="bold" />
         </button>
@@ -324,6 +345,37 @@ function ScelteLibreria({
           </select>
         </div>
         <div className="mini-campo">
+          <label htmlFor="q-prof">Profilo</label>
+          <select
+            id="q-prof"
+            className="input"
+            value={sel.profiloTipo}
+            onChange={(e) => onCambia({ profiloTipo: e.target.value as TipoProfilo, profiloTaglia: '' })}
+          >
+            {TIPI_PROFILO.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.label}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="mini-campo">
+          <label htmlFor="q-prof-t">Taglia</label>
+          <select
+            id="q-prof-t"
+            className="input"
+            value={sel.profiloTaglia}
+            onChange={(e) => onCambia({ profiloTaglia: e.target.value })}
+          >
+            <option value="">— nessuna —</option>
+            {taglieDisponibili(sel.profiloTipo).map((t) => (
+              <option key={t} value={t}>
+                {t}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="mini-campo">
           <label htmlFor="q-fi">Ferro ⌀</label>
           <select id="q-fi" className="input" value={sel.barraFi} onChange={(e) => onCambia({ barraFi: e.target.value })}>
             {DIAMETRI.map((d) => (
@@ -389,8 +441,9 @@ function ScelteLibreria({
         </div>
       ) : (
         <p className="note" style={{ margin: 0 }}>
-          Nessuna scelta fatta: scegli una classe di calcestruzzo o un acciaio e qui compaiono le
-          resistenze di progetto, da tirare nel quaderno o da richiamare per nome nelle formule.
+          Nessuna scelta fatta: scegli una classe di calcestruzzo, un acciaio o un profilo e qui
+          compaiono resistenze di progetto, aree e inerzie, da tirare nel quaderno o da richiamare
+          per nome nelle formule.
         </p>
       )}
     </>
@@ -448,22 +501,59 @@ export default function Quaderno() {
 
   /* ── comporre il quaderno ── */
 
-  const aggiungi = (b: BloccoQuaderno) => setQ({ blocchi: [...q.blocchi, b] });
+  /** Mette un blocco al posto `dove` (in coda se non lo si dice). */
+  const aggiungi = (b: BloccoQuaderno, dove?: number) => {
+    const i = dove == null ? q.blocchi.length : Math.max(0, Math.min(q.blocchi.length, dove));
+    setQ({ blocchi: [...q.blocchi.slice(0, i), b, ...q.blocchi.slice(i)] });
+  };
   const aggiornaBlocco = (id: string, patch: Partial<BloccoQuaderno>) =>
     setQ({ blocchi: q.blocchi.map((b) => (b.id === id ? { ...b, ...patch } : b)) });
   const eliminaBlocco = (id: string) => setQ({ blocchi: q.blocchi.filter((b) => b.id !== id) });
 
-  const onDrop = (e: DragEvent) => {
+  /**
+   * Sposta un blocco al posto `dove`, contato sul foglio di adesso: è il
+   * riordino, quello che serve quando ci si accorge che la sezione andava
+   * calcolata prima della tensione.
+   */
+  const spostaBlocco = (id: string, dove: number) => {
+    const da = q.blocchi.findIndex((b) => b.id === id);
+    if (da < 0) return;
+    const senza = q.blocchi.filter((b) => b.id !== id);
+    const meta = Math.max(0, Math.min(senza.length, dove > da ? dove - 1 : dove));
+    if (meta === da) return;
+    setQ({ blocchi: [...senza.slice(0, meta), q.blocchi[da], ...senza.slice(meta)] });
+  };
+
+  /** Un passo avanti o indietro: il riordino da dito, dove il trascinamento non c'è. */
+  const scorri = (id: string, verso: -1 | 1) => {
+    const da = q.blocchi.findIndex((b) => b.id === id);
+    if (da < 0) return;
+    const a = da + verso;
+    if (a < 0 || a >= q.blocchi.length) return;
+    const nuovi = [...q.blocchi];
+    [nuovi[da], nuovi[a]] = [nuovi[a], nuovi[da]];
+    setQ({ blocchi: nuovi });
+  };
+
+  /**
+   * Qualcosa è caduto sul foglio: una grandezza o una formula dal pannello, un
+   * blocco che sta cambiando posto, o un'immagine da fuori. `dove` è il posto
+   * in cui si è lasciato: in coda quando è la zona di arrivo in fondo.
+   */
+  const onDrop = (e: DragEvent, dove?: number) => {
     const d = leggiTrascinato(e);
     if (d) {
       e.preventDefault();
-      aggiungi(nuovoBlocco(d.tipo, { fonte: d.fonte }));
+      e.stopPropagation();
+      if (d.sposta) spostaBlocco(d.sposta, dove ?? q.blocchi.length);
+      else aggiungi(nuovoBlocco(d.tipo, { fonte: d.fonte }), dove);
       return;
     }
     const file = immagineDa(e.dataTransfer);
     if (file) {
       e.preventDefault();
-      void leggiImmagine(file).then((img) => aggiungi(nuovoBlocco('immagine', { img })));
+      e.stopPropagation();
+      void leggiImmagine(file).then((img) => aggiungi(nuovoBlocco('immagine', { img }), dove));
     }
   };
 
@@ -681,7 +771,7 @@ export default function Quaderno() {
 
       <div className="quad-corpo">
         {/* ─────────────── il foglio ─────────────── */}
-        <div className="quad-area" onDragOver={(e) => e.preventDefault()} onDrop={onDrop} onPaste={onPaste}>
+        <div className="quad-area" onDragOver={(e) => e.preventDefault()} onDrop={(e) => onDrop(e)} onPaste={onPaste}>
           <div className={`quad-foglio${q.quadretti ? ' is-quadretti' : ''}`} id="foglio-esportazione">
             <header className="quad-testa">
               <div>
@@ -723,13 +813,18 @@ export default function Quaderno() {
 
             {calcolati.length > 0 && (
               <div className="quad-blocchi">
-                {calcolati.map((b) => (
+                {calcolati.map((b, i) => (
                   <BloccoCard
                     key={b.blocco.id}
                     b={b}
+                    primo={i === 0}
+                    ultimo={i === calcolati.length - 1}
                     campoRef={ultimoCampo}
                     onAggiorna={(patch) => aggiornaBlocco(b.blocco.id, patch)}
                     onElimina={() => eliminaBlocco(b.blocco.id)}
+                    onScorri={(verso) => scorri(b.blocco.id, verso)}
+                    onInserisci={() => aggiungi(nuovoBlocco('formula'), i + 1)}
+                    onDropPrima={(e) => onDrop(e, i)}
                     capitolo={
                       b.blocco.tipo === 'capitolo'
                         ? blocchiCapitolo(state, b.blocco.fonte as CapitoloId)
@@ -740,10 +835,10 @@ export default function Quaderno() {
               </div>
             )}
 
-            <div className="quad-drop" onDragOver={(e) => e.preventDefault()} onDrop={onDrop}>
+            <div className="quad-drop" onDragOver={(e) => e.preventDefault()} onDrop={(e) => onDrop(e)}>
               {calcolati.length === 0
                 ? 'Quaderno bianco. Trascina qui una grandezza, una formula preimpostata, un valore da un’altra scheda o un capitolo — resta collegato e si aggiorna da sé. Puoi anche incollare uno screenshot con Ctrl+V.'
-                : 'Trascina qui il prossimo passaggio — si aggiunge in coda, collegato alla sua fonte'}
+                : 'Trascina qui il prossimo passaggio — si aggiunge in coda. Per metterlo prima, lascialo sopra il blocco davanti al quale deve stare.'}
             </div>
 
             <textarea
@@ -818,7 +913,7 @@ export default function Quaderno() {
             </div>
           </Sezione>
 
-          <Sezione id="q-fisse" titolo="Grandezze fisse">
+          <Sezione id="q-fisse" titolo="Costanti" hint={`${voci.filter((v) => (v.tipo ?? 'operazione') === 'fissa').length}`}>
             <div className="quad-griglia">
               {voci
                 .filter((v) => (v.tipo ?? 'operazione') === 'fissa')
@@ -853,7 +948,7 @@ export default function Quaderno() {
               <button
                 type="button"
                 className="quad-chip is-piu"
-                title="Aggiungi una grandezza fissa tua"
+                title="Aggiungi una costante tua"
                 onClick={() => aggiungiGrandezza({ tipo: 'fissa' })}
               >
                 <Plus size={10} weight="bold" />
@@ -862,7 +957,7 @@ export default function Quaderno() {
             </div>
           </Sezione>
 
-          <Sezione id="q-libreria" titolo="Grandezze da libreria" hint={`${derivate.length}`}>
+          <Sezione id="q-libreria" titolo="Da libreria" hint={`${derivate.length}`}>
             <ScelteLibreria
               sel={calc.selezioni}
               derivate={derivate}
@@ -1117,20 +1212,34 @@ const TASTI: { t: string; ins?: string; classe?: string; titolo?: string }[] = [
  */
 function BloccoCard({
   b,
+  primo,
+  ultimo,
   campoRef,
   onAggiorna,
   onElimina,
+  onScorri,
+  onInserisci,
+  onDropPrima,
   capitolo,
 }: {
   b: BloccoCalcolato;
+  primo: boolean;
+  ultimo: boolean;
   campoRef: { current: HTMLInputElement | null };
   onAggiorna: (patch: Partial<BloccoQuaderno>) => void;
   onElimina: () => void;
+  /** Un passo indietro (−1) o avanti (+1) nella sequenza del foglio. */
+  onScorri: (verso: -1 | 1) => void;
+  /** Una formula nuova subito dopo questo blocco. */
+  onInserisci: () => void;
+  /** Qualcosa lasciato su questo blocco: entra *prima* di lui. */
+  onDropPrima: (e: DragEvent) => void;
   /** Blocchi di relazione, per i blocchi capitolo. */
   capitolo?: { titolo: string; righe: string[] }[];
 }) {
   const bl = b.blocco;
   const fileRef = useRef<HTMLInputElement>(null);
+  const [bersaglio, setBersaglio] = useState(false);
 
   const incolla = (dati: DataTransfer | null) => {
     const f = immagineDa(dati);
@@ -1138,19 +1247,51 @@ function BloccoCard({
   };
 
   return (
-    <div className={`quad-blocco${b.pieno ? ' is-pieno' : ''}${b.errore ? ' is-errore' : ''}`}>
-      <div className="quad-blocco-testa">
-        <span className="passo">{b.passo}</span>
-        <span className={`tipo is-${bl.tipo}`}>{b.etichetta}</span>
+    <div
+      className={`quad-blocco${b.pieno ? ' is-pieno' : ''}${b.errore ? ' is-errore' : ''}${
+        bersaglio ? ' is-bersaglio' : ''
+      }`}
+      onDragOver={(e) => {
+        e.preventDefault();
+        setBersaglio(true);
+      }}
+      onDragLeave={() => setBersaglio(false)}
+      onDrop={(e) => {
+        setBersaglio(false);
+        onDropPrima(e);
+      }}
+    >
+      {/* i comandi del blocco: niente etichette, solo quello che si fa — si
+          spostano, ci si infila una riga, si toglie. Compaiono al passaggio */}
+      <div className="quad-blocco-azioni">
+        <span
+          className="maniglia"
+          draggable
+          title="Trascina per spostarlo: lascialo sul blocco davanti al quale deve stare"
+          onDragStart={(e) => iniziaTrascinamento(e, { tipo: bl.tipo, fonte: bl.fonte, sposta: bl.id })}
+        >
+          <DotsSixVertical size={12} weight="bold" />
+        </span>
         {b.collegato && (
           <span className="link" title="Collegato alla sua fonte: si aggiorna da solo">
             <LinkIcon size={11} />
           </span>
         )}
         {b.provenienza && bl.tipo === 'import' && <span className="fonte">↩ {b.provenienza}</span>}
-        <button type="button" className="chiudi" title="Togli dal quaderno" onClick={onElimina}>
-          <X size={12} weight="bold" />
-        </button>
+        <span className="tasti">
+          <button type="button" disabled={primo} title="Spostalo un passo prima" onClick={() => onScorri(-1)}>
+            <ArrowLeft size={11} weight="bold" />
+          </button>
+          <button type="button" disabled={ultimo} title="Spostalo un passo dopo" onClick={() => onScorri(1)}>
+            <ArrowRight size={11} weight="bold" />
+          </button>
+          <button type="button" title="Infila una formula subito dopo" onClick={onInserisci}>
+            <Plus size={11} weight="bold" />
+          </button>
+          <button type="button" className="chiudi" title="Togli dal quaderno" onClick={onElimina}>
+            <X size={12} weight="bold" />
+          </button>
+        </span>
       </div>
 
       {/* ── nota ── */}
@@ -1171,6 +1312,10 @@ function BloccoCard({
           className="quad-img"
           onDragOver={(e) => e.preventDefault()}
           onDrop={(e) => {
+            // un'immagine cade qui dentro e prende il posto di questa; un
+            // blocco che sta cambiando posto, invece, deve arrivare al foglio
+            const f = immagineDa(e.dataTransfer);
+            if (!f) return;
             e.preventDefault();
             e.stopPropagation();
             incolla(e.dataTransfer);
@@ -1182,7 +1327,12 @@ function BloccoCard({
         >
           {bl.img ? (
             <>
-              <img src={bl.img} alt={bl.testo || 'schema'} />
+              <SchemaRidimensionabile
+                img={bl.img}
+                didascalia={bl.testo}
+                larghezza={bl.larghezza}
+                onLarghezza={(larghezza) => onAggiorna({ larghezza })}
+              />
               <div className="quad-img-azioni">
                 <input
                   className="input"
@@ -1190,6 +1340,17 @@ function BloccoCard({
                   placeholder="Didascalia (facoltativa)"
                   aria-label="Didascalia dello schema"
                   onChange={(e) => onAggiorna({ testo: e.target.value })}
+                />
+                <input
+                  className="input quad-img-misura"
+                  type="range"
+                  min={LARGHEZZA_MIN}
+                  max={100}
+                  step={5}
+                  value={bl.larghezza || 100}
+                  aria-label="Larghezza dello schema in percentuale"
+                  title={`Larghezza ${bl.larghezza || 100}% — vale anche nel file stampato`}
+                  onChange={(e) => onAggiorna({ larghezza: larghezzaValida(Number(e.target.value)) })}
                 />
                 <button type="button" className="btn btn-secondary btn-icon" title="Togli l’immagine" onClick={() => onAggiorna({ img: '' })}>
                   <Trash size={13} />
@@ -1234,65 +1395,72 @@ function BloccoCard({
         </div>
       )}
 
-      {/* ── riga di calcolo ── */}
+      {/* ── riga di calcolo: nome, formula e risultato sulla stessa riga ── */}
       {!b.pieno && (
         <div className="quad-calcolo">
-          {bl.tipo === 'formula' ? (
-            <div className="quad-formula-riga">
-              <input
-                className="input quad-in-nome"
-                value={bl.nome}
-                placeholder="σ"
-                aria-label="Nome del risultato"
-                autoComplete="off"
-                spellCheck={false}
-                onChange={(e) => onAggiorna({ nome: e.target.value })}
-              />
-              <span className="uguale">=</span>
-              <input
-                className={`input quad-in-espr${b.errore ? ' is-error' : ''}`}
-                value={bl.espressione}
-                placeholder="M/W   ·   q*l^2/8   ·   b*h*γC"
-                aria-label="Formula"
-                autoComplete="off"
-                spellCheck={false}
-                data-blocco={bl.id}
-                ref={(el) => {
-                  if (el && document.activeElement === el) campoRef.current = el;
-                }}
-                onFocus={(e) => {
-                  campoRef.current = e.currentTarget;
-                }}
-                onChange={(e) => onAggiorna({ espressione: e.target.value })}
-              />
-            </div>
-          ) : (
-            <div className="quad-riga">
-              {b.nome && (
-                <span className="nome">
-                  <Nome nome={b.nome} />
-                </span>
-              )}
-              {b.espressione && !SOLO_NUMERO.test(b.espressione) && <span className="espr">{b.espressione}</span>}
-            </div>
-          )}
-
-          <div className="quad-esito">
-            {b.errore ? (
-              <span className="quad-errore" title={b.errore}>
-                <WarningCircle size={12} /> {b.errore}
-              </span>
-            ) : b.mancanti.length ? (
-              <span className="quad-manca">manca {b.mancanti.join(', ')}</span>
-            ) : b.testo ? (
-              <strong>{b.testo}</strong>
+          <div className="quad-linea">
+            {bl.tipo === 'formula' ? (
+              <>
+                <input
+                  className="input quad-in-nome"
+                  value={bl.nome}
+                  placeholder="σ"
+                  aria-label="Nome del risultato"
+                  autoComplete="off"
+                  spellCheck={false}
+                  onChange={(e) => onAggiorna({ nome: e.target.value })}
+                />
+                <span className="uguale">=</span>
+                <input
+                  className={`input quad-in-espr${b.errore ? ' is-error' : ''}`}
+                  value={bl.espressione}
+                  placeholder="M/W · q*l^2/8"
+                  aria-label="Formula"
+                  autoComplete="off"
+                  spellCheck={false}
+                  data-blocco={bl.id}
+                  ref={(el) => {
+                    if (el && document.activeElement === el) campoRef.current = el;
+                  }}
+                  onFocus={(e) => {
+                    campoRef.current = e.currentTarget;
+                  }}
+                  onChange={(e) => onAggiorna({ espressione: e.target.value })}
+                />
+              </>
             ) : (
               <>
-                <span className="uguale">=</span>
-                <strong>{formatta(b.valore)}</strong>
-                <UnitaBlocco b={b} onAggiorna={onAggiorna} />
+                {b.nome && (
+                  <span className="nome">
+                    <Nome nome={b.nome} />
+                  </span>
+                )}
+                {b.espressione && !SOLO_NUMERO.test(b.espressione) && (
+                  <>
+                    <span className="uguale">=</span>
+                    <span className="espr">{b.espressione}</span>
+                  </>
+                )}
               </>
             )}
+
+            <span className="quad-esito">
+              {b.errore ? (
+                <span className="quad-errore" title={b.errore}>
+                  <WarningCircle size={12} /> {b.errore}
+                </span>
+              ) : b.mancanti.length ? (
+                <span className="quad-manca">manca {b.mancanti.join(', ')}</span>
+              ) : b.testo ? (
+                <strong>{b.testo}</strong>
+              ) : (
+                <>
+                  <span className="uguale">=</span>
+                  <strong>{formatta(b.valore)}</strong>
+                  <UnitaBlocco b={b} onAggiorna={onAggiorna} />
+                </>
+              )}
+            </span>
           </div>
 
           {b.nomeIgnorato && (
@@ -1358,5 +1526,63 @@ function UnitaBlocco({
         </option>
       ))}
     </select>
+  );
+}
+
+/**
+ * Uno schema sul foglio, con la sua misura. Uno screenshot arriva grande come
+ * capita, ma su una relazione la dimensione è una scelta: si prende il bordo e
+ * si tira, come in un documento di testo. La larghezza è in percentuale della
+ * colonna, così vale anche nell'HTML esportato e nella stampa.
+ */
+function SchemaRidimensionabile({
+  img,
+  didascalia,
+  larghezza,
+  onLarghezza,
+}: {
+  img: string;
+  didascalia: string;
+  larghezza: number;
+  onLarghezza: (v: number) => void;
+}) {
+  const box = useRef<HTMLDivElement>(null);
+  const [tira, setTira] = useState(false);
+  const perc = larghezza || 100;
+
+  /** Da dove sta il dito alla percentuale di colonna occupata. */
+  const misura = (clientX: number) => {
+    const el = box.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    if (r.width <= 0) return;
+    onLarghezza(larghezzaValida(((clientX - r.left) / r.width) * 100));
+  };
+
+  return (
+    <div className="quad-img-box" ref={box}>
+      <div className={`quad-img-figura${tira ? ' is-tira' : ''}`} style={{ width: `${perc}%` }}>
+        <img src={img} alt={didascalia || 'schema'} draggable={false} />
+        <span
+          className="quad-img-maniglia"
+          title="Trascina per ridimensionare lo schema"
+          aria-hidden="true"
+          onPointerDown={(e) => {
+            e.preventDefault();
+            e.currentTarget.setPointerCapture(e.pointerId);
+            setTira(true);
+          }}
+          onPointerMove={(e) => {
+            if (tira) misura(e.clientX);
+          }}
+          onPointerUp={(e) => {
+            e.currentTarget.releasePointerCapture(e.pointerId);
+            setTira(false);
+          }}
+          onPointerCancel={() => setTira(false)}
+        />
+        {tira && <span className="quad-img-quota">{perc}%</span>}
+      </div>
+    </div>
   );
 }

@@ -348,7 +348,7 @@ export type ElementoFoglio =
   | { tipo: 'capitolo'; id: string; capitolo: Capitolo }
   | { tipo: 'calcolo'; id: string; passo: string; testo: string; nota: string }
   | { tipo: 'nota'; id: string; testo: string }
-  | { tipo: 'immagine'; id: string; img: string; didascalia: string };
+  | { tipo: 'immagine'; id: string; img: string; didascalia: string; larghezza: number };
 
 /**
  * Il foglio del quaderno, nell'ordine dei blocchi: i capitoli si espandono nei
@@ -369,7 +369,15 @@ export function foglioQuaderno(state: AppState): ElementoFoglio[] {
     }
     if (b.blocco.tipo === 'immagine') {
       return b.blocco.img
-        ? [{ tipo: 'immagine', id, img: b.blocco.img, didascalia: b.blocco.testo.trim() }]
+        ? [
+            {
+              tipo: 'immagine',
+              id,
+              img: b.blocco.img,
+              didascalia: b.blocco.testo.trim(),
+              larghezza: b.blocco.larghezza,
+            },
+          ]
         : [];
     }
     return [{ tipo: 'calcolo', id, passo: b.passo, testo: testoBlocco(b), nota: b.nota.trim() }];

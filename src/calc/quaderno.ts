@@ -3,9 +3,11 @@
  * lo si pensa, e che è già il documento da stampare.
  *
  * Un quaderno è una **sequenza di blocchi**. Ogni blocco è una riga di calcolo,
- * una nota, uno schema incollato o un capitolo ripreso da un'altra scheda; si
- * aggiungono in coda e si eliminano, ma non si riordinano — l'ordine racconta
- * la sequenza reale del calcolo, come su un foglio a mano.
+ * una nota, uno schema incollato o un capitolo ripreso da un'altra scheda. Si
+ * aggiungono dove servono — in coda o fra due blocchi già scritti — e si
+ * riordinano: l'ordine racconta la sequenza del calcolo, e ripensarci a metà
+ * foglio è la regola, non l'eccezione. I nomi si rileggono nell'ordine nuovo,
+ * quindi spostare un blocco sopra a chi lo usa fa tornare i conti.
  *
  * I blocchi di calcolo **non salvano il proprio valore**: salvano da dove viene
  * (la grandezza, la formula preimpostata, la scheda) e lo ricalcolano ogni
@@ -61,6 +63,12 @@ export interface BloccoQuaderno {
   testo: string;
   /** Immagine incollata o trascinata, come data URL. */
   img: string;
+  /**
+   * Larghezza dell'immagine in percentuale della colonna (20…100). 0 = intera:
+   * uno schema piccolo non deve occupare mezza pagina solo perché è arrivato
+   * così, e la misura scelta vale anche nel file esportato.
+   */
+  larghezza: number;
 }
 
 /** Un blocco nuovo, con tutti i campi al loro posto. */
@@ -74,6 +82,7 @@ export function nuovoBlocco(tipo: TipoBlocco, patch: Partial<BloccoQuaderno> = {
     um: '',
     testo: '',
     img: '',
+    larghezza: 0,
     ...patch,
   };
 }
@@ -324,6 +333,16 @@ export function testoBlocco(b: BloccoCalcolato): string {
   return `${testa}${formula}${formatta(b.valore)}${um}`;
 }
 
+/** Larghezza minima di uno schema: sotto non si legge più niente. */
+export const LARGHEZZA_MIN = 20;
+
+/** Larghezza di uno schema riportata dentro i limiti; 0 = intera colonna. */
+export function larghezzaValida(v: unknown): number {
+  const n = typeof v === 'number' ? v : Number(v);
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  return Math.round(Math.min(100, Math.max(LARGHEZZA_MIN, n)));
+}
+
 /** Rimette in ordine i blocchi che arrivano da un salvataggio. */
 export function normalizzaBlocchi(raw: Partial<BloccoQuaderno>[]): BloccoQuaderno[] {
   const tipi: TipoBlocco[] = ['valore', 'operazione', 'formula', 'import', 'nota', 'immagine', 'capitolo'];
@@ -340,6 +359,7 @@ export function normalizzaBlocchi(raw: Partial<BloccoQuaderno>[]): BloccoQuadern
         um: b?.um ?? '',
         testo: b?.testo ?? '',
         img: typeof b?.img === 'string' ? b.img : '',
+        larghezza: larghezzaValida(b?.larghezza),
       },
     ];
   });

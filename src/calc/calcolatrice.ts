@@ -56,6 +56,7 @@ import {
 import { ACCIAI, CLS, COEFF_DEFAULT, ecmCLS, fctkCLS, fctmCLS } from '../data/materiali';
 import { areaBarre } from '../data/armature';
 import { BULLONI } from '../data/bulloni';
+import { proprietaProfilo, type TipoProfilo } from '../data/profili-acciaio';
 
 const GRADI = Math.PI / 180;
 
@@ -635,6 +636,9 @@ export interface Selezioni {
   /** Taglia del bullone (es. `M12`) e numero di bulloni. */
   bulloneM: string;
   bulloneN: string;
+  /** Profilo in acciaio del sagomario: tipo (IPE, HEA, tubo…) e taglia. */
+  profiloTipo: TipoProfilo;
+  profiloTaglia: string;
 }
 
 export const SELEZIONI_DEFAULT: Selezioni = {
@@ -644,6 +648,8 @@ export const SELEZIONI_DEFAULT: Selezioni = {
   barraN: '',
   bulloneM: 'M12',
   bulloneN: '',
+  profiloTipo: 'IPE',
+  profiloTaglia: '',
 };
 
 /** Numero scritto in un campo delle scelte: virgola o punto, vuoto = 0. */
@@ -700,6 +706,32 @@ export function vociDaSelezioni(s: Selezioni): VoceCalcolo[] {
       um: 'mmq',
       tipo: 'fissa',
     });
+  }
+
+  // il profilo del sagomario: area, inerzie e moduli di resistenza dei due
+  // assi, con i nomi con cui si scrivono a mano (Ix, Wx, …). L'area si chiama
+  // `Ap` perché `A` è l'area generica delle grandezze da compilare
+  const prof = s.profiloTaglia?.trim() ? proprietaProfilo(s.profiloTipo ?? 'IPE', s.profiloTaglia.trim()) : undefined;
+  if (prof) {
+    const sigla = `${s.profiloTipo} ${s.profiloTaglia}`.trim();
+    const p = (nome: string, valore: number, um: string, cosa: string, d = 2): VoceCalcolo => ({
+      id: `gen-prof-${nome}`,
+      nome,
+      espressione: val(valore, d),
+      nota: `${sigla} — ${cosa}`,
+      um,
+      tipo: 'fissa',
+    });
+    out.push(
+      p('Ap', prof.A, 'cmq', 'area della sezione'),
+      p('Ix', prof.Ix, 'cm^4', 'momento d’inerzia attorno all’asse forte', 0),
+      p('Wx', prof.Wx, 'cmc', 'modulo di resistenza elastico, asse forte', 1),
+      p('Iy', prof.Iy, 'cm^4', 'momento d’inerzia attorno all’asse debole', 0),
+      p('Wy', prof.Wy, 'cmc', 'modulo di resistenza elastico, asse debole', 1),
+      p('Avz', prof.Avz, 'cmq', 'area resistente a taglio, carico sull’asse forte'),
+      p('hp', prof.h, 'mm', 'altezza della sezione', 1),
+      p('bp', prof.b, 'mm', 'larghezza della sezione', 1),
+    );
   }
 
   const bul = BULLONI[s.bulloneM?.trim() ?? ''];
