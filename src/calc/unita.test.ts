@@ -261,6 +261,21 @@ describe('unità nella sequenza salvata', () => {
     expect(r[1].valore).toBe(2);
   });
 
+  it('il rapporto fra due grandezze si legge in percento', () => {
+    const r = ricalcola([voce('M', '170', 'kNm'), voce('MRd', '255', 'kNm'), voce('v', 'M/MRd', '%')]);
+    expect(r[2].errore).toBe('');
+    expect(r[2].valore).toBeCloseTo(66.667, 2);
+    expect(r[2].umEffettiva).toBe('%');
+    // a valle il rapporto resta il numero puro: 0,67, non 67
+    expect(r[2].valoreBase).toBeCloseTo(0.66667, 4);
+  });
+
+  it('un numero scritto in percento vale un centesimo per unità', () => {
+    const r = ricalcola([voce('p', '5', '%'), voce('q', '200', 'kN'), voce('N', 'p*q', 'kN')]);
+    expect(r[0].valore).toBe(5);
+    expect(r[2].valore).toBeCloseTo(10, 9);
+  });
+
   it('la freccia esce giusta mescolando kN/m, m, MPa e cm⁴', () => {
     const r = ricalcola([
       voce('q', '10', 'kN/m'),

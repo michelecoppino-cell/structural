@@ -25,6 +25,7 @@
 
 import {
   formatta,
+  formattaIn,
   leggiRisultato,
   nomeAmmesso,
   nomiMancanti,
@@ -260,6 +261,8 @@ export function ricalcolaQuaderno(
     let errore = '';
     let mancanti: string[] = [];
     let testo = pronto?.testo ?? '';
+    /** true = numero puro che viene da grandezze con unità: un rapporto. */
+    let rapporto = false;
 
     if (pronto) {
       valore = pronto.valoreBase;
@@ -276,11 +279,12 @@ export function ricalcolaQuaderno(
         if (esito.ok) {
           valore = esito.valore;
           dim = esito.dim;
+          rapporto = esito.rapporto;
         } else errore = esito.errore;
       }
     }
 
-    const letto = Number.isFinite(valore) ? leggiRisultato(valore, dim, umScelta, elenco) : null;
+    const letto = Number.isFinite(valore) ? leggiRisultato(valore, dim, umScelta, elenco, rapporto) : null;
     const dimFinale = letto ? letto.dim : (dim ?? dimUnita(umScelta));
     const um = letto ? letto.um : umScelta;
 
@@ -329,8 +333,26 @@ export function testoBlocco(b: BloccoCalcolato): string {
   if (b.mancanti.length) return `${testa}${b.espressione || '—'} — manca ${b.mancanti.join(', ')}`;
   if (b.testo) return `${testa}${b.testo}`;
   const um = b.um ? ` ${b.um}` : '';
+  const numero = formattaIn(b.valore, b.um);
   const formula = b.espressione && b.espressione !== formatta(b.valore) ? `${b.espressione} = ` : '';
-  return `${testa}${formula}${formatta(b.valore)}${um}`;
+  return `${testa}${formula}${numero}${um}`;
+}
+
+/**
+ * Come sta un rapporto di verifica letto in percento: sotto l'80 % c'è
+ * margine, fra l'80 e il 100 si è al limite, oltre il 100 non passa. È il
+ * semaforo che si mette a matita a fianco del numero, e vale solo dove il
+ * numero è davvero una percentuale — sugli altri risultati non c'è nulla da
+ * dire.
+ */
+export type LivelloEsito = '' | 'ok' | 'limite' | 'fuori';
+
+export function livelloEsito(b: BloccoCalcolato): LivelloEsito {
+  if (b.errore || b.mancanti.length || b.testo) return '';
+  if (b.um.trim() !== '%' || !Number.isFinite(b.valore)) return '';
+  if (b.valore > 100) return 'fuori';
+  if (b.valore >= 80) return 'limite';
+  return 'ok';
 }
 
 /** Larghezza minima di uno schema: sotto non si legge più niente. */

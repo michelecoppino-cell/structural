@@ -16,8 +16,10 @@ import { verificaFlessioneCA, verificaTaglioArmato, verificaTaglioNonArmato } fr
 import { valido, validaTaglioArmato, validaTaglioNonArmato } from './validazione';
 import { ricalcola, testoVoce, vociDaSelezioni, type VoceCalcolata } from './calcolatrice';
 import {
+  livelloEsito,
   ricalcolaQuaderno,
   testoBlocco,
+  type LivelloEsito,
   type BloccoCalcolato,
   type ImportoScheda,
   type Sorgenti,
@@ -346,7 +348,7 @@ export function quadernoCalcolato(state: AppState): BloccoCalcolato[] {
  */
 export type ElementoFoglio =
   | { tipo: 'capitolo'; id: string; capitolo: Capitolo }
-  | { tipo: 'calcolo'; id: string; passo: string; testo: string; nota: string }
+  | { tipo: 'calcolo'; id: string; passo: string; testo: string; nota: string; livello: LivelloEsito }
   | { tipo: 'nota'; id: string; testo: string }
   | { tipo: 'immagine'; id: string; img: string; didascalia: string; larghezza: number };
 
@@ -380,7 +382,9 @@ export function foglioQuaderno(state: AppState): ElementoFoglio[] {
           ]
         : [];
     }
-    return [{ tipo: 'calcolo', id, passo: b.passo, testo: testoBlocco(b), nota: b.nota.trim() }];
+    return [
+      { tipo: 'calcolo', id, passo: b.passo, testo: testoBlocco(b), nota: b.nota.trim(), livello: livelloEsito(b) },
+    ];
   });
 }
 

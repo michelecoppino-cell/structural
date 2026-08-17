@@ -90,7 +90,9 @@ ${b.righe.map((r) => `        <li>${escape(r)}</li>`).join('\n')}
     } src="${escape(el.img)}">
 ${el.didascalia ? `    <figcaption>${escape(el.didascalia)}</figcaption>` : ''}
   </figure>`;
-      return `  <p class="calcolo"><span class="passo">${escape(el.passo)}</span>${escape(el.testo)}${
+      return `  <p class="calcolo${el.livello ? ` is-${el.livello}` : ''}"><span class="passo">${escape(
+        el.passo,
+      )}</span>${escape(el.testo)}${
         el.nota ? `<span class="nota-riga">${escape(el.nota)}</span>` : ''
       }</p>`;
     })
@@ -127,6 +129,10 @@ ${el.didascalia ? `    <figcaption>${escape(el.didascalia)}</figcaption>` : ''}
     break-inside: avoid; page-break-inside: avoid;
   }
   .passo { display: inline-block; min-width: 22px; color: #8a8f9a; }
+  /* il semaforo dei rapporti di verifica, come sul foglio a schermo */
+  .calcolo.is-ok { color: #1f7a45; }
+  .calcolo.is-limite { color: #9a6a11; }
+  .calcolo.is-fuori { color: #b3261e; font-weight: 600; }
   .nota-riga { color: #55606f; font-size: 10.5px; margin-left: 8px; }
   .nota { margin: 8px 0; font-size: 12px; }
   .schema { margin: 10px 0; break-inside: avoid; page-break-inside: avoid; }
