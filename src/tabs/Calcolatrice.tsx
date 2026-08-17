@@ -1,9 +1,12 @@
-import { useMemo, useRef, useState } from 'react';
+import { useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   ArrowDown,
   ArrowUp,
   Backspace,
   BookmarkSimple,
+  CaretDown,
+  CaretUp,
+  Check,
   Copy,
   Equals,
   Keyboard,
@@ -16,6 +19,7 @@ import {
 } from '@phosphor-icons/react';
 import { useStore } from '../state/store';
 import { ComandiScheda } from '../components/ComandiScheda';
+import { Accordion } from '../components/ui';
 import {
   FUNZIONI,
   GRANDEZZE_CATALOGO,
@@ -86,6 +90,53 @@ const COLONNE: { id: Exclude<TipoVoce, 'operazione'>; titolo: string; sotto: str
   { id: 'compilabile', titolo: 'Da compilare', sotto: 'si svuotano a ogni riapertura' },
   { id: 'fissa', titolo: 'Fisse', sotto: 'pesi di volume e costanti' },
 ];
+
+/**
+ * Tendina interna al pannello: l'intestazione di un blocco (le scelte di
+ * libreria, una colonna di grandezze, le operazioni salvate) diventa il
+ * comando che lo apre e lo chiude. Serve a tenere sott'occhio solo quello che
+ * si sta usando, senza scorrere tutta la scheda.
+ */
+function Blocco({
+  id,
+  titolo,
+  sotto,
+  /** Comandi che restano visibili anche a blocco chiuso, in coda al titolo. */
+  azioni,
+  children,
+}: {
+  id: string;
+  titolo: string;
+  sotto?: string;
+  azioni?: ReactNode;
+  children: ReactNode;
+}) {
+  const { state, dispatch } = useStore();
+  const aperto = !!state.ui.open[id];
+  return (
+    <div className={`calc-blocco${aperto ? ' is-aperto' : ''}`}>
+      <div className="calc-colonna-testa">
+        <button
+          type="button"
+          className="calc-blocco-testa"
+          aria-expanded={aperto}
+          aria-controls={`${id}-corpo`}
+          onClick={() => dispatch({ type: 'toggleOpen', id })}
+        >
+          {aperto ? <CaretUp size={12} weight="bold" /> : <CaretDown size={12} weight="bold" />}
+          <span className="t">{titolo}</span>
+          {sotto && <span className="d">{sotto}</span>}
+        </button>
+        {azioni}
+      </div>
+      {aperto && (
+        <div className="calc-blocco-corpo" id={`${id}-corpo`}>
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
 
 /**
  * Campo dell'unità di misura: si scrive a mano, ma con i suggerimenti
@@ -319,11 +370,6 @@ function ScelteLibreria({
 }) {
   return (
     <div className="calc-libreria">
-      <div className="calc-colonna-testa">
-        <span className="t">Da libreria</span>
-        <span className="d">scegli la sigla, le resistenze vengono da sé</span>
-      </div>
-
       {aiuto && (
         <p className="note" style={{ margin: '2px 0 0' }}>
           I valori di progetto escono con i coefficienti di serie — αcc 0.85, γC 1.5, γS 1.15, γM0
@@ -463,6 +509,8 @@ export default function Calcolatrice() {
   const aiuto = state.ui.allDetails.calcolatrice;
   const input = useRef<HTMLInputElement>(null);
   const [apriUnita, setApriUnita] = useState(false);
+  /** Modalità di modifica delle formule preimpostate: una per tutta l'area. */
+  const [modifica, setModifica] = useState(false);
   const [nuovaUnita, setNuovaUnita] = useState('');
   const [nuovaPre, setNuovaPre] = useState({ nome: '', espressione: '', um: '', nota: '' });
 
@@ -560,6 +608,13 @@ export default function Calcolatrice() {
   /** Le operazioni salvate stanno sotto le due colonne, in fila fra loro. */
   const operazioni = voci.filter((v) => (v.tipo ?? 'operazione') === 'operazione');
 
+  /* ─── riepilogo: quello che si è messo nella scheda, tutto in un posto ─── */
+
+  /** Grandezze con un valore scritto, quelle di libreria comprese. */
+  const compilate = tutte.filter((v) => v.espressione.trim());
+  /** Grandezze richiamabili per nome, anche se ancora da compilare. */
+  const nominate = tutte.filter((v) => v.nomeValido);
+
   // grandezze proposte: quelle di serie che mancano più il catalogo, divise
   // per colonna — a sinistra si aggiungono lunghezze, a destra pesi di volume
   const nomiUsati = new Set(tutte.map((v) => v.nome.trim()));
@@ -598,8 +653,18 @@ export default function Calcolatrice() {
     [calc.preimpostate, calc.unita, vars, unitaVars],
   );
 
+  /** Le formule scelte, nell'ordine in cui compaiono nell'elenco. */
+  const scelte = preimpostate.filter((p) => calc.preScelte.includes(p.id));
+
   const aggiornaPre = (id: string, patch: Partial<Preimpostata>) =>
     setPre(calc.preimpostate.map((p) => (p.id === id ? { ...p, ...patch } : p)));
+
+  /** Eliminando la formula se ne va anche la scelta: non resterebbe niente da mostrare. */
+  const eliminaPre = (id: string) =>
+    set({
+      preimpostate: calc.preimpostate.filter((x) => x.id !== id),
+      preScelte: calc.preScelte.filter((x) => x !== id),
+    });
 
   const aggiungiPre = () => {
     if (!nuovaPre.espressione.trim()) return;
@@ -625,6 +690,19 @@ export default function Calcolatrice() {
       el?.setSelectionRange(p.espressione.length, p.espressione.length);
       el?.scrollIntoView({ block: 'center', behavior: 'smooth' });
     });
+  };
+
+  /**
+   * Il tocco sulla formula fa due cose: la tiene fra le scelte — è quello che
+   * si ritrova nel riepilogo in fondo — e, se le grandezze che le servono ci
+   * sono tutte, la porta calcolata nel display. Ritoccandola la si toglie.
+   */
+  const scegliPre = (p: Preimpostata, pronta: boolean) => {
+    const scelta = calc.preScelte.includes(p.id);
+    set({
+      preScelte: scelta ? calc.preScelte.filter((x) => x !== p.id) : [...calc.preScelte, p.id],
+    });
+    if (!scelta && pronta) usaPre(p);
   };
 
   /** Salva la formula fra le operazioni senza passare dal display. */
@@ -868,9 +946,12 @@ export default function Calcolatrice() {
 
       {/* ─────────────── grandezze e operazioni salvate ─────────────── */}
 
-      <section className="panel">
-        <div className="panel-body" style={{ paddingTop: 12 }}>
-          <div className="section-title">Grandezze e operazioni</div>
+      <Accordion
+        id="calc-grandezze"
+        title="Grandezze e operazioni"
+        hint={`${compilate.length} compilate · ${operazioni.length} salvate`}
+      >
+        <div className="stack-sm">
           {aiuto && (
             <p className="note" style={{ marginTop: 0 }}>
               Il valore si scrive dentro la pastiglia; toccando il nome si aprono nome, unità, nota e la
@@ -883,13 +964,19 @@ export default function Calcolatrice() {
             </p>
           )}
 
-          <ScelteLibreria
-            sel={calc.selezioni}
-            generate={derivate}
-            aiuto={aiuto}
-            onCambia={(patch) => set({ selezioni: { ...calc.selezioni, ...patch } })}
-            onUsa={inserisci}
-          />
+          <Blocco
+            id="calc-libreria"
+            titolo="Da libreria"
+            sotto="scegli la sigla, le resistenze vengono da sé"
+          >
+            <ScelteLibreria
+              sel={calc.selezioni}
+              generate={derivate}
+              aiuto={aiuto}
+              onCambia={(patch) => set({ selezioni: { ...calc.selezioni, ...patch } })}
+              onUsa={inserisci}
+            />
+          </Blocco>
 
           <div className="calc-colonne">
             {COLONNE.map((col) => {
@@ -897,63 +984,57 @@ export default function Calcolatrice() {
               const chips = col.id === 'fissa' ? daAggiungere.fisse : daAggiungere.compilabili;
               return (
                 <div className="calc-colonna" key={col.id}>
-                  <div className="calc-colonna-testa">
-                    <span className="t">{col.titolo}</span>
-                    <span className="d">{col.sotto}</span>
-                  </div>
-                  {gruppo.length > 0 && (
-                    <ul className="calc-griglia">
-                      {gruppo.map((v) => (
-                        <RigaVoce
-                          key={v.id}
-                          v={v}
-                          indice={voci.findIndex((x) => x.id === v.id)}
-                          ultima={voci[voci.length - 1]?.id === v.id}
-                          aperta={!!state.ui.exp[`calc-${v.id}`]}
-                          elenco={calc.unita}
-                          onApri={() => dispatch({ type: 'toggleExp', id: `calc-${v.id}` })}
-                          onAggiorna={(patch) => aggiorna(v.id, patch)}
-                          onSposta={(verso) => sposta(v.id, verso)}
-                          onElimina={() => setVoci(calc.voci.filter((x) => x.id !== v.id))}
-                          onUsa={inserisci}
-                        />
+                  <Blocco id={`calc-col-${col.id}`} titolo={col.titolo} sotto={col.sotto}>
+                    {gruppo.length > 0 && (
+                      <ul className="calc-griglia">
+                        {gruppo.map((v) => (
+                          <RigaVoce
+                            key={v.id}
+                            v={v}
+                            indice={voci.findIndex((x) => x.id === v.id)}
+                            ultima={voci[voci.length - 1]?.id === v.id}
+                            aperta={!!state.ui.exp[`calc-${v.id}`]}
+                            elenco={calc.unita}
+                            onApri={() => dispatch({ type: 'toggleExp', id: `calc-${v.id}` })}
+                            onAggiorna={(patch) => aggiorna(v.id, patch)}
+                            onSposta={(verso) => sposta(v.id, verso)}
+                            onElimina={() => setVoci(calc.voci.filter((x) => x.id !== v.id))}
+                            onUsa={inserisci}
+                          />
+                        ))}
+                      </ul>
+                    )}
+                    <div className="calc-catalogo">
+                      {chips.map((g) => (
+                        <button
+                          type="button"
+                          key={g.nome}
+                          className="calc-catalogo-chip"
+                          title={`Aggiungi ${g.nome} — ${g.nota}${g.espressione ? ` (${g.espressione} ${g.um})` : ''}`}
+                          onClick={() => aggiungiGrandezza({ ...g })}
+                        >
+                          <Plus size={11} weight="bold" />
+                          {g.nome}
+                        </button>
                       ))}
-                    </ul>
-                  )}
-                  <div className="calc-catalogo">
-                    {chips.map((g) => (
                       <button
                         type="button"
-                        key={g.nome}
-                        className="calc-catalogo-chip"
-                        title={`Aggiungi ${g.nome} — ${g.nota}${g.espressione ? ` (${g.espressione} ${g.um})` : ''}`}
-                        onClick={() => aggiungiGrandezza({ ...g })}
+                        className="calc-catalogo-chip is-vuota"
+                        title={`Aggiungi una grandezza tua fra quelle ${col.id === 'fissa' ? 'fisse' : 'da compilare'}`}
+                        onClick={() => aggiungiGrandezza({ tipo: col.id })}
                       >
                         <Plus size={11} weight="bold" />
-                        {g.nome}
+                        nuova
                       </button>
-                    ))}
-                    <button
-                      type="button"
-                      className="calc-catalogo-chip is-vuota"
-                      title={`Aggiungi una grandezza tua fra quelle ${col.id === 'fissa' ? 'fisse' : 'da compilare'}`}
-                      onClick={() => aggiungiGrandezza({ tipo: col.id })}
-                    >
-                      <Plus size={11} weight="bold" />
-                      nuova
-                    </button>
-                  </div>
+                    </div>
+                  </Blocco>
                 </div>
               );
             })}
           </div>
 
           {operazioni.length > 0 && (
-            <>
-              <div className="calc-colonna-testa" style={{ marginTop: 14 }}>
-                <span className="t">Operazioni salvate</span>
-                <span className="d">restano con il progetto</span>
-              </div>
+            <Blocco id="calc-operazioni" titolo="Operazioni salvate" sotto="restano con il progetto">
               <ul className="calc-griglia">
                 {operazioni.map((v) => (
                   <RigaVoce
@@ -971,7 +1052,7 @@ export default function Calcolatrice() {
                   />
                 ))}
               </ul>
-            </>
+            </Blocco>
           )}
 
           {aiuto && voci.length > 0 && (
@@ -981,40 +1062,72 @@ export default function Calcolatrice() {
             </p>
           )}
         </div>
-      </section>
+      </Accordion>
 
       {/* ─────────────── operazioni preimpostate ─────────────── */}
 
-      <section className="panel">
-        <div className="panel-body" style={{ paddingTop: 12 }}>
-          <div className="section-title">Operazioni preimpostate</div>
+      <Accordion
+        id="calc-preimpostate"
+        title="Operazioni preimpostate"
+        hint={`${scelte.length} scelte su ${preimpostate.length}`}
+      >
+        <div className="stack-sm">
           {aiuto && (
             <p className="note" style={{ marginTop: 0 }}>
               Formule scritte una volta sui nomi delle grandezze qui sopra — <code>q*l^2/8</code>,{' '}
               <code>b*h^2/6</code>. Quando le grandezze che servono sono tutte compilate la formula si
               accende e al tocco fa il calcolo: finisce nel display con nome e unità, pronta da salvare.
+              Il tocco la segna anche fra le scelte, che si ritrovano nel riepilogo in fondo alla
+              scheda; per cambiare le formule — testo, unità, nota — si entra in modifica con «Edita».
             </p>
           )}
+
+          <div className="calc-preset-barra">
+            <button
+              type="button"
+              className={`btn ${modifica ? 'btn-primary' : 'btn-secondary'}`}
+              aria-pressed={modifica}
+              title="Entra ed esci dalla modalità che permette di cambiare, aggiungere ed eliminare le formule"
+              onClick={() => setModifica((v) => !v)}
+            >
+              {modifica ? <Check size={14} /> : <PencilSimple size={14} />}
+              {modifica ? 'Fine modifiche' : 'Edita'}
+            </button>
+            <span className="note" style={{ margin: 0 }}>
+              {modifica
+                ? 'Modalità modifica: cambia le formule, aggiungine di nuove, elimina quelle che non servono.'
+                : 'Tocca una formula per calcolarla e tenerla fra le scelte; ritoccandola la togli.'}
+            </span>
+          </div>
 
           {preimpostate.length > 0 && (
             <ul className="calc-preset-lista">
               {preimpostate.map((p) => {
-                const aperta = !!state.ui.exp[`pre-${p.id}`];
                 const pronta = !!p.esito?.ok;
+                const scelta = calc.preScelte.includes(p.id);
                 return (
-                  <li key={p.id} className={`calc-preset${pronta ? ' is-pronta' : ''}`}>
+                  <li
+                    key={p.id}
+                    className={`calc-preset${pronta ? ' is-pronta' : ''}${scelta ? ' is-scelta' : ''}`}
+                  >
                     <button
                       type="button"
                       className="calc-preset-usa"
-                      disabled={!pronta}
+                      aria-pressed={scelta}
+                      disabled={modifica}
                       title={
-                        pronta
-                          ? 'Calcola e porta la formula nel display'
-                          : `Mancano: ${p.mancanti.join(', ') || 'un’espressione valida'}`
+                        modifica
+                          ? 'In modifica la formula non si calcola: si cambia qui sotto'
+                          : pronta
+                            ? 'Calcola, porta la formula nel display e la tiene fra le scelte'
+                            : `Tienila fra le scelte — mancano: ${p.mancanti.join(', ') || 'un’espressione valida'}`
                       }
-                      onClick={() => usaPre(p)}
+                      onClick={() => scegliPre(p, pronta)}
                     >
-                      <span className="calc-preset-nome">{p.nome.trim() || '—'}</span>
+                      <span className="calc-preset-nome">
+                        {scelta && <Check size={11} weight="bold" />}
+                        {p.nome.trim() || '—'}
+                      </span>
                       <span className="calc-preset-espr">{p.espressione}</span>
                       <span className="calc-preset-esito">
                         {p.esito?.ok ? (
@@ -1033,36 +1146,29 @@ export default function Calcolatrice() {
                       </span>
                     </button>
 
-                    <div className="calc-preset-azioni">
-                      <button
-                        type="button"
-                        className="btn btn-secondary btn-icon"
-                        disabled={!pronta}
-                        title="Salva subito fra le operazioni"
-                        onClick={() => salvaPre(p)}
-                      >
-                        <BookmarkSimple size={13} />
-                      </button>
-                      <button
-                        type="button"
-                        className="btn btn-secondary btn-icon"
-                        aria-expanded={aperta}
-                        title="Modifica la formula"
-                        onClick={() => dispatch({ type: 'toggleExp', id: `pre-${p.id}` })}
-                      >
-                        <PencilSimple size={13} />
-                      </button>
-                      <button
-                        type="button"
-                        className="btn btn-secondary btn-icon"
-                        title="Elimina la formula"
-                        onClick={() => setPre(calc.preimpostate.filter((x) => x.id !== p.id))}
-                      >
-                        <Trash size={13} />
-                      </button>
-                    </div>
+                    {modifica && (
+                      <div className="calc-preset-azioni">
+                        <button
+                          type="button"
+                          className="btn btn-secondary btn-icon"
+                          disabled={!pronta}
+                          title="Salva subito fra le operazioni"
+                          onClick={() => salvaPre(p)}
+                        >
+                          <BookmarkSimple size={13} />
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-secondary btn-icon"
+                          title="Elimina la formula"
+                          onClick={() => eliminaPre(p.id)}
+                        >
+                          <Trash size={13} />
+                        </button>
+                      </div>
+                    )}
 
-                    {aperta && (
+                    {modifica && (
                       <div className="calc-voce-modifica">
                         <div className="mini-campo">
                           <label htmlFor={`pn-${p.id}`}>Nome</label>
@@ -1107,79 +1213,82 @@ export default function Calcolatrice() {
                       </div>
                     )}
 
-                    {p.nota.trim() && !aperta && <span className="calc-preset-nota">{p.nota.trim()}</span>}
+                    {p.nota.trim() && !modifica && (
+                      <span className="calc-preset-nota">{p.nota.trim()}</span>
+                    )}
                   </li>
                 );
               })}
             </ul>
           )}
 
-          <div className="calc-preset-aggiungi">
-            <div className="mini-campo">
-              <label htmlFor="pre-nome">Nome</label>
-              <input
-                id="pre-nome"
-                className="input"
-                value={nuovaPre.nome}
-                placeholder="M"
-                autoComplete="off"
-                spellCheck={false}
-                onChange={(e) => setNuovaPre({ ...nuovaPre, nome: e.target.value })}
+          {modifica && (
+            <div className="calc-preset-aggiungi">
+              <div className="mini-campo">
+                <label htmlFor="pre-nome">Nome</label>
+                <input
+                  id="pre-nome"
+                  className="input"
+                  value={nuovaPre.nome}
+                  placeholder="M"
+                  autoComplete="off"
+                  spellCheck={false}
+                  onChange={(e) => setNuovaPre({ ...nuovaPre, nome: e.target.value })}
+                />
+              </div>
+              <div className="mini-campo calc-campo-espr">
+                <label htmlFor="pre-espr">Formula</label>
+                <input
+                  id="pre-espr"
+                  className="input"
+                  value={nuovaPre.espressione}
+                  placeholder="q*l^2/8"
+                  autoComplete="off"
+                  spellCheck={false}
+                  onChange={(e) => setNuovaPre({ ...nuovaPre, espressione: e.target.value })}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      aggiungiPre();
+                    }
+                  }}
+                />
+              </div>
+              <CampoUnita
+                id="pre-um"
+                label="Unità"
+                value={nuovaPre.um}
+                auto=""
+                elenco={calc.unita}
+                onChange={(um) => setNuovaPre({ ...nuovaPre, um })}
               />
+              <div className="mini-campo calc-campo-nota">
+                <label htmlFor="pre-nota">Nota</label>
+                <input
+                  id="pre-nota"
+                  className="input"
+                  value={nuovaPre.nota}
+                  placeholder="momento in mezzeria, trave appoggiata"
+                  autoComplete="off"
+                  onChange={(e) => setNuovaPre({ ...nuovaPre, nota: e.target.value })}
+                />
+              </div>
+              <button
+                type="button"
+                className="btn btn-primary calc-btn-salva"
+                disabled={!nuovaPre.espressione.trim()}
+                onClick={aggiungiPre}
+              >
+                <Plus size={14} />
+                Aggiungi formula
+              </button>
             </div>
-            <div className="mini-campo calc-campo-espr">
-              <label htmlFor="pre-espr">Formula</label>
-              <input
-                id="pre-espr"
-                className="input"
-                value={nuovaPre.espressione}
-                placeholder="q*l^2/8"
-                autoComplete="off"
-                spellCheck={false}
-                onChange={(e) => setNuovaPre({ ...nuovaPre, espressione: e.target.value })}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    aggiungiPre();
-                  }
-                }}
-              />
-            </div>
-            <CampoUnita
-              id="pre-um"
-              label="Unità"
-              value={nuovaPre.um}
-              auto=""
-              elenco={calc.unita}
-              onChange={(um) => setNuovaPre({ ...nuovaPre, um })}
-            />
-            <div className="mini-campo calc-campo-nota">
-              <label htmlFor="pre-nota">Nota</label>
-              <input
-                id="pre-nota"
-                className="input"
-                value={nuovaPre.nota}
-                placeholder="momento in mezzeria, trave appoggiata"
-                autoComplete="off"
-                onChange={(e) => setNuovaPre({ ...nuovaPre, nota: e.target.value })}
-              />
-            </div>
-            <button
-              type="button"
-              className="btn btn-primary calc-btn-salva"
-              disabled={!nuovaPre.espressione.trim()}
-              onClick={aggiungiPre}
-            >
-              <Plus size={14} />
-              Aggiungi formula
-            </button>
-          </div>
+          )}
 
-          {calc.preimpostate.length === 0 && (
+          {modifica && calc.preimpostate.length === 0 && (
             <button
               type="button"
               className="btn btn-secondary"
-              style={{ marginTop: 10 }}
               title="Rimette le formule di serie: momenti, taglio, area, modulo di resistenza, peso proprio"
               onClick={() => setPre(PREIMPOSTATE_DEFAULT)}
             >
@@ -1188,7 +1297,131 @@ export default function Calcolatrice() {
             </button>
           )}
         </div>
-      </section>
+      </Accordion>
+
+      {/* ─────────────── riepilogo di quello che si è messo ─────────────── */}
+
+      <Accordion
+        id="calc-riepilogo"
+        title="Riepilogo"
+        hint={`${compilate.length} compilate · ${nominate.length} con nome · ${scelte.length} formule`}
+      >
+        <div className="stack-sm">
+          {aiuto && (
+            <p className="note" style={{ marginTop: 0 }}>
+              Quello che si è messo nella scheda, tutto in un posto: le grandezze compilate — appena si
+              scrive un valore in <code>b</code> o in <code>l</code> compare qui —, quelle a cui si è dato
+              un nome, richiamabili nelle formule, e le operazioni preimpostate scelte con il loro
+              risultato di adesso.
+            </p>
+          )}
+
+          <div className="calc-riepilogo">
+            <div className="calc-riepilogo-gruppo">
+              <div className="calc-colonna-testa">
+                <span className="t">Compilate</span>
+                <span className="d">grandezze con un valore scritto</span>
+              </div>
+              {compilate.length > 0 ? (
+                <ul className="calc-riep-lista">
+                  {compilate.map((v) => (
+                    <li key={v.id} className={v.errore ? 'is-errore' : undefined}>
+                      <span className="n">{v.nome.trim() || '—'}</span>
+                      <span className="x">{v.espressione}</span>
+                      <span className="v">
+                        {v.errore ? (
+                          <span className="calc-preset-mancanti">{v.errore}</span>
+                        ) : (
+                          <>
+                            <strong>{formatta(v.valore)}</strong>
+                            {v.umEffettiva && <span className="um">{v.umEffettiva}</span>}
+                          </>
+                        )}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="note" style={{ margin: 0 }}>
+                  Niente di compilato: scrivi un valore in una grandezza e compare qui.
+                </p>
+              )}
+            </div>
+
+            <div className="calc-riepilogo-gruppo">
+              <div className="calc-colonna-testa">
+                <span className="t">Con un nome</span>
+                <span className="d">richiamabili nelle formule</span>
+              </div>
+              {nominate.length > 0 ? (
+                <ul className="calc-riep-lista">
+                  {nominate.map((v) => (
+                    <li key={v.id}>
+                      <span className="n">{v.nome.trim()}</span>
+                      <span className="x">{v.nota.trim() || v.espressione}</span>
+                      <span className="v">
+                        {v.espressione.trim() && !v.errore ? (
+                          <>
+                            <strong>{formatta(v.valore)}</strong>
+                            {v.umEffettiva && <span className="um">{v.umEffettiva}</span>}
+                          </>
+                        ) : (
+                          <span className="calc-da-compilare">da compilare</span>
+                        )}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="note" style={{ margin: 0 }}>
+                  Nessun nome dato: il nome si scrive toccando la pastiglia della grandezza.
+                </p>
+              )}
+            </div>
+
+            <div className="calc-riepilogo-gruppo">
+              <div className="calc-colonna-testa">
+                <span className="t">Formule scelte</span>
+                <span className="d">operazioni preimpostate toccate</span>
+              </div>
+              {scelte.length > 0 ? (
+                <ul className="calc-riep-lista">
+                  {scelte.map((p) => (
+                    <li key={p.id}>
+                      <span className="n">{p.nome.trim() || '—'}</span>
+                      <span className="x">{p.espressione}</span>
+                      <span className="v">
+                        {p.esito?.ok ? (
+                          <>
+                            <strong>{formatta(p.esito.valore)}</strong>
+                            {p.umEffettiva && <span className="um">{p.umEffettiva}</span>}
+                          </>
+                        ) : (
+                          <span className="calc-preset-mancanti">
+                            {p.mancanti.length ? `manca ${p.mancanti.join(', ')}` : 'non calcolabile'}
+                          </span>
+                        )}
+                      </span>
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-icon"
+                        title="Togli dalle scelte"
+                        onClick={() => set({ preScelte: calc.preScelte.filter((x) => x !== p.id) })}
+                      >
+                        <X size={12} weight="bold" />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="note" style={{ margin: 0 }}>
+                  Nessuna formula scelta: tocca una delle operazioni preimpostate e la ritrovi qui.
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      </Accordion>
     </div>
   );
 }
