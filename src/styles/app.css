@@ -276,7 +276,8 @@ button {
   flex: none;
 }
 
-.app-main.is-fit > .soll-layout {
+.app-main.is-fit > .soll-layout,
+.app-main.is-fit > .quad {
   flex: 1;
   min-height: 0;
 }
@@ -1829,625 +1830,75 @@ button.field-origin:hover {
   }
 }
 
-/* ─────────────────── scheda Calcolatrice ─────────────────── */
-
-.calc-conteggio {
-  font-size: 11.5px;
-  color: var(--text-faint);
-  white-space: nowrap;
-  align-self: center;
-}
-
-.calc-display {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 10px 12px;
-  border-radius: var(--radius-lg);
-  background: var(--nested);
-  border: 1px solid var(--border-panel);
-}
-
-.calc-input {
-  width: 100%;
-  border: 0;
-  background: transparent;
-  color: var(--text);
-  font-family: var(--font-mono);
-  font-size: 20px;
-  line-height: 1.4;
-  padding: 2px 0;
-  outline: none;
-}
-
-.calc-input::placeholder {
-  color: var(--text-faint);
-  font-size: 13px;
-}
-
-.calc-risultato {
-  display: flex;
-  align-items: baseline;
-  justify-content: flex-end;
-  gap: 6px;
-  min-height: 26px;
-  font-family: var(--font-mono);
-  font-size: 21px;
-  color: var(--color-accent-300);
-}
-
-.calc-risultato > svg {
-  align-self: center;
-}
-
-.calc-risultato .um {
-  font-size: 13px;
-  color: var(--text-muted);
-}
-
-.calc-risultato.is-errore {
-  font-family: var(--font);
-  font-size: 12.5px;
-  color: var(--err);
-}
-
-.calc-vuoto {
-  font-family: var(--font);
-  font-size: 11.5px;
-  color: var(--text-faint);
-}
-
-/* su desktop si scrive da tastiera: il tastierino compare a richiesta */
-.calc-tastierino {
-  display: none;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 6px;
-  margin-top: 10px;
-  max-width: 420px;
-}
-
-.calc-tastierino.is-sempre {
-  display: grid;
-}
+/* ────────── pezzi condivisi: tastierino e unità di misura ────────── */
 
 .calc-tasto {
-  min-height: 46px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text);
+  background: var(--control);
   border: 1px solid var(--divider);
   border-radius: var(--radius-md);
-  background: var(--control);
-  color: var(--text);
-  font-size: 16px;
-  font-family: var(--font-mono);
   cursor: pointer;
-  display: grid;
-  place-items: center;
 }
 
 .calc-tasto:hover {
-  background: var(--hover);
+  border-color: var(--color-accent);
 }
 
 .calc-tasto.is-op {
   color: var(--color-accent-300);
 }
 
-.calc-tasto.is-canc {
-  color: var(--text-muted);
-}
-
-/* ans occupa due colonne: è l'unico tasto con una parola sopra */
-.calc-tasto.is-largo {
-  grid-column: span 2;
-  font-size: 14px;
-}
-
-.calc-salva {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  gap: 8px;
-  margin-top: 12px;
-}
-
-.calc-salva .mini-campo {
-  width: 118px;
-}
-
-.calc-salva .calc-campo-nota {
-  flex: 1 1 220px;
-  width: auto;
-  min-width: 180px;
-}
-
-.calc-btn-salva {
-  flex: none;
-  height: var(--control-h);
-}
-
-/* elenco delle unità proposte, modificabile */
 .calc-unita-aggiungi {
   display: flex;
-  gap: 8px;
-  align-items: center;
-  margin-top: 10px;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
 }
 
 .calc-unita-aggiungi .input {
-  width: 150px;
-  flex: none;
+  flex: 0 1 180px;
+  min-width: 120px;
 }
 
 .calc-unita-elenco {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 10px;
+  gap: 5px;
 }
 
 .calc-unita-chip {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 2px 4px 2px 9px;
+  gap: 4px;
+  padding: 3px 4px 3px 8px;
   font-size: 11.5px;
   font-family: var(--font-mono);
   color: var(--text-2);
   background: var(--nested);
-  border: 1px solid var(--border-faint);
-  border-radius: 9px;
+  border: 1px solid var(--divider);
+  border-radius: var(--radius-md);
 }
 
 .calc-unita-chip button {
-  display: grid;
-  place-items: center;
-  width: 16px;
-  height: 16px;
-  padding: 0;
-  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  padding: 2px;
   color: var(--text-faint);
   background: transparent;
   border: 0;
-  border-radius: 50%;
+  border-radius: 4px;
+  cursor: pointer;
 }
 
 .calc-unita-chip button:hover {
   color: var(--err);
-  background: var(--hover);
-}
-
-/* unità ricavata dall'operazione invece che scritta a mano */
-.calc-risultato .um.is-auto,
-.calc-voce-valore .um.is-auto {
-  opacity: 0.7;
-  font-style: italic;
-}
-
-.calc-um-auto {
-  margin-left: 5px;
-  font-size: 9.5px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--color-accent-400);
-}
-
-.calc-da-compilare {
-  font-size: 11.5px;
-  font-family: var(--font);
-  color: var(--text-faint);
-}
-
-.calc-aiuto {
-  margin-top: 10px;
-}
-
-.calc-aiuto code,
-.note code {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--color-accent-300);
-}
-
-/* le grandezze stanno in pastiglie piccole: su cellulare almeno tre per riga,
-   così l'elenco si legge tutto senza scorrere */
-.calc-griglia {
-  list-style: none;
-  margin: 0 0 10px;
-  padding: 0;
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
-  gap: 6px;
-  align-items: start;
-}
-
-.calc-gr {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  padding: 5px 6px 4px;
-  border: 1px solid var(--border-faint);
-  border-radius: var(--radius-md);
-  background: var(--nested);
-  min-width: 0;
-}
-
-.calc-gr.is-errore {
-  border-color: color-mix(in srgb, var(--err) 45%, transparent);
-}
-
-/* aperta per la modifica: prende tutta la riga della griglia */
-.calc-gr.is-aperta {
-  grid-column: 1 / -1;
-}
-
-.calc-gr-nome {
-  display: block;
-  width: 100%;
-  border: 0;
-  background: transparent;
-  padding: 0;
-  text-align: left;
-  cursor: pointer;
-  font-family: var(--font-mono);
-  font-size: 12px;
-  color: var(--color-accent-300);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.calc-gr-nome:hover {
-  color: var(--color-accent-400);
-}
-
-.calc-gr-valore.input {
-  height: 30px;
-  padding: 0 6px;
-  font-family: var(--font-mono);
-  font-size: 13.5px;
-  text-align: right;
-  width: 100%;
-  min-width: 0;
-}
-
-.calc-gr-esito {
-  display: flex;
-  align-items: baseline;
-  justify-content: flex-end;
-  gap: 4px;
-  min-height: 14px;
-  font-family: var(--font-mono);
-  font-size: 11.5px;
-  color: var(--color-accent-300);
-  overflow: hidden;
-  white-space: nowrap;
-}
-
-.calc-gr-esito .um {
-  font-size: 10.5px;
-  color: var(--text-muted);
-}
-
-.calc-senza-nome {
-  color: var(--text-faint);
-  font-style: italic;
-}
-
-.calc-voce-errore {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-family: var(--font);
-  font-size: 11px;
-  color: var(--err);
-}
-
-.calc-voce-azioni {
-  display: flex;
-  gap: 4px;
-  flex: none;
-  align-items: flex-end;
-}
-
-.calc-voce-modifica {
-  width: 100%;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  gap: 8px;
-  margin-top: 4px;
-  padding-top: 6px;
-  border-top: 1px solid var(--border-faint);
-}
-
-.calc-voce-modifica .mini-campo {
-  width: 110px;
-}
-
-.calc-voce-modifica .calc-campo-espr {
-  flex: 1 1 260px;
-  width: auto;
-}
-
-.calc-voce-modifica .calc-campo-espr .input {
-  font-family: var(--font-mono);
-}
-
-.calc-voce-modifica .calc-campo-nota {
-  flex: 1 1 200px;
-  width: auto;
-}
-
-/* due colonne: a sinistra quello che si compila oggi, a destra i dati fissi.
-   Su cellulare tornano una sotto l'altra, con le intestazioni a fare da guida */
-.calc-colonne {
-  display: grid;
-  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
-  gap: 10px 18px;
-  align-items: start;
-}
-
-@media (max-width: 720px) {
-  .calc-colonne {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
-
-.calc-colonna {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.calc-colonna-testa {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  flex-wrap: wrap;
-  padding-bottom: 4px;
-  border-bottom: 1px solid var(--border-faint);
-}
-
-.calc-colonna-testa .t {
-  font-size: 11px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--text-2);
-}
-
-.calc-colonna-testa .d {
-  font-size: 11px;
-  color: var(--text-faint);
-}
-
-.calc-colonna .calc-griglia {
-  margin-bottom: 0;
-}
-
-/* ── scelte di libreria: tendine dei materiali e grandezze che ne discendono ── */
-.calc-libreria {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-bottom: 14px;
-}
-
-.calc-scelte {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-  gap: 8px 10px;
-  align-items: end;
-}
-
-.calc-derivate {
-  list-style: none;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin: 0;
-  padding: 0;
-}
-
-.calc-derivate button {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 6px;
-  padding: 4px 10px;
-  min-height: 28px;
-  font-size: 11.5px;
-  font-family: var(--font-mono);
-  color: var(--text-1);
-  background: var(--hover-soft);
-  border: 1px solid var(--border-faint);
-  border-radius: 999px;
-  cursor: pointer;
-}
-
-.calc-derivate button:hover {
-  border-color: var(--color-accent);
-  color: var(--color-accent-300);
-}
-
-.calc-derivate .n {
-  color: var(--text-2);
-}
-
-.calc-derivate .um {
-  font-size: 10.5px;
-  color: var(--text-faint);
-}
-
-/* catalogo: le grandezze che si possono aggiungere, una per pastiglia */
-.calc-catalogo {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.calc-catalogo-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 4px 9px;
-  min-height: 28px;
-  font-size: 11.5px;
-  font-family: var(--font-mono);
-  color: var(--text-2);
-  background: transparent;
-  border: 1px dashed var(--divider);
-  border-radius: 999px;
-  cursor: pointer;
-}
-
-.calc-catalogo-chip:hover {
-  color: var(--color-accent-300);
-  border-color: var(--color-accent);
-  background: var(--hover-soft);
-}
-
-.calc-catalogo-chip.is-vuota {
-  font-family: var(--font);
-  color: var(--text-faint);
-}
-
-/* ── operazioni preimpostate ── */
-
-/* le formule sono righe corte: da PC ne stanno almeno tre per riga, invece di
-   una colonna sola larga tutto il pannello */
-.calc-preset-lista {
-  list-style: none;
-  margin: 0 0 12px;
-  padding: 0;
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(268px, 1fr));
-  gap: 6px;
-  align-items: start;
-}
-
-/* la formula aperta per la modifica si prende tutta la riga: i campi nome,
-   formula, unità e nota non stanno in un terzo di pannello */
-.calc-preset:has(.calc-voce-modifica) {
-  grid-column: 1 / -1;
-}
-
-.calc-preset {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 6px 4px 10px;
-  border: 1px solid var(--border-faint);
-  border-radius: var(--radius-md);
-  background: var(--nested);
-}
-
-/* pronta = tutte le grandezze che le servono sono compilate */
-.calc-preset.is-pronta {
-  border-color: color-mix(in srgb, var(--color-accent) 40%, transparent);
-}
-
-.calc-preset-usa {
-  display: flex;
-  align-items: baseline;
-  flex-wrap: wrap;
-  gap: 2px 10px;
-  min-width: 0;
-  border: 0;
-  background: transparent;
-  color: inherit;
-  text-align: left;
-  padding: 5px 0;
-  cursor: pointer;
-}
-
-.calc-preset-usa:disabled {
-  cursor: default;
-  opacity: 0.75;
-}
-
-.calc-preset-nome {
-  font-family: var(--font-mono);
-  font-size: 12.5px;
-  color: var(--text-2);
-  flex: none;
-  min-width: 22px;
-}
-
-.calc-preset.is-pronta .calc-preset-nome {
-  color: var(--color-accent-300);
-}
-
-.calc-preset-espr {
-  font-family: var(--font-mono);
-  font-size: 12.5px;
-  color: var(--text-2);
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.calc-preset-esito {
-  display: flex;
-  align-items: baseline;
-  gap: 4px;
-  margin-left: auto;
-  flex: none;
-  font-family: var(--font-mono);
-  font-size: 13px;
-  color: var(--color-accent-300);
-}
-
-.calc-preset-esito .um {
-  font-size: 10.5px;
-  color: var(--text-muted);
-}
-
-.calc-preset-mancanti {
-  font-family: var(--font);
-  font-size: 11px;
-  color: var(--text-faint);
-}
-
-.calc-preset-nota {
-  grid-column: 1 / -1;
-  font-size: 11px;
-  color: var(--text-faint);
-  padding-bottom: 3px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.calc-preset-azioni {
-  display: flex;
-  gap: 4px;
-  flex: none;
-}
-
-.calc-preset-aggiungi {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  gap: 8px;
-}
-
-.calc-preset-aggiungi .mini-campo {
-  width: 96px;
-}
-
-.calc-preset-aggiungi .calc-campo-espr {
-  flex: 1 1 200px;
-  width: auto;
-}
-
-.calc-preset-aggiungi .calc-campo-espr .input {
-  font-family: var(--font-mono);
-}
-
-.calc-preset-aggiungi .calc-campo-nota {
-  flex: 1 1 200px;
-  width: auto;
+  background: var(--err-bg);
 }
 
 /* ─────────────────── scheda Normativa ─────────────────── */
@@ -2696,72 +2147,13 @@ button.field-origin:hover {
   align-self: center;
 }
 
-/* ────────── calcolatrice e normativa su cellulare ────────── */
+/* ────────── quaderno e normativa su cellulare ────────── */
 
 @media (max-width: 899px) {
-  /* qui i tasti sono l'unico modo comodo di scrivere: ci sono sempre */
-  .calc-tastierino {
-    display: grid;
-    max-width: none;
-  }
-
+  /* sul telefono i tasti del tastierino sono l'unico modo comodo di scrivere */
   .calc-tasto {
-    min-height: 52px;
-    font-size: 18px;
-  }
-
-  .calc-input {
-    font-size: 18px;
-  }
-
-  .calc-salva .mini-campo,
-  .calc-salva .calc-campo-nota,
-  .calc-voce-modifica .mini-campo,
-  .calc-voce-modifica .calc-campo-espr,
-  .calc-voce-modifica .calc-campo-nota {
-    flex: 1 1 100%;
-    width: 100%;
-  }
-
-  .calc-btn-salva {
-    width: 100%;
-    justify-content: center;
-    height: var(--control-h);
-  }
-
-  /* tre pastiglie per riga anche sullo schermo più stretto */
-  .calc-griglia {
-    grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
-    gap: 5px;
-  }
-
-  .calc-gr-valore.input {
-    height: 32px;
-  }
-
-  .calc-voce-azioni {
-    justify-content: flex-end;
-    flex: 1 1 100%;
-  }
-
-  .calc-preset {
-    grid-template-columns: minmax(0, 1fr) auto;
-  }
-
-  .calc-preset-usa {
-    flex-wrap: wrap;
-    gap: 2px 8px;
-  }
-
-  .calc-preset-esito {
-    margin-left: 0;
-  }
-
-  .calc-preset-aggiungi .mini-campo,
-  .calc-preset-aggiungi .calc-campo-espr,
-  .calc-preset-aggiungi .calc-campo-nota {
-    flex: 1 1 100%;
-    width: 100%;
+    min-height: 46px;
+    font-size: 17px;
   }
 
   .norma-aggiungi .mini-campo,
@@ -2817,143 +2209,807 @@ button.field-origin:hover {
   }
 }
 
-/* ─────────────────── scheda Esportazione — il foglio A4 ─────────────────── */
+/* ══════════════════════ scheda Quaderno ══════════════════════ */
 
-.esp-spunte {
+/* Il quaderno è due cose accostate: a sinistra il foglio — carta bianca, come
+   un quaderno vero, e in stampa esce identico a come si vede — e a destra il
+   pannello di quello che ci si può mettere dentro. */
+
+.quad {
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
 }
 
-.esp-area {
+/* le due colonne scorrono per conto loro: si tiene il foglio sotto gli occhi
+   mentre si cerca una grandezza in fondo al pannello */
+.quad-corpo {
+  display: flex;
+  align-items: stretch;
+  gap: 14px;
+  min-width: 0;
+  min-height: 0;
+  flex: 1;
+}
+
+.quad-area {
+  flex: 1 1 auto;
+  min-width: 0;
   display: flex;
   justify-content: center;
+  align-items: flex-start;
+  overflow-y: auto;
   padding-bottom: 16px;
 }
 
-/* il foglio: proporzione A4 e larghezza di una pagina, così quello che si
-   vede a schermo è quello che esce dalla stampante */
-.foglio {
+/* ── il foglio ── */
+
+.quad-foglio {
+  /* la carta ha una tavolozza sua: è l'unico posto chiaro dell'app, perché
+     è già il documento — quello che si vede è quello che esce dalla stampante */
+  --carta: #fff;
+  --inchiostro: #14181f;
+  --inchiostro-2: #3f4655;
+  --inchiostro-3: #6b7382;
+  --riga: rgba(20, 24, 31, 0.09);
+  --segno: rgba(20, 24, 31, 0.16);
+
   width: min(100%, 210mm);
   min-height: 297mm;
-  padding: 18mm 16mm;
-  background: var(--panel);
-  border: 1px solid var(--border);
+  padding: 15mm 13mm;
+  background: var(--carta);
+  color: var(--inchiostro);
   border-radius: var(--radius-md);
-  box-shadow: var(--shadow-1, 0 2px 12px rgba(0, 0, 0, 0.25));
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.5), 0 12px 34px rgba(0, 0, 0, 0.45);
   display: flex;
   flex-direction: column;
   gap: 10px;
 }
 
 /* i quadretti sono un fondo, non un contenuto: in stampa spariscono */
-.foglio.is-quadretti {
-  background-image: linear-gradient(var(--border-faint) 1px, transparent 1px),
-    linear-gradient(90deg, var(--border-faint) 1px, transparent 1px);
+.quad-foglio.is-quadretti {
+  background-image: linear-gradient(var(--riga) 1px, transparent 1px),
+    linear-gradient(90deg, var(--riga) 1px, transparent 1px);
   background-size: 5mm 5mm;
   background-position: -1px -1px;
 }
 
-.foglio-testa {
+/* i controlli dentro la carta si vestono di chiaro: un campo scuro su un
+   foglio bianco sarebbe una toppa */
+.quad-foglio .input {
+  min-height: 26px;
+  font-size: 12.5px;
+  color: var(--inchiostro);
+  caret-color: var(--color-accent-600);
+  background: rgba(20, 24, 31, 0.03);
+  border-color: var(--segno);
+}
+
+.quad-foglio .input:hover {
+  border-color: rgba(20, 24, 31, 0.35);
+}
+
+.quad-foglio .input:focus-visible {
+  border-color: var(--color-accent-600);
+}
+
+.quad-foglio .input::placeholder {
+  color: var(--inchiostro-3);
+}
+
+.quad-foglio select.input {
+  background: rgba(20, 24, 31, 0.03);
+}
+
+.quad-foglio .btn {
+  color: var(--inchiostro-2);
+}
+
+.quad-foglio .btn-secondary {
+  border-color: var(--segno);
+}
+
+.quad-foglio .btn-secondary:hover:not(:disabled) {
+  background: rgba(20, 24, 31, 0.05);
+}
+
+.quad-testa {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
   padding-bottom: 8px;
-  border-bottom: 2px solid var(--text-2);
+  border-bottom: 2px solid var(--inchiostro-2);
 }
 
-.foglio-titolo {
+.quad-titolo {
   font-size: 16px;
-  color: var(--text-1);
+  font-weight: 500;
 }
 
-.foglio-meta,
-.foglio-data {
+.quad-meta,
+.quad-data {
   font-size: 11px;
-  color: var(--text-faint);
+  color: var(--inchiostro-3);
 }
 
-.foglio-intestazione {
+.quad-intestazione {
   width: 100%;
   background: transparent;
   border: 0;
-  border-bottom: 1px dashed var(--border-faint);
-  color: var(--text-1);
+  border-bottom: 1px dashed var(--segno);
+  color: var(--inchiostro);
+  font-family: inherit;
   font-size: 12.5px;
   padding: 4px 0;
 }
 
-.foglio-intestazione:focus,
-.foglio-nota:focus {
+.quad-intestazione:focus,
+.quad-nota-foglio:focus {
   outline: none;
-  border-color: var(--color-accent);
+  border-color: var(--color-accent-600);
 }
 
-.foglio-vuoto {
-  margin: 24px 0;
-  font-size: 12.5px;
-  color: var(--text-faint);
+.quad-rapidi {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 
-.foglio-cap h2 {
-  font-size: 12.5px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--color-accent-300);
-  margin: 14px 0 6px;
-  padding-bottom: 3px;
-  border-bottom: 1px solid var(--divider);
+/* ── i blocchi: a flusso, due per riga quando ci stanno ── */
+
+.quad-blocchi {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
-.foglio-blocco {
-  margin-bottom: 8px;
+.quad-blocco {
+  flex: 1 1 260px;
+  min-width: 240px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 7px 9px;
+  background: rgba(20, 24, 31, 0.02);
+  border: 1px solid var(--segno);
+  border-radius: var(--radius-md);
   break-inside: avoid;
 }
 
-.foglio-blocco h3 {
-  font-size: 11.5px;
-  color: var(--text-2);
-  margin: 6px 0 3px;
+.quad-blocco.is-pieno {
+  flex-basis: 100%;
+}
+
+.quad-blocco.is-errore {
+  border-color: var(--err);
+}
+
+.quad-blocco-testa {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10px;
+}
+
+.quad-blocco-testa .passo {
+  font-family: var(--font-mono);
+  color: var(--inchiostro-3);
+}
+
+.quad-blocco-testa .tipo {
+  padding: 1px 5px;
+  border: 1px solid var(--segno);
+  border-radius: 999px;
+  color: var(--inchiostro-3);
+  text-transform: lowercase;
+}
+
+.quad-blocco-testa .tipo.is-operazione,
+.quad-blocco-testa .tipo.is-formula {
+  color: var(--color-accent-700);
+  border-color: var(--color-accent-400);
+}
+
+.quad-blocco-testa .link {
+  display: inline-flex;
+  color: var(--color-accent-600);
+}
+
+.quad-blocco-testa .fonte {
+  color: var(--inchiostro-3);
+}
+
+.quad-blocco-testa .chiudi {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  padding: 3px;
+  color: var(--inchiostro-3);
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  cursor: pointer;
+  opacity: 0;
+}
+
+.quad-blocco:hover .chiudi,
+.quad-blocco:focus-within .chiudi {
+  opacity: 1;
+}
+
+.quad-blocco-testa .chiudi:hover {
+  color: var(--err);
+  background: var(--err-bg);
+}
+
+/* ── la riga di calcolo ── */
+
+.quad-calcolo {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.quad-riga {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  flex-wrap: wrap;
+  font-size: 13.5px;
+}
+
+.quad-riga .nome {
   font-weight: 600;
 }
 
-.foglio-blocco ul {
-  margin: 0;
-  padding-left: 16px;
-  list-style: none;
-}
-
-.foglio-blocco li {
+.quad-riga .espr,
+.quad-formula-riga .uguale,
+.quad-esito .uguale {
   font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--text-1);
-  line-height: 1.55;
-  overflow-wrap: anywhere;
+  font-size: 12px;
+  color: var(--inchiostro-2);
 }
 
-.foglio-nota {
-  margin-top: auto;
+.quad-esito {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  font-size: 14px;
+}
+
+.quad-esito strong {
+  font-weight: 600;
+  color: var(--color-accent-700);
+  font-variant-numeric: tabular-nums;
+}
+
+/* il selettore dell'unità: cambiarla converte il numero, quindi è un comando
+   di prima fila — non un'etichetta */
+.quad-um.input,
+.quad-um-libera.input {
+  width: auto;
+  min-width: 62px;
+  max-width: 116px;
+  min-height: 22px;
+  padding: 1px 4px;
+  font-size: 11.5px;
+  font-family: var(--font-mono);
+  color: var(--inchiostro-2);
+  background: transparent;
+  border-color: transparent;
+}
+
+.quad-um.input:hover,
+.quad-um-libera.input:hover,
+.quad-um.input:focus-visible,
+.quad-um-libera.input:focus-visible {
+  border-color: var(--color-accent-600);
+}
+
+.quad-formula-riga {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.quad-in-nome.input {
+  flex: 0 0 68px;
+  width: 68px;
+  padding-inline: 5px;
+  font-weight: 600;
+}
+
+.quad-in-espr.input {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-family: var(--font-mono);
+}
+
+.quad-errore,
+.quad-manca {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--err);
+}
+
+.quad-manca {
+  color: var(--inchiostro-3);
+}
+
+.quad-avviso {
+  font-size: 10.5px;
+  color: var(--warn);
+}
+
+.quad-nota-riga {
+  font-size: 10.5px;
+  color: var(--inchiostro-3);
+}
+
+/* ── nota, schema, capitolo ── */
+
+.quad-nota,
+.quad-nota-foglio {
   width: 100%;
   resize: vertical;
   background: transparent;
   border: 0;
-  border-top: 1px dashed var(--border-faint);
-  color: var(--text-1);
-  font-family: var(--font);
-  font-size: 12px;
-  padding: 6px 0;
+  color: var(--inchiostro);
+  font-family: inherit;
+  font-size: 12.5px;
+  padding: 2px 0;
 }
 
-.foglio-piede {
+.quad-nota {
+  border-bottom: 1px dashed var(--segno);
+}
+
+.quad-nota:focus {
+  outline: none;
+  border-color: var(--color-accent-600);
+}
+
+.quad-nota-foglio {
+  margin-top: auto;
+  border-top: 1px dashed var(--segno);
+  padding-top: 6px;
+}
+
+.quad-img img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--segno);
+  border-radius: var(--radius-sm);
+}
+
+.quad-img-azioni {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 5px;
+}
+
+.quad-img-vuota {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  width: 100%;
+  min-height: 140px;
+  padding: 16px;
+  color: var(--inchiostro-3);
+  background: rgba(20, 24, 31, 0.02);
+  border: 1px dashed var(--segno);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  font-size: 11px;
+}
+
+.quad-img-vuota strong {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--inchiostro-2);
+}
+
+.quad-cap h2 {
+  font-size: 12.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-accent-700);
+  margin: 2px 0 6px;
+  padding-bottom: 3px;
+  border-bottom: 1px solid var(--segno);
+}
+
+.quad-cap-blocco {
+  margin-bottom: 8px;
+  break-inside: avoid;
+}
+
+.quad-cap-blocco h3 {
+  font-size: 11.5px;
+  color: var(--inchiostro-2);
+  margin: 6px 0 3px;
+  font-weight: 600;
+}
+
+.quad-cap-blocco ul {
+  margin: 0;
+  padding-left: 14px;
+  list-style: none;
+}
+
+.quad-cap-blocco li {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+/* ── la zona di arrivo, sempre in fondo ── */
+
+.quad-drop {
+  padding: 14px 16px;
+  text-align: center;
+  font-size: 11.5px;
+  color: var(--inchiostro-3);
+  border: 1px dashed var(--segno);
+  border-radius: var(--radius-md);
+}
+
+.quad-piede {
+  font-size: 10.5px;
+  color: var(--inchiostro-3);
+  padding-top: 6px;
+  border-top: 1px solid var(--segno);
+}
+
+/* ── il pannello a destra ── */
+
+.quad-panel {
+  flex: 0 0 322px;
+  width: 322px;
+  min-width: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 0 4px 16px 12px;
+  border-left: 1px solid var(--divider);
+}
+
+.quad-sez-testa {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 7px 2px;
+  background: none;
+  border: 0;
+  cursor: pointer;
+  color: var(--text-2);
+  text-align: left;
+}
+
+.quad-sez-testa:hover {
+  color: var(--text);
+}
+
+.quad-sez-testa .t {
+  flex: 1;
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.quad-sez-testa .d {
   font-size: 10.5px;
   color: var(--text-faint);
-  padding-top: 6px;
-  border-top: 1px solid var(--divider);
 }
 
-/* in stampa resta solo il foglio, senza cornici né quadretti: la pagina è
-   già A4, quindi il contenuto esce alle stesse misure che si vedono */
+.quad-sez-corpo {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 2px 2px 10px;
+}
+
+/* grandezze: due colonne, come sul foglio di brutta */
+.quad-griglia {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 5px;
+}
+
+.quad-gr {
+  min-width: 0;
+}
+
+.quad-gr.is-aperta {
+  grid-column: 1 / -1;
+}
+
+.quad-gr-riga {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px 4px;
+  background: var(--nested);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  cursor: grab;
+}
+
+.quad-gr-riga:hover {
+  border-color: var(--divider-strong);
+}
+
+.quad-gr.is-errore .quad-gr-riga {
+  border-color: var(--err);
+}
+
+.quad-gr-nome {
+  flex: 0 0 auto;
+  max-width: 46px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 2px 3px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--color-accent-300);
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+
+.quad-gr-nome sub {
+  font-size: 8.5px;
+}
+
+.quad-gr-valore.input {
+  flex: 1 1 auto;
+  width: 0;
+  min-width: 0;
+  min-height: 26px;
+  padding: 2px 5px;
+  font-size: 12px;
+}
+
+.quad-gr-um {
+  flex: 0 0 auto;
+  max-width: 44px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 9.5px;
+  color: var(--text-faint);
+}
+
+.quad-gr-piu {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  padding: 3px;
+  color: var(--text-faint);
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.quad-gr-piu:hover {
+  color: var(--color-accent);
+  background: var(--accent-12);
+}
+
+.quad-gr-modifica {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 6px;
+  margin-top: 5px;
+  padding: 7px;
+  background: var(--nested);
+  border: 1px solid var(--divider);
+  border-radius: var(--radius-md);
+}
+
+.quad-gr-modifica .mini-campo {
+  flex: 1 1 88px;
+  min-width: 0;
+}
+
+.quad-gr-modifica .quad-campo-largo {
+  flex: 1 1 100%;
+}
+
+/* pastiglie: catalogo, derivate di libreria, capitoli */
+.quad-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.quad-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 7px;
+  font-size: 11px;
+  color: var(--text-2);
+  background: var(--nested);
+  border: 1px solid var(--divider);
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.quad-chip:hover {
+  border-color: var(--color-accent);
+  color: var(--text);
+}
+
+.quad-chip .n {
+  color: var(--color-accent-300);
+  font-weight: 500;
+}
+
+.quad-chip strong {
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.quad-chip .um {
+  font-size: 9.5px;
+  color: var(--text-faint);
+}
+
+.quad-chip.is-dentro {
+  border-color: var(--color-accent);
+  color: var(--color-accent-300);
+}
+
+.quad-chips.is-catalogo .quad-chip {
+  color: var(--text-faint);
+  border-style: dashed;
+}
+
+.quad-scelte {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+/* formule preimpostate: prima il risultato che danno, poi la formula */
+.quad-formule {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.quad-formula-usa {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  width: 100%;
+  padding: 5px 8px;
+  text-align: left;
+  background: var(--nested);
+  border: 1px solid var(--divider);
+  border-radius: var(--radius-md);
+  cursor: grab;
+}
+
+.quad-formula-usa:hover {
+  border-color: var(--color-accent);
+}
+
+.quad-formula-usa .t {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.quad-formula-usa .t .u {
+  margin-left: 4px;
+  font-size: 10.5px;
+  font-weight: 400;
+  color: var(--color-accent-300);
+}
+
+.quad-formula-usa .x {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--text-faint);
+}
+
+.quad-formula-modifica {
+  display: grid;
+  grid-template-columns: 54px 1fr 70px;
+  gap: 4px;
+  padding: 5px 0 2px;
+}
+
+.quad-formula-modifica .input {
+  min-height: 26px;
+  font-size: 11.5px;
+}
+
+.quad-formula-modifica .input:nth-child(4) {
+  grid-column: 1 / 3;
+}
+
+.quad-formula-modifica .btn {
+  align-self: end;
+}
+
+.quad-formule-barra {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* import: valore adesso e scheda di provenienza */
+.quad-import {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.quad-import-riga {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 1px 8px;
+  padding: 5px 8px;
+  text-align: left;
+  background: var(--nested);
+  border: 1px solid var(--divider);
+  border-radius: var(--radius-md);
+  cursor: grab;
+  color: var(--text-2);
+}
+
+.quad-import-riga:hover {
+  border-color: var(--color-accent);
+}
+
+.quad-import-riga .n {
+  font-size: 12px;
+  color: var(--text);
+}
+
+.quad-import-riga .v {
+  grid-row: 2;
+  font-size: 11.5px;
+  color: var(--color-accent-300);
+  font-variant-numeric: tabular-nums;
+}
+
+.quad-import-riga .s {
+  grid-row: 1 / 3;
+  grid-column: 2;
+  align-self: center;
+  font-size: 9.5px;
+  color: var(--text-faint);
+}
+
+.quad-tasti {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+}
+
+/* ── in stampa resta solo il foglio: è già A4 e già bianco ── */
+
 @media print {
   @page {
     size: A4;
@@ -2964,6 +3020,11 @@ button.field-origin:hover {
   .side-nav,
   .bottom-bar,
   .tab-toolbar,
+  .quad-panel,
+  .quad-unita,
+  .quad-rapidi,
+  .quad-drop,
+  .quad-blocco-testa .chiudi,
   .toast {
     display: none !important;
   }
@@ -2971,200 +3032,98 @@ button.field-origin:hover {
   .app,
   .app-body,
   .app-main,
-  .esp-area {
+  .quad,
+  .quad-corpo,
+  .quad-area {
     display: block;
     height: auto;
     overflow: visible;
     padding: 0;
     margin: 0;
+    gap: 0;
   }
 
-  .foglio {
+  /* la pagina è già bianca e già A4: il foglio riempie la carta senza cornici
+     e senza quadretti, che sono un aiuto per lo schermo e non un contenuto */
+  html,
+  body {
+    background: #fff;
+  }
+
+  .quad-foglio,
+  .quad-foglio.is-quadretti {
     width: auto;
     min-height: auto;
-    border: 0;
     border-radius: 0;
     box-shadow: none;
-    background: #fff;
     background-image: none;
-    color: #14181f;
   }
 
-  .foglio-titolo,
-  .foglio-blocco li {
-    color: #14181f;
+  /* i comandi si stampano come testo: niente cornici, niente freccette, e i
+     campi rimasti vuoti non lasciano righe di segnaposto sul documento */
+  .app {
+    background: #fff;
   }
 
-  .foglio-cap h2 {
-    color: #14181f;
+  .quad-foglio select.input {
+    appearance: none;
+    padding-inline: 2px;
+    background: transparent;
   }
 
-  .foglio-intestazione,
-  .foglio-nota {
-    color: #14181f;
+  .quad-foglio input:placeholder-shown,
+  .quad-foglio textarea:placeholder-shown {
+    visibility: hidden;
+  }
+
+  .quad-foglio textarea {
+    resize: none;
+  }
+
+  /* i campi scritti a mano sulla carta si stampano come testo, senza cornice */
+  .quad-foglio .input,
+  .quad-foglio .quad-nota,
+  .quad-foglio .quad-nota-foglio,
+  .quad-foglio .quad-intestazione {
+    background: transparent;
+    border-color: transparent;
+  }
+
+  .quad-blocco {
+    border-color: transparent;
+    background: transparent;
+    padding: 2px 0;
   }
 }
 
-/* su cellulare i margini di pagina si mangerebbero mezza larghezza: il foglio
-   resta A4 in stampa, ma a schermo si stringe */
+/* ── su cellulare il pannello va sotto il foglio ── */
+
+@media (max-width: 1099px) {
+  .quad-corpo {
+    flex-direction: column;
+  }
+
+  .quad-panel {
+    flex: 1 1 auto;
+    width: 100%;
+    padding: 8px 0 16px;
+    border-left: 0;
+    border-top: 1px solid var(--divider);
+  }
+}
+
 @media (max-width: 640px) {
-  .foglio {
+  .quad-foglio {
     min-height: 0;
     padding: 14px 12px;
-    border-radius: var(--radius-md);
   }
 
-  .foglio.is-quadretti {
+  .quad-foglio.is-quadretti {
     background-size: 4mm 4mm;
   }
-}
 
-/* ── tendine interne della calcolatrice ── */
-
-/* dentro il pannello ogni blocco è una tendina: l'intestazione fa da comando,
-   così si tiene aperto solo quello che si sta usando */
-.stack-sm {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.calc-blocco {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  min-width: 0;
-}
-
-.calc-blocco-testa {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  flex-wrap: wrap;
-  flex: 1 1 auto;
-  min-width: 0;
-  padding: 2px 0;
-  border: 0;
-  background: transparent;
-  text-align: left;
-  cursor: pointer;
-  color: inherit;
-}
-
-.calc-blocco-testa > svg {
-  color: var(--text-faint);
-  flex: none;
-  align-self: center;
-}
-
-.calc-blocco-testa:hover .t,
-.calc-blocco-testa:hover > svg {
-  color: var(--color-accent-300);
-}
-
-.calc-blocco-corpo {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  min-width: 0;
-}
-
-/* ── barra di modifica delle formule preimpostate ── */
-
-/* un solo comando per tutta l'area: dentro «Edita» le formule si cambiano,
-   si aggiungono e si eliminano, fuori restano righe da toccare e basta */
-.calc-preset-barra {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.calc-preset-barra .note {
-  flex: 1 1 200px;
-  min-width: 0;
-}
-
-/* formula scelta: resta segnata e finisce nel riepilogo in fondo alla scheda */
-.calc-preset.is-scelta {
-  border-color: var(--color-accent);
-  background: var(--hover-soft);
-}
-
-.calc-preset-nome {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 3px;
-}
-
-/* ── riepilogo ── */
-
-.calc-riepilogo {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 12px 18px;
-  align-items: start;
-}
-
-.calc-riepilogo-gruppo {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  min-width: 0;
-}
-
-.calc-riep-lista {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-
-.calc-riep-lista li {
-  display: grid;
-  grid-template-columns: minmax(0, auto) minmax(0, 1fr) auto;
-  align-items: baseline;
-  gap: 4px 8px;
-  padding: 3px 6px;
-  border-radius: var(--radius-sm);
-  background: var(--nested);
-  font-size: 12px;
-}
-
-.calc-riep-lista li:has(> .btn) {
-  grid-template-columns: minmax(0, auto) minmax(0, 1fr) auto auto;
-}
-
-.calc-riep-lista li.is-errore {
-  border-left: 2px solid color-mix(in srgb, var(--err) 60%, transparent);
-}
-
-.calc-riep-lista .n {
-  font-family: var(--font-mono);
-  color: var(--text-2);
-}
-
-.calc-riep-lista .x {
-  font-family: var(--font-mono);
-  font-size: 11.5px;
-  color: var(--text-faint);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.calc-riep-lista .v {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 4px;
-  margin-left: auto;
-  font-family: var(--font-mono);
-  color: var(--color-accent-300);
-}
-
-.calc-riep-lista .v .um {
-  font-size: 10.5px;
-  color: var(--text-muted);
+  .quad-blocco {
+    flex-basis: 100%;
+    min-width: 0;
+  }
 }

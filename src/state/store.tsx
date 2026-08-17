@@ -45,17 +45,11 @@ import {
   type VoceCalcolo,
 } from '../calc/calcolatrice';
 import { UNITA_DEFAULT, normalizzaElenco } from '../calc/unita';
+import { normalizzaBlocchi, nuovoBlocco, type BloccoQuaderno } from '../calc/quaderno';
 import type { LinkUtente } from '../data/normative';
 
-export type TabId =
-  | 'azioni'
-  | 'sollecitazioni'
-  | 'verifiche'
-  | 'costi'
-  | 'calcolatrice'
-  | 'normativa'
-  | 'esporta';
-/** Capitoli che si possono portare nel foglio di esportazione. */
+export type TabId = 'azioni' | 'sollecitazioni' | 'verifiche' | 'costi' | 'quaderno' | 'normativa';
+/** Capitoli di altre schede che si possono tirare dentro il quaderno. */
 export type CapitoloId = 'azioni' | 'sollecitazioni' | 'verifiche' | 'calcolatrice' | 'costi';
 export type MaterialeId = 'cls' | 'acciaio' | 'legno' | 'muratura';
 
@@ -93,7 +87,7 @@ export interface AppState {
   };
   costi: VoceCosto[];
   calcolatrice: StatoCalcolatrice;
-  esportazione: StatoEsportazione;
+  quaderno: StatoQuaderno;
   /** Norme e link aggiunti a mano nella scheda Normativa. */
   normative: LinkUtente[];
   ui: {
@@ -126,9 +120,14 @@ export interface StatoCalcolatrice {
   tastierino: boolean;
 }
 
-export interface StatoEsportazione {
-  /** Capitoli spuntati: solo questi finiscono nel foglio. */
-  capitoli: Record<CapitoloId, boolean>;
+/**
+ * Il foglio del Quaderno: i blocchi in ordine, più le due righe libere in
+ * testa e a piè di pagina. I capitoli ripresi dalle altre schede non sono più
+ * una spunta a parte — sono blocchi come gli altri, e stanno dove li si mette.
+ */
+export interface StatoQuaderno {
+  /** Blocchi del foglio, nell'ordine in cui sono stati aggiunti. */
+  blocchi: BloccoQuaderno[];
   /** Riga di testo libera in testa al foglio (oggetto, riferimento, data). */
   intestazione: string;
   /** Nota a piè di foglio, scritta a mano. */
@@ -137,7 +136,7 @@ export interface StatoEsportazione {
   quadretti: boolean;
 }
 
-export const SCHEMA_VERSION = 6;
+export const SCHEMA_VERSION = 7;
 
 export const STATO_INIZIALE: AppState = {
   schemaVersion: SCHEMA_VERSION,
@@ -177,8 +176,9 @@ export const STATO_INIZIALE: AppState = {
     selezioni: SELEZIONI_DEFAULT,
     tastierino: false,
   },
-  esportazione: {
-    capitoli: { azioni: true, sollecitazioni: true, verifiche: true, calcolatrice: false, costi: false },
+  // il quaderno parte bianco: quello che ci va dentro lo si tira dal pannello
+  quaderno: {
+    blocchi: [],
     intestazione: '',
     nota: '',
     quadretti: true,
@@ -190,14 +190,14 @@ export const STATO_INIZIALE: AppState = {
       vari: true,
       'soll-risultati': true,
       'soll-inerzia': true,
-      // le tendine della calcolatrice: aperte di serie, si richiudono a mano
-      'calc-grandezze': true,
-      'calc-preimpostate': true,
-      'calc-riepilogo': true,
-      'calc-libreria': true,
-      'calc-col-compilabile': true,
-      'calc-col-fissa': true,
-      'calc-operazioni': true,
+      // le sezioni del pannello del quaderno: aperte di serie, si chiudono a mano
+      'q-compilare': true,
+      'q-fisse': true,
+      'q-libreria': true,
+      'q-formule': true,
+      'q-import': true,
+      'q-capitoli': true,
+      'q-tastierino': false,
     },
     exp: {},
     allDetails: {
@@ -205,9 +205,8 @@ export const STATO_INIZIALE: AppState = {
       sollecitazioni: false,
       verifiche: false,
       costi: false,
-      calcolatrice: false,
+      quaderno: false,
       normativa: false,
-      esporta: false,
     },
     verifica: 'taglio-non-armato',
   },
@@ -225,7 +224,7 @@ export type Action =
   | { type: 'acciaioSezione'; patch: Partial<InputAcciaioSezione> }
   | { type: 'costi'; voci: VoceCosto[] }
   | { type: 'calcolatrice'; patch: Partial<StatoCalcolatrice> }
-  | { type: 'esportazione'; patch: Partial<StatoEsportazione> }
+  | { type: 'quaderno'; patch: Partial<StatoQuaderno> }
   | { type: 'normative'; voci: LinkUtente[] }
   | { type: 'toggleOpen'; id: string }
   | { type: 'toggleExp'; id: string }
@@ -282,8 +281,8 @@ export function reducer(state: AppState, action: Action): AppState {
       return { ...state, costi: action.voci };
     case 'calcolatrice':
       return { ...state, calcolatrice: { ...state.calcolatrice, ...action.patch } };
-    case 'esportazione':
-      return { ...state, esportazione: { ...state.esportazione, ...action.patch } };
+    case 'quaderno':
+      return { ...state, quaderno: { ...state.quaderno, ...action.patch } };
     case 'normative':
       return { ...state, normative: action.voci };
     case 'toggleOpen':
@@ -325,7 +324,7 @@ export function migra(raw: Partial<AppState>): AppState {
   return {
     schemaVersion: SCHEMA_VERSION,
     progetto: { ...base.progetto, ...raw.progetto },
-    tab: raw.tab ?? base.tab,
+    tab: TAB_VALIDE.find((t) => t === raw.tab) ?? tabRinominata(raw.tab) ?? base.tab,
     azioni: { ...base.azioni, ...raw.azioni },
     sollecitazioni: {
       ...base.sollecitazioni,
@@ -378,11 +377,7 @@ export function migra(raw: Partial<AppState>): AppState {
       // hanno e ripartono da quelle di serie
       selezioni: { ...base.calcolatrice.selezioni, ...raw.calcolatrice?.selezioni },
     },
-    esportazione: {
-      ...base.esportazione,
-      ...raw.esportazione,
-      capitoli: { ...base.esportazione.capitoli, ...raw.esportazione?.capitoli },
-    },
+    quaderno: quadernoMigrato(raw, base.quaderno),
     normative: (Array.isArray(raw.normative) ? raw.normative : []).flatMap((v, i) =>
       v?.url
         ? [{ id: v.id || `norma-${i}`, sigla: v.sigla ?? '', titolo: v.titolo ?? '', url: v.url }]
@@ -400,21 +395,57 @@ export function migra(raw: Partial<AppState>): AppState {
 
 const CHIAVE = 'structural:stato';
 
-const TAB_VALIDE: TabId[] = [
-  'azioni',
-  'sollecitazioni',
-  'verifiche',
-  'costi',
-  'calcolatrice',
-  'normativa',
-  'esporta',
-];
+const TAB_VALIDE: TabId[] = ['azioni', 'sollecitazioni', 'verifiche', 'costi', 'quaderno', 'normativa'];
+
+/**
+ * Schede di ieri: la Calcolatrice e l'Esporta sono diventate il Quaderno, e
+ * chi arriva da un salvataggio, da un segnalibro o da una scorciatoia
+ * dell'app installata deve trovarsi lì, non sulla prima scheda.
+ */
+const TAB_RINOMINATE: Record<string, TabId> = { calcolatrice: 'quaderno', esporta: 'quaderno' };
+
+function tabRinominata(id: string | undefined): TabId | undefined {
+  return id ? TAB_RINOMINATE[id] : undefined;
+}
+
+/**
+ * Il quaderno di un salvataggio precedente. I file di prima non hanno blocchi:
+ * portano le spunte della vecchia scheda Esporta, e quelle diventano i primi
+ * blocchi del foglio — così un progetto riaperto esporta ancora i suoi
+ * capitoli, nell'ordine in cui li mostrava l'app.
+ */
+function quadernoMigrato(raw: Partial<AppState>, base: StatoQuaderno): StatoQuaderno {
+  const q = raw.quaderno;
+  const vecchia = (raw as { esportazione?: { capitoli?: Record<string, boolean>; intestazione?: string; nota?: string; quadretti?: boolean } })
+    .esportazione;
+
+  if (q) {
+    return {
+      blocchi: normalizzaBlocchi(Array.isArray(q.blocchi) ? q.blocchi : []),
+      intestazione: q.intestazione ?? '',
+      nota: q.nota ?? '',
+      quadretti: q.quadretti ?? base.quadretti,
+    };
+  }
+
+  const spunte = vecchia?.capitoli ?? {};
+  const blocchi = CAPITOLI_ORDINE.filter((id) => spunte[id]).map((id) => nuovoBlocco('capitolo', { fonte: id }));
+  return {
+    blocchi,
+    intestazione: vecchia?.intestazione ?? '',
+    nota: vecchia?.nota ?? '',
+    quadretti: vecchia?.quadretti ?? base.quadretti,
+  };
+}
+
+/** Ordine in cui i capitoli compaiono nell'app: lo usa anche la migrazione. */
+const CAPITOLI_ORDINE: CapitoloId[] = ['azioni', 'sollecitazioni', 'verifiche', 'calcolatrice', 'costi'];
 
 /** Scheda chiesta da `?scheda=…` — le scorciatoie dell'app installata. */
 function tabDaUrl(): TabId | undefined {
   try {
     const q = new URLSearchParams(window.location.search).get('scheda');
-    return TAB_VALIDE.find((t) => t === q);
+    return TAB_VALIDE.find((t) => t === q) ?? tabRinominata(q ?? undefined);
   } catch {
     return undefined;
   }

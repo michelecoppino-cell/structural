@@ -1,0 +1,210 @@
+import { describe, it, expect } from 'vitest';
+import {
+  normalizzaBlocchi,
+  nuovoBlocco,
+  ricalcolaQuaderno,
+  testoBlocco,
+  type BloccoQuaderno,
+  type ImportoScheda,
+  type Sorgenti,
+} from './quaderno';
+import { ricalcola, type Preimpostata, type VoceCalcolo } from './calcolatrice';
+import { UNITA_DEFAULT } from './unita';
+import { SCHEMA_VERSION, migra, type AppState } from '../state/store';
+
+const voce = (nome: string, espressione: string, um = ''): VoceCalcolo => ({
+  id: `v-${nome}`,
+  nome,
+  espressione,
+  nota: '',
+  um,
+  tipo: 'compilabile',
+});
+
+const FORMULE: Preimpostata[] = [
+  { id: 'f-area', nome: 'A', espressione: 'b*h', nota: 'area', um: 'mq' },
+  { id: 'f-m', nome: 'M', espressione: 'q*l^2/8', nota: 'momento in mezzeria', um: 'kNm' },
+  { id: 'f-w', nome: 'W', espressione: 'b*h^2/6', nota: 'modulo di resistenza', um: 'cmc' },
+];
+
+const IMPORTI: ImportoScheda[] = [
+  { id: 'i-v', nome: 'Vmax', etichetta: 'V max', scheda: 'Sollecitazioni', valore: 18, um: 'kN' },
+  {
+    id: 'i-esito',
+    nome: '',
+    etichetta: 'Esito taglio',
+    scheda: 'Verifiche',
+    valore: NaN,
+    um: '',
+    testo: 'verificato (62%)',
+  },
+];
+
+/** Le sorgenti di un quaderno: le grandezze del pannello e le formule. */
+function sorgenti(voci: VoceCalcolo[]): Sorgenti {
+  return {
+    voci: ricalcola(voci, UNITA_DEFAULT),
+    preimpostate: FORMULE,
+    importi: IMPORTI,
+    elenco: UNITA_DEFAULT,
+  };
+}
+
+const TRAVE = [voce('b', '0,3', 'm'), voce('h', '0,5', 'm'), voce('q', '12', 'kN/m'), voce('l', '5', 'm')];
+
+describe('blocchi del quaderno', () => {
+  it('una grandezza trascinata mostra il suo valore e resta collegata', () => {
+    const [b] = ricalcolaQuaderno([nuovoBlocco('valore', { fonte: 'v-b' })], sorgenti(TRAVE));
+    expect(b.nome).toBe('b');
+    expect(b.valore).toBeCloseTo(0.3, 9);
+    expect(b.um).toBe('m');
+    expect(b.collegato).toBe(true);
+    expect(testoBlocco(b)).toBe('b = 0,3 = 0.3 m');
+  });
+
+  it('cambiare la grandezza nel pannello aggiorna il blocco, senza toccarlo', () => {
+    const blocchi = [nuovoBlocco('operazione', { fonte: 'f-area' })];
+    const prima = ricalcolaQuaderno(blocchi, sorgenti(TRAVE))[0];
+    const piuLarga = TRAVE.map((v) => (v.nome === 'b' ? { ...v, espressione: '0,6' } : v));
+    const dopo = ricalcolaQuaderno(blocchi, sorgenti(piuLarga))[0];
+    expect(prima.valore).toBeCloseTo(0.15, 9);
+    expect(dopo.valore).toBeCloseTo(0.3, 9);
+  });
+
+  it('una formula scritta nel quaderno vede i blocchi che la precedono', () => {
+    const r = ricalcolaQuaderno(
+      [
+        nuovoBlocco('operazione', { fonte: 'f-w' }),
+        nuovoBlocco('operazione', { fonte: 'f-m' }),
+        nuovoBlocco('formula', { nome: 'σ', espressione: 'M/W', um: 'MPa' }),
+      ],
+      sorgenti(TRAVE),
+    );
+    expect(r[2].errore).toBe('');
+    // M = 37,5 kNm su W = 12500 cmc → 3 MPa: le unità si mescolano e tornano
+    expect(r[2].valore).toBeCloseTo(3, 9);
+    expect(r[2].um).toBe('MPa');
+  });
+
+  it('cambiare l’unità di un blocco converte il numero', () => {
+    const con = (um: string) =>
+      ricalcolaQuaderno(
+        [
+          nuovoBlocco('operazione', { fonte: 'f-w' }),
+          nuovoBlocco('operazione', { fonte: 'f-m' }),
+          nuovoBlocco('formula', { nome: 'σ', espressione: 'M/W', um }),
+        ],
+        sorgenti(TRAVE),
+      )[2];
+    expect(con('MPa').valore).toBeCloseTo(3, 9);
+    expect(con('kg/cmq').valore).toBeCloseTo(30.591, 3);
+    expect(con('kN/mq').valore).toBeCloseTo(3000, 9);
+    // il valore che gira nelle formule resta lo stesso: cambia come si legge
+    for (const um of ['MPa', 'kg/cmq', 'kN/mq']) expect(con(um).valoreBase).toBeCloseTo(3e6, 3);
+  });
+
+  it('propone solo le unità con cui quel risultato si può leggere', () => {
+    const [b] = ricalcolaQuaderno([nuovoBlocco('operazione', { fonte: 'f-m' })], sorgenti(TRAVE));
+    expect(b.umAmmesse).toContain('kNm');
+    expect(b.umAmmesse).toContain('Nmm');
+    expect(b.umAmmesse).not.toContain('MPa');
+    expect(b.umFonte).toBe('kNm');
+  });
+
+  it('una formula a cui manca una grandezza lo dice, senza sbagliare', () => {
+    const [b] = ricalcolaQuaderno([nuovoBlocco('operazione', { fonte: 'f-m' })], sorgenti([voce('q', '12', 'kN/m')]));
+    expect(b.mancanti).toEqual(['l']);
+    expect(b.errore).toBe('');
+    expect(testoBlocco(b)).toContain('manca l');
+  });
+
+  it('un valore ripreso da un’altra scheda si converte come gli altri', () => {
+    const r = ricalcolaQuaderno(
+      [nuovoBlocco('import', { fonte: 'i-v' }), nuovoBlocco('import', { fonte: 'i-v', um: 'kg' })],
+      sorgenti(TRAVE),
+    );
+    expect(r[0].valore).toBeCloseTo(18, 9);
+    expect(r[0].provenienza).toBe('Sollecitazioni');
+    expect(r[1].valore).toBeCloseTo(1835.5, 1);
+  });
+
+  it('un esito che non è un numero passa come testo', () => {
+    const [b] = ricalcolaQuaderno([nuovoBlocco('import', { fonte: 'i-esito' })], sorgenti(TRAVE));
+    expect(b.testo).toBe('verificato (62%)');
+    expect(testoBlocco(b)).toBe('verificato (62%)');
+  });
+
+  it('due blocchi con lo stesso nome: il primo vince e il secondo lo dice', () => {
+    const r = ricalcolaQuaderno(
+      [
+        nuovoBlocco('formula', { nome: 'A', espressione: 'b*h' }),
+        nuovoBlocco('formula', { nome: 'A', espressione: 'b*l' }),
+        nuovoBlocco('formula', { nome: 'x', espressione: 'A' }),
+      ],
+      sorgenti(TRAVE),
+    );
+    expect(r[1].nomeIgnorato).toBe(true);
+    expect(r[2].valore).toBeCloseTo(0.15, 9);
+  });
+
+  it('una fonte che non c’è più lo dice invece di sparire', () => {
+    const [b] = ricalcolaQuaderno([nuovoBlocco('valore', { fonte: 'v-mai-esistita' })], sorgenti(TRAVE));
+    expect(b.errore).toContain('non più in elenco');
+  });
+
+  it('note, schemi e capitoli occupano tutta la riga', () => {
+    const r = ricalcolaQuaderno(
+      [nuovoBlocco('nota', { testo: 'ciao' }), nuovoBlocco('immagine'), nuovoBlocco('capitolo', { fonte: 'azioni' })],
+      sorgenti(TRAVE),
+    );
+    expect(r.map((b) => b.pieno)).toEqual([true, true, true]);
+    expect(r.map((b) => b.passo)).toEqual(['01', '02', '03']);
+  });
+
+  it('i blocchi salvati si rileggono, quelli inventati si scartano', () => {
+    const raw = [
+      { tipo: 'formula', nome: 'A', espressione: 'b*h', um: 'mq' },
+      { tipo: 'chissà', nome: 'x' },
+      { id: 'q-9', tipo: 'nota', testo: 'promemoria' },
+    ] as Partial<BloccoQuaderno>[];
+    const b = normalizzaBlocchi(raw);
+    expect(b.map((x) => x.tipo)).toEqual(['formula', 'nota']);
+    expect(b[1].id).toBe('q-9');
+    expect(b[0].img).toBe('');
+  });
+});
+
+describe('migrazione dei progetti salvati', () => {
+  it('le spunte della vecchia scheda Esporta diventano capitoli sul foglio', () => {
+    const vecchio = {
+      schemaVersion: 6,
+      esportazione: {
+        capitoli: { azioni: true, sollecitazioni: false, verifiche: true, calcolatrice: false, costi: false },
+        intestazione: 'Trave di copertura',
+        nota: 'da confermare',
+        quadretti: false,
+      },
+    } as unknown as Partial<AppState>;
+    const s = migra(vecchio);
+    expect(s.schemaVersion).toBe(SCHEMA_VERSION);
+    expect(s.quaderno.blocchi.map((b) => [b.tipo, b.fonte])).toEqual([
+      ['capitolo', 'azioni'],
+      ['capitolo', 'verifiche'],
+    ]);
+    expect(s.quaderno.intestazione).toBe('Trave di copertura');
+    expect(s.quaderno.nota).toBe('da confermare');
+    expect(s.quaderno.quadretti).toBe(false);
+  });
+
+  it('chi aveva aperto la Calcolatrice o l’Esporta si ritrova nel Quaderno', () => {
+    expect(migra({ tab: 'calcolatrice' } as unknown as Partial<AppState>).tab).toBe('quaderno');
+    expect(migra({ tab: 'esporta' } as unknown as Partial<AppState>).tab).toBe('quaderno');
+    expect(migra({ tab: 'azioni' }).tab).toBe('azioni');
+  });
+
+  it('un quaderno già salvato si riapre com’era', () => {
+    const blocchi = [nuovoBlocco('formula', { nome: 'A', espressione: 'b*h', um: 'cmq' })];
+    const s = migra({ schemaVersion: SCHEMA_VERSION, quaderno: { blocchi, intestazione: '', nota: '', quadretti: true } });
+    expect(s.quaderno.blocchi).toEqual(blocchi);
+  });
+});
