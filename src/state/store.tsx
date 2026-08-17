@@ -116,6 +116,8 @@ export interface StatoCalcolatrice {
   voci: VoceCalcolo[];
   /** Formule pronte all'uso, scritte sui nomi delle grandezze qui sopra. */
   preimpostate: Preimpostata[];
+  /** Id delle formule preimpostate scelte: sono quelle che vanno nel riepilogo. */
+  preScelte: string[];
   /** Unità di misura proposte: si scrivono a mano ma devono stare qui dentro. */
   unita: string[];
   /** Scelte a tendina (CLS, acciaio, ferro, bullone) da cui nascono le fisse. */
@@ -170,6 +172,7 @@ export const STATO_INIZIALE: AppState = {
     um: '',
     voci: VOCI_DEFAULT,
     preimpostate: PREIMPOSTATE_DEFAULT,
+    preScelte: [],
     unita: UNITA_DEFAULT,
     selezioni: SELEZIONI_DEFAULT,
     tastierino: false,
@@ -182,7 +185,20 @@ export const STATO_INIZIALE: AppState = {
   },
   normative: [],
   ui: {
-    open: { sisma: true, vari: true, 'soll-risultati': true, 'soll-inerzia': true },
+    open: {
+      sisma: true,
+      vari: true,
+      'soll-risultati': true,
+      'soll-inerzia': true,
+      // le tendine della calcolatrice: aperte di serie, si richiudono a mano
+      'calc-grandezze': true,
+      'calc-preimpostate': true,
+      'calc-riepilogo': true,
+      'calc-libreria': true,
+      'calc-col-compilabile': true,
+      'calc-col-fissa': true,
+      'calc-operazioni': true,
+    },
     exp: {},
     allDetails: {
       azioni: false,
@@ -346,6 +362,11 @@ export function migra(raw: Partial<AppState>): AppState {
             um: v?.um ?? '',
           }))
         : base.calcolatrice.preimpostate,
+      // le formule scelte sono dati di commessa: si tengono quelle del file,
+      // liste vuote comprese; i file di prima non ne hanno e partono da nessuna
+      preScelte: Array.isArray(raw.calcolatrice?.preScelte)
+        ? raw.calcolatrice.preScelte.filter((id): id is string => typeof id === 'string')
+        : [],
       // l'elenco delle unità è una preferenza: se il file non ne porta uno
       // valido si riparte da quello di serie
       unita: normalizzaElenco(
