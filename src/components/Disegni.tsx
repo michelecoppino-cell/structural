@@ -7,6 +7,8 @@
  * segue. I colori vengono dai token attraverso le classi `dg-*`.
  */
 
+import { spettroElastico, spettroProgetto, type FormaSpettro } from '../calc/sismica';
+
 const fx = (v: number, d = 2) => (Number.isFinite(v) ? v.toFixed(d) : '—');
 
 function Cornice({ titolo, children, viewBox }: { titolo: string; children: React.ReactNode; viewBox: string }) {
@@ -307,14 +309,6 @@ export function SezioneArmata({
 
 /* ─────────────────────── spettro di risposta ─────────────────────── */
 
-/** Se(T)/g secondo §3.2.3.2.1, con η = 1 (ξ = 5%). */
-function spettroElastico(T: number, ag: number, S: number, F0: number, TB: number, TC: number, TD: number) {
-  if (T < TB) return ag * S * F0 * (T / TB + (1 / F0) * (1 - T / TB));
-  if (T < TC) return ag * S * F0;
-  if (T < TD) return ag * S * F0 * (TC / T);
-  return ag * S * F0 * ((TC * TD) / (T * T));
-}
-
 export function Spettro({
   ag,
   S,
@@ -323,6 +317,7 @@ export function Spettro({
   TC,
   TD,
   q,
+  T,
 }: {
   ag: number;
   S: number;
@@ -331,6 +326,8 @@ export function Spettro({
   TC: number;
   TD: number;
   q: number;
+  /** Periodo letto in scheda: se c'è, si marca sul grafico con Se(T) e Sd(T). */
+  T?: number;
 }) {
   const W = 260;
   const H = 170;
@@ -338,16 +335,14 @@ export function Spettro({
   const y0 = 20;
   const x1 = W - 12;
   const y1 = H - 28;
-  const Tmax = Math.max(4, TD * 1.2);
+  const forma: FormaSpettro = { ag, S, F0, TB, TC, TD };
+  const Tmax = Math.max(4, TD * 1.2, T !== undefined && Number.isFinite(T) ? T * 1.1 : 0);
 
   const punti: { T: number; se: number; sd: number }[] = [];
   const nn = 120;
   for (let i = 0; i <= nn; i++) {
-    const T = (Tmax * i) / nn;
-    const se = spettroElastico(T, ag, S, F0, Math.max(TB, 1e-4), TC, TD);
-    // §3.2.3.5: lo spettro di progetto non scende sotto 0.2·ag
-    const sd = Math.max(se / Math.max(q, 1), 0.2 * ag);
-    punti.push({ T, se, sd });
+    const t = (Tmax * i) / nn;
+    punti.push({ T: t, se: spettroElastico(t, forma), sd: spettroProgetto(t, forma, q) });
   }
   const smax = Math.max(...punti.map((p) => p.se), 1e-6);
 
@@ -370,6 +365,23 @@ export function Spettro({
       ))}
       <path className="dg-line is-faint" strokeWidth={1.4} d={path((p) => p.se)} />
       <path className="dg-line" strokeWidth={1.8} d={path((p) => p.sd)} />
+
+      {/* lettura al periodo assegnato: verticale in T, punti su Se e su Sd */}
+      {T !== undefined && Number.isFinite(T) && T >= 0 && T <= Tmax && (
+        <g>
+          <path className="dg-quota" strokeWidth={1} d={`M${X(T)},${y0} L${X(T)},${y1}`} />
+          <circle className="dg-nodo" cx={X(T)} cy={Y(spettroElastico(T, forma))} r={2.4} />
+          <circle className="dg-nodo" cx={X(T)} cy={Y(spettroProgetto(T, forma, q))} r={3} />
+          <text
+            x={Math.min(X(T) + 5, x1 - 2)}
+            y={Math.max(Y(spettroProgetto(T, forma, q)) - 6, y0 + 28)}
+            className="dg-testo is-accent"
+            textAnchor={X(T) > (x0 + x1) / 2 ? 'end' : 'start'}
+          >
+            Sd({fx(T)}) = {fx(spettroProgetto(T, forma, q), 3)} g
+          </text>
+        </g>
+      )}
 
       <text x={x0 - 4} y={y0 + 4} className="dg-testo" textAnchor="end">
         {fx(smax, 3)}

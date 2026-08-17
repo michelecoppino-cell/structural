@@ -58,6 +58,14 @@ function blocchiAzioni(state: AppState): Blocco[] {
         `ag/g = ${fx(az.sisma.ag, 3)}; SS = ${fx(az.sisma.Ss)}; ST = ${fx(az.sisma.St)}; S = SS·ST = ${fx(az.sisma.S)}`,
         `F0 = ${fx(az.sisma.F0, 3)}; TC* = ${fx(az.sisma.TCstar, 3)} s; CC = ${fx(az.sisma.Cc)} → TB = ${fx(az.sisma.TB)} s; TC = ${fx(az.sisma.TC)} s; TD = ${fx(az.sisma.TD)} s`,
         `q = ${fx(az.sisma.q)}; Sd(T1) = ag·S·F0/q = ${fx(az.sisma.Sd, 3)} g`,
+        ...(az.sisma.periodo
+          ? [
+              `Lettura dello spettro per T = ${fx(az.sisma.periodo.T)} s (${az.sisma.periodo.ramo}): ` +
+                `Se(T) = ${fx(az.sisma.periodo.Se, 3)} g = ${fx(az.sisma.periodo.SeMS2, 2)} m/s²; ` +
+                `Sd(T) = ${fx(az.sisma.periodo.Sd, 3)} g = ${fx(az.sisma.periodo.SdMS2, 2)} m/s²` +
+                (az.sisma.periodo.minimo ? ' (al minimo 0.2·ag di §3.2.3.5)' : ''),
+            ]
+          : []),
       ],
     },
     {

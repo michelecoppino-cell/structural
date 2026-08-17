@@ -108,6 +108,75 @@ export function coefficienteCC(suolo: string, TCstar: number): number {
   }
 }
 
+/** Forma spettrale in uso: i parametri che definiscono lo spettro orizzontale. */
+export interface FormaSpettro {
+  /** ag/g del sito. */
+  ag: number;
+  /** S = SS · ST. */
+  S: number;
+  F0: number;
+  TB: number;
+  TC: number;
+  TD: number;
+}
+
+/**
+ * Spettro elastico orizzontale Se(T)/g — §3.2.3.2.1, eq. 3.2.4, con η = 1
+ * (smorzamento convenzionale ξ = 5%).
+ */
+export function spettroElastico(T: number, f: FormaSpettro): number {
+  const { ag, S, F0, TC, TD } = f;
+  const TB = Math.max(f.TB, 1e-4);
+  const t = Math.max(T, 0);
+  if (t < TB) return ag * S * F0 * (t / TB + (1 / F0) * (1 - t / TB));
+  if (t < TC) return ag * S * F0;
+  if (t < TD) return ag * S * F0 * (TC / t);
+  return ag * S * F0 * ((TC * TD) / (t * t));
+}
+
+/**
+ * Spettro di progetto Sd(T)/g: Se(T)/q, con il limite inferiore 0.2·ag
+ * prescritto da §3.2.3.5 per le componenti orizzontali agli SLU.
+ */
+export function spettroProgetto(T: number, f: FormaSpettro, q: number): number {
+  return Math.max(spettroElastico(T, f) / Math.max(q, 1), 0.2 * f.ag);
+}
+
+/** Ramo dello spettro in cui cade T, per dichiararlo in scheda e relazione. */
+export function ramoSpettro(T: number, f: FormaSpettro): string {
+  if (T < f.TB) return 'ramo crescente, T < TB';
+  if (T < f.TC) return 'plateau, TB ≤ T < TC';
+  if (T < f.TD) return 'ramo a velocità costante, TC ≤ T < TD';
+  return 'ramo a spostamento costante, T ≥ TD';
+}
+
+/** Ordinate spettrali per un periodo assegnato, in g e in m/s². */
+export interface OrdinateSpettro {
+  /** Periodo richiesto, in secondi. */
+  T: number;
+  Se: number;
+  SeMS2: number;
+  Sd: number;
+  SdMS2: number;
+  ramo: string;
+  /** true = Sd è tenuto in piedi dal minimo 0.2·ag di §3.2.3.5. */
+  minimo: boolean;
+}
+
+export function ordinateSpettro(T: number, f: FormaSpettro, q: number): OrdinateSpettro {
+  const Se = spettroElastico(T, f);
+  const Sd = spettroProgetto(T, f, q);
+  return {
+    T,
+    Se,
+    SeMS2: Se * 9.81,
+    Sd,
+    SdMS2: Sd * 9.81,
+    ramo: ramoSpettro(T, f),
+    minimo: Sd > Se / Math.max(q, 1) + 1e-12,
+  };
+}
+
 export type FonteSito = 'reticolo' | 'zona';
 
 export interface Override {

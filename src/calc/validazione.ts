@@ -100,6 +100,10 @@ export function validaAzioni(inp: InputAzioni): Errori<InputAzioni> {
   return raccogli({
     vn: num(inp.vn) >= 10 ? undefined : 'La vita nominale VN non può essere minore di 10 anni.',
     q: num(inp.q) >= 1 ? undefined : 'Il fattore di comportamento q non può essere minore di 1.',
+    Tsp:
+      !String(inp.Tsp ?? '').trim() || (num(inp.Tsp) >= 0 && num(inp.Tsp) <= 10)
+        ? undefined
+        : 'Il periodo di lettura T deve stare fra 0 e 10 s.',
     as: nonNegativo(inp.as, 'La quota sul livello del mare'),
     alfaNeve:
       num(inp.alfaNeve) >= 0 && num(inp.alfaNeve) <= 75

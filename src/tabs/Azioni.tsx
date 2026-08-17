@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Waveform, Snowflake, Wind, Stack, Mountains, ListBullets } from '@phosphor-icons/react';
+import { Waveform, Snowflake, Wind, Stack, Mountains, ListBullets, ArrowSquareOut } from '@phosphor-icons/react';
 import { useCalcoli, useStore } from '../state/store';
 import { num } from '../calc/azioni';
 import { STATI_LIMITE, SUOLI, type StatoLimite } from '../calc/sismica';
@@ -10,6 +10,13 @@ import { Accordion, Field, NumInput, Origine, Output, Select } from '../componen
 import { Falda, Paramento, ProfiloVento, Spettro } from '../components/Disegni';
 
 const fx = (v: number, d = 2) => (Number.isFinite(v) ? v.toFixed(d) : '—');
+
+/**
+ * Servizio esterno con mappa e ricerca per indirizzo: dà ag, F0 e TC* del punto
+ * esatto, da riportare a mano nei campi del sito quando il valore mediato sul
+ * comune non basta.
+ */
+const LINK_PARAMETRI = 'https://www.acca.it/edilus-ms/';
 
 /** Etichetta della provenienza di un parametro del sito. */
 const fonteDi = (manuale: boolean, fonte: string) =>
@@ -25,6 +32,8 @@ export default function Azioni() {
   /** Promemoria dei cp ordinari, con la falda calcolata sull'inclinazione data. */
   const cpOpzioni = opzioniCp(r.neve.alfa);
   const sismaT = r.terre.sisma;
+  /** Lettura dello spettro al periodo scritto in scheda, se c'è. */
+  const per = r.sisma.periodo;
 
   const province = provinceDi(inp.regione);
   const comuni = comuniDi(inp.regione, inp.prov);
@@ -45,11 +54,19 @@ export default function Azioni() {
     dispatch({ type: 'progetto', patch: { localita: `${comune} (${prov})` } });
   };
 
-  /** Badge che dice da dove arriva il parametro sismico in uso. */
-  const fonte = (manuale: boolean) => (
+  /**
+   * Badge che dice da dove arriva il parametro sismico in uso; quando il valore
+   * è scritto a mano diventa un pulsante che lo riporta al reticolo.
+   */
+  const fonte = (manuale: boolean, azzera?: () => void) => (
     <Origine
       testo={fonteDi(manuale, r.sisma.fonte)}
-      titolo={manuale ? 'Valore imposto a mano: vince sul reticolo' : r.sisma.nota}
+      titolo={
+        manuale
+          ? 'Valore imposto a mano: vince sul reticolo — clic per tornare al reticolo'
+          : r.sisma.nota
+      }
+      onClick={manuale ? azzera : undefined}
     />
   );
 
@@ -154,7 +171,7 @@ export default function Azioni() {
                 tab="azioni"
                 label="ag/g del sito"
                 unit="g"
-                origine={fonte(r.sisma.manuali.ag)}
+                origine={fonte(r.sisma.manuali.ag, () => set({ agManuale: '' }))}
                 dettaglio={{
                   formula: r.sisma.nota,
                   ref:
@@ -249,7 +266,7 @@ export default function Azioni() {
                 tab="azioni"
                 label="F0"
                 unit="—"
-                origine={fonte(r.sisma.manuali.F0)}
+                origine={fonte(r.sisma.manuali.F0, () => set({ F0: '' }))}
                 dettaglio={{
                   formula: `F0 = ${fx(r.sisma.F0, 3)} per TR = ${fx(r.sisma.TR, 0)} anni`,
                   ref: 'NTC2018 §3.2.3.2 — All. B, interpolato per TR',
@@ -263,7 +280,7 @@ export default function Azioni() {
                 tab="azioni"
                 label="TC*"
                 unit="s"
-                origine={fonte(r.sisma.manuali.TCstar)}
+                origine={fonte(r.sisma.manuali.TCstar, () => set({ TCstar: '' }))}
                 dettaglio={{
                   formula: `TC = CC · TC* = ${fx(r.sisma.Cc)} · ${fx(r.sisma.TCstar)} = ${fx(r.sisma.TC)} s; TB = TC/3 = ${fx(r.sisma.TB)} s; TD = 4.0·ag/g + 1.6 = ${fx(r.sisma.TD)} s`,
                   ref: 'NTC2018 §3.2.3.2.1 — eq. 3.2.5 ÷ 3.2.7',
@@ -299,6 +316,51 @@ export default function Azioni() {
               >
                 <NumInput id="sisma_q" value={inp.q} errore={!!err.q} onChange={(v) => set({ q: v })} />
               </Field>
+
+              <Field
+                id="sisma_T"
+                tab="azioni"
+                label="Periodo T di lettura"
+                unit="s"
+                errore={err.Tsp}
+                dettaglio={{
+                  formula: per
+                    ? `T = ${fx(per.T)} s — ${per.ramo}: Se(T) = ${fx(per.Se, 3)} g = ${fx(per.SeMS2, 2)} m/s²; ` +
+                      `Sd(T) = Se(T)/q = ${fx(per.Sd, 3)} g = ${fx(per.SdMS2, 2)} m/s²` +
+                      (per.minimo ? ' — tenuto al minimo 0.2·ag di §3.2.3.5' : '')
+                    : 'Scrivi un periodo (per esempio quello fondamentale della struttura) per leggere Se(T) e Sd(T) sullo spettro',
+                  ref: 'NTC2018 §3.2.3.2.1 — eq. 3.2.4; §3.2.3.5 per Sd',
+                  coeffs: [
+                    { k: 'TB', v: `${fx(r.sisma.TB)} s` },
+                    { k: 'TC', v: `${fx(r.sisma.TC)} s` },
+                    { k: 'TD', v: `${fx(r.sisma.TD)} s` },
+                    ...(per
+                      ? [
+                          { k: 'Se(T)', v: `${fx(per.Se, 3)} g` },
+                          { k: 'Sd(T)', v: `${fx(per.Sd, 3)} g` },
+                        ]
+                      : []),
+                  ],
+                }}
+              >
+                <NumInput
+                  id="sisma_T"
+                  value={inp.Tsp}
+                  errore={!!err.Tsp}
+                  placeholder="es. 0.35"
+                  onChange={(v) => set({ Tsp: v })}
+                />
+              </Field>
+
+              <p className="note">
+                ag, F0 e TC* arrivano dal reticolo mediato sul comune: sui siti dove l’azione varia in fretta
+                conviene ricavarli sulla posizione esatta e scriverli qui sopra — il valore inserito a mano vince
+                sul reticolo, e il badge accanto all’etichetta lo riporta al reticolo con un clic.{' '}
+                <a className="link-esterno" href={LINK_PARAMETRI} target="_blank" rel="noopener noreferrer">
+                  Parametri sismici sulla mappa (ACCA)
+                  <ArrowSquareOut size={12} />
+                </a>
+              </p>
             </div>
 
             <div className="col-aside">
@@ -310,7 +372,51 @@ export default function Azioni() {
                 TC={r.sisma.TC}
                 TD={r.sisma.TD}
                 q={r.sisma.q}
+                T={per?.T}
               />
+
+              {per && (
+                <div className="output" style={{ marginBottom: 4 }}>
+                  <div className="kicker">
+                    Ordinate spettrali per T = {fx(per.T)} s — {per.ramo}
+                  </div>
+                  <div className="output-grid">
+                    <div className="output-item">
+                      <span className="k">Se(T)</span>
+                      <span className="v">
+                        {fx(per.Se, 3)}
+                        <span className="u">g</span>
+                      </span>
+                    </div>
+                    <div className="output-item">
+                      <span className="k">Se(T)</span>
+                      <span className="v">
+                        {fx(per.SeMS2, 2)}
+                        <span className="u">m/s²</span>
+                      </span>
+                    </div>
+                    <div className="output-item">
+                      <span className="k">Sd(T)</span>
+                      <span className="v">
+                        {fx(per.Sd, 3)}
+                        <span className="u">g</span>
+                      </span>
+                    </div>
+                    <div className="output-item">
+                      <span className="k">Sd(T)</span>
+                      <span className="v">
+                        {fx(per.SdMS2, 2)}
+                        <span className="u">m/s²</span>
+                      </span>
+                    </div>
+                  </div>
+                  {per.minimo && (
+                    <p className="note" style={{ marginTop: 6 }}>
+                      Sd(T) è tenuto al minimo 0.2·ag = {fx(0.2 * r.sisma.ag, 3)} g prescritto da §3.2.3.5.
+                    </p>
+                  )}
+                </div>
+              )}
 
               <div className="output" style={{ marginBottom: 4 }}>
                 <div className="kicker">Accelerazione di plateau — Se = ag · S · F0</div>

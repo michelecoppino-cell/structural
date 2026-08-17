@@ -11,10 +11,13 @@ import {
   coefficienteCC,
   coefficienteSS,
   interpolaTR,
+  ordinateSpettro,
   periodoRitorno,
   risolviSito,
   STATI_LIMITE,
   type FonteSito,
+  type FormaSpettro,
+  type OrdinateSpettro,
   type StatoLimite,
 } from './sismica';
 import type { ZonaSismica } from '../data/comuni';
@@ -39,6 +42,8 @@ export interface InputAzioni {
   /** TC* del sito (s) imposto a mano; vuoto = dal reticolo. */
   TCstar: string;
   q: string;
+  /** Periodo T per cui leggere Se(T) e Sd(T); vuoto = nessuna lettura. */
+  Tsp: string;
   // neve
   zneve: string;
   as: string;
@@ -95,6 +100,7 @@ export const AZIONI_DEFAULT: InputAzioni = {
   F0: '',
   TCstar: '',
   q: '1.33',
+  Tsp: '',
   zneve: 'I — Alpina',
   as: '177',
   alfaNeve: '15',
@@ -153,6 +159,10 @@ export interface RisultatiAzioni {
     TB: number;
     TC: number;
     TD: number;
+    /** Parametri della forma spettrale, per rileggere lo spettro a qualsiasi T. */
+    forma: FormaSpettro;
+    /** Lettura dello spettro al periodo scritto in scheda; assente se non c'è. */
+    periodo?: OrdinateSpettro;
     /** ag, F0 e TC* del sito per i quattro stati limite — Tab. 3.2.I. */
     statiLimite: { id: StatoLimite; label: string; TR: number; ag: number; F0: number; TCstar: number }[];
   };
@@ -223,6 +233,11 @@ export function calcolaAzioni(inp: InputAzioni): RisultatiAzioni {
   const TC = Cc * TCstar;
   const TB = TC / 3;
   const TD = 4 * ag + 1.6;
+  const forma: FormaSpettro = { ag, S, F0, TB, TC, TD };
+
+  // lettura dello spettro al periodo assegnato in scheda (campo facoltativo)
+  const Tsp = forzato(inp.Tsp);
+  const periodo = Tsp !== undefined && Tsp >= 0 ? ordinateSpettro(Tsp, forma, q) : undefined;
 
   // quadro dei quattro stati limite sullo stesso VR
   const tabellaSito = sito.comune ? parametriSito(sito.comune.indice) : undefined;
@@ -301,6 +316,8 @@ export function calcolaAzioni(inp: InputAzioni): RisultatiAzioni {
       TB,
       TC,
       TD,
+      forma,
+      periodo,
       statiLimite,
     },
     neve: { qsk, qs, mu, ce: ceN, ct, alfa: alfaNeve, muSuggerito },
