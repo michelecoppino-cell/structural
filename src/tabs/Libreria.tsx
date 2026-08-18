@@ -3,6 +3,7 @@ import { useStore } from '../state/store';
 import { Seg } from '../components/ui';
 import Normativa from './Normativa';
 import Utili from './Utili';
+import type { useSincronia } from '../cloud/useSincronia';
 
 /** I due fogli della libreria: l'indice delle norme e le tabelle di lavoro. */
 type Foglio = 'norme' | 'utili';
@@ -17,7 +18,7 @@ const FOGLI: { id: Foglio; label: string; icon: React.ReactNode }[] = [
  * Il foglio attivo sta nello stato dell'interfaccia, così tornando alla scheda
  * si riapre dov'era — le tabelle si consultano avanti e indietro.
  */
-export default function Libreria() {
+export default function Libreria({ sincronia }: { sincronia: ReturnType<typeof useSincronia> }) {
   const { state, dispatch } = useStore();
   const foglio: Foglio = state.ui.open['libreria-utili'] ? 'utili' : 'norme';
 
@@ -36,7 +37,7 @@ export default function Libreria() {
         />
       </div>
 
-      <div id="libreria-corpo">{foglio === 'utili' ? <Utili /> : <Normativa />}</div>
+      <div id="libreria-corpo">{foglio === 'utili' ? <Utili /> : <Normativa sincronia={sincronia} />}</div>
     </div>
   );
 }

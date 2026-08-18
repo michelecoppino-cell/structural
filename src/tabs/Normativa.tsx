@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { ArrowSquareOut, BookOpenText, CaretDown, CaretRight, MagnifyingGlass, Plus, Trash } from '@phosphor-icons/react';
 import { useStore } from '../state/store';
 import PannelloSincronia from '../cloud/PannelloSincronia';
+import type { useSincronia } from '../cloud/useSincronia';
 import { ComandiScheda } from '../components/ComandiScheda';
 import {
   CAPITOLI,
@@ -364,7 +365,7 @@ function Aggiunte({ voci, ricerca }: { voci: LinkUtente[]; ricerca: boolean }) {
 
 /* ─────────────────────────── scheda ─────────────────────────── */
 
-export default function Normativa() {
+export default function Normativa({ sincronia }: { sincronia: ReturnType<typeof useSincronia> }) {
   const { state } = useStore();
   const [q, setQ] = useState('');
   const ricerca = q.trim().length > 0;
@@ -415,7 +416,7 @@ export default function Normativa() {
 
       <Aggiunte voci={aggiunte} ricerca={ricerca} />
 
-      <PannelloSincronia />
+      <PannelloSincronia sincronia={sincronia} />
 
       <p className="note">
         I link aprono la norma <strong>capitolo per capitolo</strong> su studiopetrillo.com: il
