@@ -11,7 +11,7 @@ import { CARTELLA, FILE_LIBRERIA } from './config';
 import { useSincronia } from './useSincronia';
 
 export default function PannelloSincronia() {
-  const { stato, utente, ultimo, dettaglio, sincronizza, collega, scollega } = useSincronia();
+  const { stato, utente, ultimo, dettaglio, conteggio, sincronizza, collega, scollega } = useSincronia();
 
   if (stato === 'spenta') {
     return (
@@ -39,7 +39,13 @@ export default function PannelloSincronia() {
   const riga: Record<typeof stato, string> = {
     scollegata: 'Collega OneDrive per ritrovare la libreria su tutti i dispositivi',
     'in-corso': 'Sincronizzazione in corso…',
-    'in-pari': ultimo ? `In pari con OneDrive — ultimo controllo alle ${ultimo}` : 'In pari con OneDrive',
+    'in-pari': [
+      'In pari con OneDrive',
+      conteggio && `${conteggio.normative} ${conteggio.normative === 1 ? 'norma' : 'norme'}, ${conteggio.unita} unità, ${conteggio.preimpostate} ${conteggio.preimpostate === 1 ? 'formula' : 'formule'}`,
+      ultimo && `ultimo controllo alle ${ultimo}`,
+    ]
+      .filter(Boolean)
+      .join(' — '),
     scaduta: 'L’accesso Microsoft è scaduto: ricollegati per riprendere',
     errore: 'OneDrive non raggiungibile: si continua in locale, riproverà da solo',
   };
