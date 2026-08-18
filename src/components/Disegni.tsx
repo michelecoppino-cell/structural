@@ -879,3 +879,187 @@ export function PiegaArmatura() {
     </Cornice>
   );
 }
+
+/* ─────────────────── spazi di manovra per le chiavi ─────────────────── */
+
+/**
+ * Dove si misurano gli spazi di manovra: `f` (o `h` per la poligonale) è la
+ * distanza fra l'asse del bullone e l'ostacolo laterale, `g` (o `k`)
+ * l'interasse minimo fra due bulloni perché la chiave passi in mezzo, `S`
+ * l'apertura di chiave del dado.
+ */
+export function SpaziChiave() {
+  const xMuro = 20;
+  const xAsse = 92;
+  const ySu = 62;
+  const yGiu = 132;
+  const R = 26; // circoscritta dell'esagono: apertura di chiave = R·√3 ≈ 45
+  const esagono = (cy: number) =>
+    Array.from({ length: 6 }, (_, i) => {
+      const a = (Math.PI / 180) * (30 + 60 * i);
+      return `${(xAsse + R * Math.cos(a)).toFixed(1)},${(cy + R * Math.sin(a)).toFixed(1)}`;
+    }).join(' ');
+  const mezzaChiave = (R * Math.sqrt(3)) / 2;
+
+  return (
+    <Cornice titolo="Dove si misurano f · g (h · k) e l'apertura S" viewBox="0 0 280 190">
+      {/* l'ostacolo: una parete, un'ala, un elemento vicino */}
+      <path className="dg-vinc" strokeWidth={1.4} d={`M${xMuro},10 L${xMuro},175`} />
+      {Array.from({ length: 11 }, (_, i) => (
+        <path
+          key={i}
+          className="dg-vinc"
+          strokeWidth={0.8}
+          d={`M${xMuro},${16 + i * 15} L${xMuro - 12},${28 + i * 15}`}
+        />
+      ))}
+
+      {/* l'ingombro della chiave, infilata sul bullone di sopra */}
+      <rect
+        x={xAsse - mezzaChiave - 4}
+        y={ySu - 24}
+        width={112}
+        height={48}
+        rx={8}
+        className="dg-vinc"
+        strokeWidth={1}
+        strokeDasharray="4 3"
+        fill="none"
+      />
+      <text x={xAsse + 44} y={ySu + 4} className="dg-testo">
+        chiave
+      </text>
+
+      {/* i due bulloni contigui */}
+      {[ySu, yGiu].map((cy) => (
+        <g key={cy}>
+          <polygon points={esagono(cy)} className="dg-line" strokeWidth={1.6} fill="none" />
+          <circle cx={xAsse} cy={cy} r={13} className="dg-line" strokeWidth={1.4} fill="none" />
+        </g>
+      ))}
+      <path className="dg-axis" strokeWidth={0.8} strokeDasharray="4 3" d={`M${xAsse},16 L${xAsse},170`} />
+
+      {/* f (h): dall'ostacolo all'asse del bullone */}
+      <path
+        className="dg-quota"
+        strokeWidth={1}
+        d={`M${xMuro},26 L${xAsse},26 M${xMuro},22 L${xMuro},30 M${xAsse},22 L${xAsse},30`}
+      />
+      <text x={(xMuro + xAsse) / 2} y={19} className="dg-testo is-accent" textAnchor="middle">
+        f (h)
+      </text>
+
+      {/* g (k): interasse fra i due bulloni */}
+      <path
+        className="dg-quota"
+        strokeWidth={1}
+        d={`M214,${ySu} L214,${yGiu} M210,${ySu} L218,${ySu} M210,${yGiu} L218,${yGiu}`}
+      />
+      <text x={222} y={(ySu + yGiu) / 2} className="dg-testo is-accent" dominantBaseline="middle">
+        g (k)
+      </text>
+
+      {/* S: apertura di chiave, fra le due facce del dado */}
+      <path
+        className="dg-axis"
+        strokeWidth={1}
+        d={
+          `M${xAsse - mezzaChiave},100 L${xAsse + mezzaChiave},100 ` +
+          `M${xAsse - mezzaChiave},96 L${xAsse - mezzaChiave},104 ` +
+          `M${xAsse + mezzaChiave},96 L${xAsse + mezzaChiave},104`
+        }
+      />
+      <text x={xAsse + mezzaChiave + 6} y={104} className="dg-testo">
+        S
+      </text>
+    </Cornice>
+  );
+}
+
+/* ─────────────── distanze e interassi dei fori (Fig. 4.2.5) ─────────────── */
+
+/**
+ * Le quote di NTC2018 Fig. 4.2.5: `e` sono le distanze dal bordo, `p` gli
+ * interassi; il pedice 1 è la direzione della forza, il 2 quella ortogonale.
+ */
+export function DisposizioneFori() {
+  const x0 = 46;
+  const x1 = 250;
+  const y0 = 52;
+  const y1 = 148;
+  const colonne = [92, 142, 192];
+  const file = [82, 118];
+
+  return (
+    <Cornice titolo="Distanze dal bordo e interassi dei fori" viewBox="0 0 300 190">
+      {/* il piatto e la forza che lo tira */}
+      <rect x={x0} y={y0} width={x1 - x0} height={y1 - y0} className="dg-beam" strokeWidth={1.6} fill="none" />
+      <path className="dg-carico" strokeWidth={1.4} d={`M8,100 L${x0 - 4},100 M${x0 - 12},95 L${x0 - 4},100 L${x0 - 12},105`} />
+      <text x={10} y={92} className="dg-testo">
+        forza
+      </text>
+
+      {/* i fori, due file per tre colonne */}
+      {file.map((cy) =>
+        colonne.map((cx) => (
+          <g key={`${cx}-${cy}`}>
+            <circle cx={cx} cy={cy} r={7} className="dg-line" strokeWidth={1.3} fill="none" />
+            <path
+              className="dg-axis"
+              strokeWidth={0.8}
+              d={`M${cx - 11},${cy} L${cx + 11},${cy} M${cx},${cy - 11} L${cx},${cy + 11}`}
+            />
+          </g>
+        )),
+      )}
+
+      {/* e1 e p1, sopra: nella direzione della forza */}
+      <path
+        className="dg-axis"
+        strokeWidth={0.8}
+        strokeDasharray="3 3"
+        d={`M${x0},38 L${x0},${y0} M${colonne[0]},38 L${colonne[0]},${file[0]} M${colonne[1]},38 L${colonne[1]},${file[0]}`}
+      />
+      <path
+        className="dg-quota"
+        strokeWidth={1}
+        d={
+          `M${x0},34 L${colonne[0]},34 M${x0},30 L${x0},38 M${colonne[0]},30 L${colonne[0]},38 ` +
+          `M${colonne[0]},34 L${colonne[1]},34 M${colonne[1]},30 L${colonne[1]},38`
+        }
+      />
+      <text x={(x0 + colonne[0]) / 2} y={27} className="dg-testo is-accent" textAnchor="middle">
+        e1
+      </text>
+      <text x={(colonne[0] + colonne[1]) / 2} y={27} className="dg-testo is-accent" textAnchor="middle">
+        p1
+      </text>
+
+      {/* e2 e p2, a destra: ortogonali alla forza */}
+      <path
+        className="dg-axis"
+        strokeWidth={0.8}
+        strokeDasharray="3 3"
+        d={`M${x1},${y0} L266,${y0} M${colonne[2]},${file[0]} L266,${file[0]} M${colonne[2]},${file[1]} L266,${file[1]}`}
+      />
+      <path
+        className="dg-quota"
+        strokeWidth={1}
+        d={
+          `M262,${y0} L262,${file[0]} M258,${y0} L266,${y0} M258,${file[0]} L266,${file[0]} ` +
+          `M262,${file[0]} L262,${file[1]} M258,${file[1]} L266,${file[1]}`
+        }
+      />
+      <text x={270} y={(y0 + file[0]) / 2 + 4} className="dg-testo is-accent">
+        e2
+      </text>
+      <text x={270} y={(file[0] + file[1]) / 2 + 4} className="dg-testo is-accent">
+        p2
+      </text>
+
+      <text x={x0} y={y1 + 20} className="dg-testo">
+        1 = direzione della forza · 2 = ortogonale
+      </text>
+    </Cornice>
+  );
+}

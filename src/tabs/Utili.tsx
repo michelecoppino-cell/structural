@@ -1,9 +1,11 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { CaretDown, CaretUp, MagnifyingGlass } from '@phosphor-icons/react';
 import { ComandiScheda } from '../components/ComandiScheda';
-import { PiegaArmatura } from '../components/Disegni';
+import { DisposizioneFori, PiegaArmatura, SpaziChiave } from '../components/Disegni';
 import { TABELLA_ARMATURE } from '../data/armature';
 import { BULLONI, CLASSI_BULLONE, TAGLIE_BULLONE } from '../data/bulloni';
+import { SPAZI_CHIAVI } from '../data/chiavi';
+import { DISTANZE_FORI } from '../data/distanze-fori';
 import { ACCIAI, CLS, COEFF_DEFAULT, SIGLE_ACCIAIO, ecmCLS, fctkCLS, fctmCLS } from '../data/materiali';
 import {
   TIPI_PROFILO,
@@ -193,6 +195,16 @@ export default function Utili() {
     };
   });
 
+  const chiavi_manovra = SPAZI_CHIAVI.map((r) => ({
+    chiave: `${r.vite} chiave forchetta poligonale manovra serraggio`,
+    celle: [r.vite, fx(r.S, 0), fx(r.f, 1), fx(r.g, 1), fx(r.h, 2), fx(r.k, 1)],
+  }));
+
+  const distanze = DISTANZE_FORI.map((r) => ({
+    chiave: `${r.sigla} ${r.descrizione} distanza bordo interasse passo foro`,
+    celle: [r.sigla, r.descrizione, r.minimo, r.maxEsposte, r.maxNonEsposte, r.maxCorten],
+  }));
+
   const classiBullone = Object.entries(CLASSI_BULLONE).map(([c, v]) => ({
     chiave: `${c} classe bullone`,
     celle: [
@@ -236,6 +248,8 @@ export default function Utili() {
     filtra(armature, 'armature ferri barre diametri pesi mandrino piega raggio curvatura'),
     filtra(profili, `profilario acciaio ${tipo} sagomario profili`),
     filtra(bulloni, 'bulloni viti profilario metrica aree fori chiavi'),
+    filtra(chiavi_manovra, 'chiavi spazi manovra forchetta poligonali serraggio bulloni'),
+    filtra(distanze, 'distanze interassi bordi fori passi bulloni chiodi unioni'),
     filtra(classiBullone, 'classi bulloni resistenza'),
     filtra(calcestruzzi, 'calcestruzzo cls classi resistenza'),
     filtra(acciai, 'acciai resistenze fyd ftd'),
@@ -366,12 +380,70 @@ export default function Utili() {
       />
 
       <Tabella
+        id="utili-chiavi"
+        titolo="Spazi di manovra per le chiavi"
+        sotto="quanto posto serve intorno al bullone per serrarlo"
+        ricerca={!!q.trim()}
+        colonne={[
+          'Vite',
+          'Apertura S (mm)',
+          'Forchetta f (mm)',
+          'Forchetta g (mm)',
+          'Poligonale h (mm)',
+          'Poligonale k (mm)',
+        ]}
+        righe={tabelle[3]}
+        sopra={<SpaziChiave />}
+        nota={
+          <>
+            <strong>f</strong> e <strong>h</strong> sono la distanza minima fra l’asse del bullone e
+            un ostacolo laterale — una parete, un’ala, un altro elemento — mentre{' '}
+            <strong>g</strong> e <strong>k</strong> sono l’interasse minimo fra due bulloni contigui
+            perché la chiave passi in mezzo. La forchetta chiede più posto della poligonale: nei nodi
+            fitti si serra di poligonale. L’apertura <strong>S</strong> è quella dei bulloni
+            strutturali ad alta resistenza (UNI 5712 / EN 14399), più grande di quella ISO 4014 del
+            profilario qui sopra. Sono vincoli di montaggio: valgono <em>insieme</em> ai minimi
+            normativi di passo e distanza dal bordo, non al loro posto.
+          </>
+        }
+      />
+
+      <Tabella
+        id="utili-distanze-fori"
+        titolo="Distanze e interassi dei fori"
+        sotto="NTC2018 §4.2.8.1, Fig. 4.2.5"
+        ricerca={!!q.trim()}
+        testo={6}
+        colonne={[
+          'Distanza',
+          'Che cos’è',
+          'Minimo',
+          'Max — esposte a corrosione',
+          'Max — non esposte',
+          'Max — acciaio EN 10025-5',
+        ]}
+        righe={tabelle[4]}
+        sopra={<DisposizioneFori />}
+        nota={
+          <>
+            <strong>d0</strong> è il diametro del foro (colonna «Foro d0» del profilario bulloni),{' '}
+            <strong>t</strong> lo spessore minimo degli elementi esterni collegati. I minimi servono
+            al rifollamento — davanti al bullone ci vuole materiale — i massimi a tenere i piatti a
+            contatto: contro l’instabilità locale e, all’aperto, contro l’acqua fra le lamiere.
+            L’instabilità locale del piatto fra i bulloni non va considerata se p1/t &lt; 9·(235/fy)
+            <sup>0,5</sup>; in caso contrario si assume una lunghezza libera di inflessione pari a
+            0,6·p1.
+          </>
+        }
+      />
+
+      <Tabella
         id="utili-classi-bulloni"
         titolo="Classi di resistenza dei bulloni"
         sotto="NTC2018 Tab. 11.3.XII"
         ricerca={!!q.trim()}
         colonne={['Classe', 'fyb (N/mm²)', 'ftb (N/mm²)', 'fyb/γM2', 'ftb/γM2']}
-        righe={tabelle[3]}
+        righe={tabelle[5]}
         nota={<>γM2 = {COEFF_DEFAULT.gammaM2} per i collegamenti e le sezioni indebolite.</>}
       />
 
@@ -381,7 +453,7 @@ export default function Utili() {
         sotto="classi di resistenza e valori di progetto"
         ricerca={!!q.trim()}
         colonne={['Classe', 'fck (N/mm²)', 'Rck (N/mm²)', 'fcd', 'fctm', 'fctd', 'Ecm (N/mm²)']}
-        righe={tabelle[4]}
+        righe={tabelle[6]}
         nota={
           <>
             fcd = αcc·fck/γC con αcc = {COEFF_DEFAULT.alfacc} e γC = {COEFF_DEFAULT.gammaC}; fctm =
@@ -396,7 +468,7 @@ export default function Utili() {
         sotto="carpenteria, armatura e classi dei bulloni"
         ricerca={!!q.trim()}
         colonne={['Sigla', 'Famiglia', 'fyk (N/mm²)', 'ftk (N/mm²)', 'fyd', 'ftd']}
-        righe={tabelle[5]}
+        righe={tabelle[7]}
         testo={2}
         nota={
           <>
