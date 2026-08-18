@@ -11,7 +11,7 @@ import { CARTELLA, FILE_LIBRERIA } from './config';
 import { useSincronia } from './useSincronia';
 
 export default function PannelloSincronia() {
-  const { stato, utente, ultimo, sincronizza, collega, scollega } = useSincronia();
+  const { stato, utente, ultimo, dettaglio, sincronizza, collega, scollega } = useSincronia();
 
   if (stato === 'spenta') {
     return (
@@ -78,6 +78,12 @@ export default function PannelloSincronia() {
             )}
           </div>
         </div>
+
+        {!!dettaglio && (stato === 'errore' || stato === 'scaduta') && (
+          <p className="field-error">
+            Microsoft ha risposto: <code>{dettaglio}</code>
+          </p>
+        )}
 
         <p className="note">
           {utente && (
