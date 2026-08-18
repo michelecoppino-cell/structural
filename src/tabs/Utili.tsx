@@ -1,8 +1,11 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { CaretDown, CaretUp, MagnifyingGlass } from '@phosphor-icons/react';
 import { ComandiScheda } from '../components/ComandiScheda';
+import { DisposizioneFori, PiegaArmatura, SpaziChiave } from '../components/Disegni';
 import { TABELLA_ARMATURE } from '../data/armature';
 import { BULLONI, CLASSI_BULLONE, TAGLIE_BULLONE } from '../data/bulloni';
+import { SPAZI_CHIAVI } from '../data/chiavi';
+import { DISTANZE_FORI } from '../data/distanze-fori';
 import { ACCIAI, CLS, COEFF_DEFAULT, SIGLE_ACCIAIO, ecmCLS, fctkCLS, fctmCLS } from '../data/materiali';
 import {
   TIPI_PROFILO,
@@ -24,12 +27,17 @@ const normalizza = (s: string) =>
  * Una scheda della libreria: si apre e si chiude, così sul tavolo resta solo
  * la tabella che si sta consultando. Il titolo dice sempre quante righe ci
  * sono sotto, anche da chiusa.
+ *
+ * Si parte tutte chiuse: la libreria si apre sull'indice delle tabelle, e si
+ * srotola solo quella che serve. Durante una ricerca invece le schede si
+ * aprono da sole, altrimenti le righe trovate resterebbero nascoste.
  */
 function Scheda({
   id,
   titolo,
   sotto,
   conta,
+  ricerca = false,
   children,
 }: {
   id: string;
@@ -37,15 +45,18 @@ function Scheda({
   sotto?: string;
   /** Righe contenute: si legge anche a scheda chiusa. */
   conta: number;
+  /** C'è una ricerca in corso: la scheda mostra comunque quello che ha trovato. */
+  ricerca?: boolean;
   children: ReactNode;
 }) {
-  const [aperta, setAperta] = useState(true);
+  const [aperta, setAperta] = useState(false);
+  const mostra = aperta || ricerca;
   return (
     <section className="panel utili-scheda">
       <button
         type="button"
         className="utili-testa"
-        aria-expanded={aperta}
+        aria-expanded={mostra}
         aria-controls={`${id}-corpo`}
         onClick={() => setAperta((v) => !v)}
       >
@@ -54,9 +65,9 @@ function Scheda({
         <span className="n">
           {conta} {conta === 1 ? 'riga' : 'righe'}
         </span>
-        <span className="caret">{aperta ? <CaretUp size={14} /> : <CaretDown size={14} />}</span>
+        <span className="caret">{mostra ? <CaretUp size={14} /> : <CaretDown size={14} />}</span>
       </button>
-      {aperta && (
+      {mostra && (
         <div className="panel-body utili-corpo" id={`${id}-corpo`}>
           {children}
         </div>
@@ -77,6 +88,8 @@ function Tabella({
   colonne,
   righe,
   testo = 1,
+  ricerca = false,
+  sopra,
   nota,
 }: {
   id: string;
@@ -86,11 +99,15 @@ function Tabella({
   righe: { chiave: string; celle: string[] }[];
   /** Quante colonne di testa sono testo: le altre sono numeri, centrati. */
   testo?: number;
+  ricerca?: boolean;
+  /** Disegno o legenda che precede la tabella e ne spiega le colonne. */
+  sopra?: React.ReactNode;
   nota?: React.ReactNode;
 }) {
   if (!righe.length) return null;
   return (
-    <Scheda id={id} titolo={titolo} sotto={sotto} conta={righe.length}>
+    <Scheda id={id} titolo={titolo} sotto={sotto} conta={righe.length} ricerca={ricerca}>
+      {sopra}
       <div className="table-scroll">
         <table className="table">
           <thead>
@@ -178,6 +195,16 @@ export default function Utili() {
     };
   });
 
+  const chiavi_manovra = SPAZI_CHIAVI.map((r) => ({
+    chiave: `${r.vite} chiave forchetta poligonale manovra serraggio`,
+    celle: [r.vite, fx(r.S, 0), fx(r.f, 1), fx(r.g, 1), fx(r.h, 2), fx(r.k, 1)],
+  }));
+
+  const distanze = DISTANZE_FORI.map((r) => ({
+    chiave: `${r.sigla} ${r.descrizione} distanza bordo interasse passo foro`,
+    celle: [r.sigla, r.descrizione, r.minimo, r.maxEsposte, r.maxNonEsposte, r.maxCorten],
+  }));
+
   const classiBullone = Object.entries(CLASSI_BULLONE).map(([c, v]) => ({
     chiave: `${c} classe bullone`,
     celle: [
@@ -221,6 +248,8 @@ export default function Utili() {
     filtra(armature, 'armature ferri barre diametri pesi mandrino piega raggio curvatura'),
     filtra(profili, `profilario acciaio ${tipo} sagomario profili`),
     filtra(bulloni, 'bulloni viti profilario metrica aree fori chiavi'),
+    filtra(chiavi_manovra, 'chiavi spazi manovra forchetta poligonali serraggio bulloni'),
+    filtra(distanze, 'distanze interassi bordi fori passi bulloni chiodi unioni'),
     filtra(classiBullone, 'classi bulloni resistenza'),
     filtra(calcestruzzi, 'calcestruzzo cls classi resistenza'),
     filtra(acciai, 'acciai resistenze fyd ftd'),
@@ -252,14 +281,19 @@ export default function Utili() {
         id="utili-armature"
         titolo="Armature"
         sotto="diametri commerciali, peso, piega"
-        colonne={['⌀', 'Area (mm²)', 'Peso (kg/m)', 'Mandrino ⌀m (mm)', 'Raggio interno (mm)']}
+        colonne={['⌀', 'Area (mm²)', 'Peso (kg/m)', 'Mandrino ⌀m (mm)', 'Raggio curvatura (mm)']}
         righe={tabelle[0]}
+        ricerca={!!q.trim()}
+        sopra={<PiegaArmatura />}
         nota={
           <>
-            Il peso è quello dell’acciaio, 7850 kg/m³. Il mandrino è il minimo di EC2 §8.3 Tab.
-            8.1N — <strong>4⌀</strong> fino a ⌀16, <strong>7⌀</strong> oltre — e il raggio interno di
-            curvatura è metà del mandrino. Per le pieghe con l’ancoraggio a contatto del
-            calcestruzzo, o con i ferri fitti, il mandrino va verificato caso per caso.
+            Il ferro si piega avvolgendolo sul mandrino, un rullo di diametro ⌀m: la faccia interna
+            della barra ne copia la superficie, così il <strong>raggio di curvatura</strong> è il
+            raggio del mandrino, ⌀m/2. Il <strong>⌀</strong> invece è il diametro della barra, quello
+            che si legge nello spessore del ferro. Il peso è quello dell’acciaio, 7850 kg/m³. Il
+            mandrino è il minimo di EC2 §8.3 Tab. 8.1N — <strong>4⌀</strong> fino a ⌀16,{' '}
+            <strong>7⌀</strong> oltre. Per le pieghe con l’ancoraggio a contatto del calcestruzzo, o
+            con i ferri fitti, il mandrino va verificato caso per caso.
           </>
         }
       />
@@ -269,6 +303,7 @@ export default function Utili() {
         titolo="Profilario acciaio"
         sotto="lo stesso sagomario delle Sollecitazioni"
         conta={tabelle[1].length}
+        ricerca={!!q.trim()}
       >
         <div className="calc-catalogo" style={{ margin: '2px 0 8px' }}>
           {TIPI_PROFILO.map((tp) => (
@@ -332,6 +367,7 @@ export default function Utili() {
         id="utili-bulloni"
         titolo="Profilario bulloni"
         sotto="filettatura metrica grossa, ISO 261/262"
+        ricerca={!!q.trim()}
         colonne={['Vite', 'd (mm)', 'Passo (mm)', 'A lorda (mm²)', 'Ares (mm²)', 'Chiave (mm)', 'Foro d0 (mm)']}
         righe={tabelle[2]}
         nota={
@@ -344,11 +380,70 @@ export default function Utili() {
       />
 
       <Tabella
+        id="utili-chiavi"
+        titolo="Spazi di manovra per le chiavi"
+        sotto="quanto posto serve intorno al bullone per serrarlo"
+        ricerca={!!q.trim()}
+        colonne={[
+          'Vite',
+          'Apertura S (mm)',
+          'Forchetta f (mm)',
+          'Forchetta g (mm)',
+          'Poligonale h (mm)',
+          'Poligonale k (mm)',
+        ]}
+        righe={tabelle[3]}
+        sopra={<SpaziChiave />}
+        nota={
+          <>
+            <strong>f</strong> e <strong>h</strong> sono la distanza minima fra l’asse del bullone e
+            un ostacolo laterale — una parete, un’ala, un altro elemento — mentre{' '}
+            <strong>g</strong> e <strong>k</strong> sono l’interasse minimo fra due bulloni contigui
+            perché la chiave passi in mezzo. La forchetta chiede più posto della poligonale: nei nodi
+            fitti si serra di poligonale. L’apertura <strong>S</strong> è quella dei bulloni
+            strutturali ad alta resistenza (UNI 5712 / EN 14399), più grande di quella ISO 4014 del
+            profilario qui sopra. Sono vincoli di montaggio: valgono <em>insieme</em> ai minimi
+            normativi di passo e distanza dal bordo, non al loro posto.
+          </>
+        }
+      />
+
+      <Tabella
+        id="utili-distanze-fori"
+        titolo="Distanze e interassi dei fori"
+        sotto="NTC2018 §4.2.8.1, Fig. 4.2.5"
+        ricerca={!!q.trim()}
+        testo={6}
+        colonne={[
+          'Distanza',
+          'Che cos’è',
+          'Minimo',
+          'Max — esposte a corrosione',
+          'Max — non esposte',
+          'Max — acciaio EN 10025-5',
+        ]}
+        righe={tabelle[4]}
+        sopra={<DisposizioneFori />}
+        nota={
+          <>
+            <strong>d0</strong> è il diametro del foro (colonna «Foro d0» del profilario bulloni),{' '}
+            <strong>t</strong> lo spessore minimo degli elementi esterni collegati. I minimi servono
+            al rifollamento — davanti al bullone ci vuole materiale — i massimi a tenere i piatti a
+            contatto: contro l’instabilità locale e, all’aperto, contro l’acqua fra le lamiere.
+            L’instabilità locale del piatto fra i bulloni non va considerata se p1/t &lt; 9·(235/fy)
+            <sup>0,5</sup>; in caso contrario si assume una lunghezza libera di inflessione pari a
+            0,6·p1.
+          </>
+        }
+      />
+
+      <Tabella
         id="utili-classi-bulloni"
         titolo="Classi di resistenza dei bulloni"
         sotto="NTC2018 Tab. 11.3.XII"
+        ricerca={!!q.trim()}
         colonne={['Classe', 'fyb (N/mm²)', 'ftb (N/mm²)', 'fyb/γM2', 'ftb/γM2']}
-        righe={tabelle[3]}
+        righe={tabelle[5]}
         nota={<>γM2 = {COEFF_DEFAULT.gammaM2} per i collegamenti e le sezioni indebolite.</>}
       />
 
@@ -356,8 +451,9 @@ export default function Utili() {
         id="utili-cls"
         titolo="Calcestruzzo"
         sotto="classi di resistenza e valori di progetto"
+        ricerca={!!q.trim()}
         colonne={['Classe', 'fck (N/mm²)', 'Rck (N/mm²)', 'fcd', 'fctm', 'fctd', 'Ecm (N/mm²)']}
-        righe={tabelle[4]}
+        righe={tabelle[6]}
         nota={
           <>
             fcd = αcc·fck/γC con αcc = {COEFF_DEFAULT.alfacc} e γC = {COEFF_DEFAULT.gammaC}; fctm =
@@ -370,8 +466,9 @@ export default function Utili() {
         id="utili-acciai"
         titolo="Acciai"
         sotto="carpenteria, armatura e classi dei bulloni"
+        ricerca={!!q.trim()}
         colonne={['Sigla', 'Famiglia', 'fyk (N/mm²)', 'ftk (N/mm²)', 'fyd', 'ftd']}
-        righe={tabelle[5]}
+        righe={tabelle[7]}
         testo={2}
         nota={
           <>
