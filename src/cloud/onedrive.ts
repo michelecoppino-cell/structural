@@ -90,44 +90,55 @@ function creaCartella(): Promise<void> {
 /**
  * Legge un JSON dalla cartella dell'app.
  *
- * In due passi invece che in uno, e la ragione è tutta pratica. La strada
- * ovvia — `GET …:/content` — non restituisce il file: restituisce un **302**
- * verso l'host di storage vero, che per un OneDrive personale è uno fra
- * `*.files.1drv.com`, `*.livefilestore.com` e parenti, e cambia da account ad
- * account. `fetch` segue il redirect da sé, il che è comodo finché tutto va
- * bene e disastroso quando qualcosa lo blocca: l'errore viene attribuito
- * all'indirizzo di partenza, e un blocco sul secondo host diventa
- * indistinguibile da un guasto sul primo.
+ * `null` significa **una cosa sola**: il file non esiste ancora (404). Ogni
+ * altro intoppo — metadati storti, scarico fallito, JSON illeggibile — è un
+ * errore che viene lanciato, e ferma il giro.
  *
- * Chiedendo prima i metadati (`@microsoft.graph.downloadUrl`) l'indirizzo di
- * storage arriva **come dato**, e il secondo scarico è una chiamata nostra a un
- * indirizzo che conosciamo: se fallisce, l'errore lo nomina. Il costo è una
- * richiesta in più su un file che si legge una volta per sincronizzazione.
+ * La distinzione sembra pedante e invece è tutto. Chi chiama usa `null` per
+ * dire «su OneDrive non c'è ancora niente», e da lì scrive la libreria locale
+ * sopra: se un guasto di lettura si travestisse da file assente, ogni
+ * dispositivo che sincronizza cancellerebbe il lavoro dell'altro credendo di
+ * inaugurare il file. È esattamente il modo in cui sono sparite delle norme.
  *
- * @returns il contenuto, o `null` se il file non c'è ancora (primo avvio).
+ * La lettura è in due passi. `GET …:/content` non restituisce il file: manda
+ * un **302** all'host di storage (`*.files.1drv.com` e parenti), e `fetch` lo
+ * segue da sé — comodo finché funziona, indistinguibile da un guasto su Graph
+ * quando qualcosa lo blocca. Chiedendo prima i metadati, l'indirizzo di
+ * storage arriva come dato e il secondo scarico è una chiamata a un indirizzo
+ * che conosciamo e che l'errore può nominare.
  */
 export async function leggiJson(file: string): Promise<unknown | null> {
-  const meta = await chiama(
-    `/me/drive/root:/${CARTELLA}/${file}?$select=id,name,@microsoft.graph.downloadUrl`,
-  );
+  // Niente `$select` qui: `@microsoft.graph.downloadUrl` è una proprietà
+  // annotata, e Graph la omette dalla risposta quando c'è una $select — anche
+  // se la si nomina dentro la $select stessa. Chiedere l'elemento intero
+  // costa qualche riga di JSON in più ed è l'unico modo di riceverla.
+  const meta = await chiama(`/me/drive/root:/${CARTELLA}/${file}`);
   if (meta.status === 404) return null;
   if (!meta.ok) throw await erroreDa(meta);
 
   const info = (await meta.json()) as Record<string, unknown>;
   const scarico = info['@microsoft.graph.downloadUrl'];
-  // niente indirizzo di scarico: file vuoto o appena creato, si riparte dal
-  // locale invece di far fallire tutta la sincronizzazione
-  if (typeof scarico !== 'string' || !scarico) return null;
 
-  // L'indirizzo è già autenticato: aggiungerci il token sarebbe un errore
-  // (l'header Authorization su quegli host fa scattare un 401).
-  const r = await fetchEsterno(scarico);
-  if (!r.ok) throw new ErroreGraph(r.status, 'downloadFallito', new URL(scarico).host);
+  // Se l'indirizzo non c'è (Graph cambia idea, un giorno, su come lo espone)
+  // si ripiega sulla strada vecchia invece di dare il file per assente.
+  const r = typeof scarico === 'string' && scarico
+    ? await fetchEsterno(scarico)
+    : await chiama(`/me/drive/root:/${CARTELLA}/${file}:/content`);
+  if (!r.ok) throw await erroreDa(r);
+
+  const testo = await r.text();
+  // Un file davvero vuoto (zero byte) è l'unico caso in cui «niente contenuto»
+  // è una risposta onesta: succede se una scrittura è stata interrotta prima
+  // di scrivere il primo byte.
+  if (!testo.trim()) return null;
   try {
-    return await r.json();
+    return JSON.parse(testo);
   } catch {
-    // file troncato da una scrittura interrotta: meglio ripartire dal locale
-    return null;
+    // JSON illeggibile: NON si finge che il file non esista, o la libreria
+    // buona verrebbe sovrascritta al primo giro. Si ferma tutto e lo si dice.
+    throw new Error(
+      `Il file ${file} su OneDrive non è JSON leggibile: la sincronizzazione si ferma per non sovrascriverlo.`,
+    );
   }
 }
 

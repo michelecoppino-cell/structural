@@ -123,3 +123,29 @@ export function stessoContenuto(a: Libreria, b: Libreria): boolean {
   const spoglia = (l: Libreria) => JSON.stringify([l.normative, l.unita, l.preimpostate]);
   return spoglia(a) === spoglia(b);
 }
+
+/**
+ * Rete di protezione prima di scrivere su OneDrive: elenca le voci che
+ * **sparirebbero** dal file senza che nessuno le abbia cancellate.
+ *
+ * Una voce può legittimamente uscire dal file solo se era nella fotografia
+ * dell'ultima sincronizzazione e non è più sul dispositivo — quella è una
+ * cancellazione vera, fatta da qualcuno. Tutto il resto è un guasto: un file
+ * letto male, una fotografia disallineata, un errore di fusione. La differenza
+ * fra le due cose non si vede a occhio nel file scritto, e quando la si scopre
+ * i dati sono già andati — quindi la si controlla prima, ogni volta.
+ *
+ * @returns le sigle o i valori delle voci a rischio; vuoto se è tutto in regola.
+ */
+export function perditeIngiustificate(remoto: Libreria, fusa: Libreria, base: Libreria | null): string[] {
+  const perse = <T>(rem: T[], fus: T[], bas: T[] | undefined, chiave: (v: T) => string, nome: (v: T) => string) => {
+    const idFusi = new Set(fus.map(chiave));
+    const idBase = new Set((bas ?? []).map(chiave));
+    return rem.filter((v) => !idFusi.has(chiave(v)) && !idBase.has(chiave(v))).map(nome);
+  };
+  return [
+    ...perse(remoto.normative, fusa.normative, base?.normative, (v) => v.id, (v) => v.sigla || v.id),
+    ...perse(remoto.unita, fusa.unita, base?.unita, (v) => v, (v) => v),
+    ...perse(remoto.preimpostate, fusa.preimpostate, base?.preimpostate, (v) => v.id, (v) => v.nome || v.id),
+  ];
+}

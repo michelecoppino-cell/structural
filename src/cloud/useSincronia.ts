@@ -18,7 +18,7 @@ import { estraiLibreria, useStore } from '../state/store';
 import { ServeAccesso, SINCRONIA_CONFIGURATA, account, initAuth, login, logout } from './auth';
 import { FILE_LIBRERIA } from './config';
 import { leggiJson, scriviJson } from './onedrive';
-import { fondiLibrerie, leggiLibreria, libreriaVuota, stessoContenuto } from './libreria';
+import { fondiLibrerie, leggiLibreria, libreriaVuota, perditeIngiustificate, stessoContenuto } from './libreria';
 
 /** Cosa contiene la libreria dopo l'ultimo giro riuscito. */
 export interface Conteggio {
@@ -107,6 +107,17 @@ export function useSincronia() {
       // scrittura fallisce, la fotografia resta quella di prima e il giro
       // successivo riprova da capo invece di credere a una sincronizzazione
       // mai avvenuta
+      // Ultimo controllo prima di scrivere: nessuna voce deve sparire dal file
+      // senza che qualcuno l'abbia cancellata davvero. Se ne trova una, il
+      // giro si ferma e lo dice, invece di consegnare a OneDrive una libreria
+      // monca che il dispositivo successivo prenderebbe per buona.
+      const perse = perditeIngiustificate(remoto, fusa, base);
+      if (perse.length) {
+        throw new Error(
+          `Sincronizzazione fermata per non perdere ${perse.length} ${perse.length === 1 ? 'voce' : 'voci'} (${perse.slice(0, 3).join(', ')}${perse.length > 3 ? '…' : ''}). Il file su OneDrive non è stato toccato.`,
+        );
+      }
+
       if (!grezzo || !stessoContenuto(fusa, remoto)) {
         await scriviJson(FILE_LIBRERIA, fusa);
       }
