@@ -96,10 +96,15 @@ export default function App() {
    * all'apertura ripropone i campi già compilati — e riporta tutte le schede ai
    * valori di partenza. È l'unica cosa dell'app che perde dati, quindi chiede
    * conferma e ricorda che il progetto si può salvare prima con «Esporta JSON».
+   *
+   * Quello che **non** perde è la libreria personale: le norme aggiunte a mano,
+   * le unità e le formule preimpostate non appartengono alla commessa, e
+   * riscriverle a ogni foglio bianco era il motivo per cui non si finiva mai di
+   * riscriverle. Se ne occupa il reducer, che le riporta dentro dopo il reset.
    */
   const svuota = () => {
     const ok = window.confirm(
-      'Svuotare tutto?\n\nSi cancella il salvataggio automatico e tutte le schede tornano ai valori iniziali: azioni, sollecitazioni, verifiche, computo, quaderno e formule scritte a mano.\n\nL’operazione non si può annullare — per conservare il lavoro, annulla e usa prima «Esporta JSON».',
+      'Svuotare tutto?\n\nSi cancella il salvataggio automatico e tutte le schede tornano ai valori iniziali: azioni, sollecitazioni, verifiche, computo e quaderno.\n\nRestano la tua libreria personale — norme aggiunte a mano, unità di misura e formule preimpostate — che non è roba di commessa.\n\nL’operazione non si può annullare — per conservare il lavoro, annulla e usa prima «Esporta JSON».',
     );
     if (!ok) return;
     svuotaMemoria();

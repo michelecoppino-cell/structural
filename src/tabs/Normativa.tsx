@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { ArrowSquareOut, BookOpenText, CaretDown, CaretRight, MagnifyingGlass, Plus, Trash } from '@phosphor-icons/react';
 import { useStore } from '../state/store';
+import PannelloSincronia from '../cloud/PannelloSincronia';
 import { ComandiScheda } from '../components/ComandiScheda';
 import {
   CAPITOLI,
@@ -8,6 +9,7 @@ import {
   linkCapitolo,
   linkVoce,
   livello,
+  urlSicuro,
   type Capitolo,
   type Documento,
   type LinkUtente,
@@ -206,12 +208,6 @@ function DocumentoPanel({
 
 /* ─────────────────── norme e link aggiunti a mano ─────────────────── */
 
-/** Completa un indirizzo scritto senza schema: `cnr.it/…` → `https://cnr.it/…`. */
-function indirizzo(url: string): string {
-  const u = url.trim();
-  if (!u) return '';
-  return /^[a-z][a-z0-9+.-]*:/i.test(u) ? u : `https://${u}`;
-}
 
 function Aggiunte({ voci, ricerca }: { voci: LinkUtente[]; ricerca: boolean }) {
   const { state, dispatch } = useStore();
@@ -220,8 +216,9 @@ function Aggiunte({ voci, ricerca }: { voci: LinkUtente[]; ricerca: boolean }) {
 
   const setVoci = (v: LinkUtente[]) => dispatch({ type: 'normative', voci: v });
 
-  const url = indirizzo(bozza.url);
-  const urlValido = /^https?:\/\/[^\s]+\.[^\s]+/i.test(url);
+  // urlSicuro completa lo schema mancante e scarta tutto ciò che non è http(s)
+  const url = urlSicuro(bozza.url) ?? '';
+  const urlValido = !!url && /^https?:\/\/[^\s]+\.[^\s]+/i.test(url);
   const pronto = !!bozza.sigla.trim() && urlValido;
 
   const aggiungi = () => {
@@ -248,7 +245,7 @@ function Aggiunte({ voci, ricerca }: { voci: LinkUtente[]; ricerca: boolean }) {
               Aggiunte a mano
             </span>
             <span className="norma-titolo">
-              Norme, linee guida e link tuoi — restano nel progetto e viaggiano con l’Esporta JSON
+              Norme, linee guida e link tuoi — restano anche dopo «Svuota tutto» e vanno su OneDrive
             </span>
           </span>
           <button
@@ -418,11 +415,14 @@ export default function Normativa() {
 
       <Aggiunte voci={aggiunte} ricerca={ricerca} />
 
+      <PannelloSincronia />
+
       <p className="note">
         I link aprono la norma <strong>capitolo per capitolo</strong> su studiopetrillo.com: il
         capitolo va alla sua pagina, i paragrafi al PDF del capitolo (sulla pagina indicata, dove è
         segnata). L’indice di NTC e Circolare è parte del sito e resta uguale per tutte le commesse;
-        le voci di «Aggiunte a mano» invece sono dati di progetto e finiscono nell’Esporta JSON.
+        le voci di «Aggiunte a mano» invece sono tue: restano dopo «Svuota tutto» e, se colleghi
+        OneDrive, si ritrovano su tutti i dispositivi.
       </p>
     </div>
   );

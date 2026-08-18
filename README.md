@@ -455,7 +455,8 @@ Quaderno: un valore si corregge in un posto solo.
 - **Svuota tutto**: cancella il salvataggio automatico — quello che alla riapertura ripropone
   i campi già compilati — e riporta ogni scheda ai valori iniziali. È l'unico comando che
   perde dati: chiede conferma e ricorda di usare prima *Esporta JSON* per conservare il
-  lavoro.
+  lavoro. **Non** tocca la libreria personale (vedi sotto): le norme aggiunte a mano, le
+  unità e le formule preimpostate non sono roba di commessa e restano dove sono.
 - **Intestazione di scheda sticky**: resta in vista mentre si scorre e ospita i comandi
   della scheda attiva (materiale, verifica visibile, combinazione, orientamento); dove la
   scheda non ha comandi propri sparisce del tutto.
@@ -467,6 +468,91 @@ Quaderno: un valore si corregge in un posto solo.
   container query dove lo stesso pannello è riusato largo e stretto. Sotto i 1200 px la
   navigazione laterale si riduce a una rail di sole icone. Su cellulare input e pulsanti
   salgono a 40÷42 px, sopra la soglia del tocco.
+
+---
+
+## Libreria personale e sincronizzazione OneDrive
+
+Nell'app convivono due nature di dati, e distinguerle è il senso di tutta questa parte:
+
+| | **Commessa** | **Libreria personale** |
+|---|---|---|
+| Cosa | azioni, sollecitazioni, verifiche, computo, quaderno | norme e link aggiunti a mano, unità di misura, formule preimpostate |
+| Dove | `localStorage` di questo browser | `localStorage` **e** un JSON su OneDrive |
+| «Svuota tutto» | azzera | **non tocca** |
+| Come si porta via | *Esporta JSON* | si ritrova da sola su ogni dispositivo collegato |
+
+La libreria è la roba che si costruisce una volta e si usa per anni: ributtarla via a ogni
+foglio bianco, o riscriverla a mano sul telefono, è esattamente il motivo per cui non la si
+costruiva mai davvero.
+
+### Il file su OneDrive
+
+Uno solo: `strutturale/strutturale-libreria.json`, nella root del OneDrive personale — una
+cartella normale, che si apre, si legge e si copia anche senza l'app. **La commessa non ci
+finisce dentro.**
+
+### Come si accende
+
+L'accesso Microsoft è **facoltativo e configurabile**: senza `VITE_MS_CLIENT_ID` l'app è
+identica a prima, tutta in locale, e il pannello in fondo alla scheda Normativa lo dice.
+Per accenderlo serve una registrazione su Azure — la procedura, passo per passo, è scritta
+in testa a `src/cloud/config.ts`. In sintesi: app **SPA**, account `common`, Redirect URI
+uguale all'origin del sito con la barra finale, permessi *delegated* `Files.ReadWrite` e
+`offline_access`. Poi l'ID applicazione va nelle variabili d'ambiente:
+
+```bash
+echo "VITE_MS_CLIENT_ID=<id-applicazione>" > .env.local     # in locale
+```
+
+e, per il sito pubblicato, in *Cloudflare Pages → Settings → Environment variables* con lo
+stesso nome. Non è un segreto — finisce nel bundle come tutto il resto, ed è giusto così:
+nel flusso *authorization code con PKCE* il client id da solo non apre niente, perché
+Microsoft rimanda il token solo agli indirizzi registrati.
+
+### Come si fondono due dispositivi
+
+Ogni giro è **leggi → fondi → riscrivi**, mai «scarica e sostituisci». La fusione è a tre
+vie: le due copie vengono confrontate con la fotografia dell'ultima sincronizzazione
+riuscita, tenuta in locale. È quella terza copia a distinguere «l'ho appena aggiunta qui»
+da «l'ho appena cancellata là» — senza, la voce cancellata sul telefono ricompare al primo
+accesso dal PC. Le regole stanno in `src/cloud/libreria.ts` e sono coperte dai test.
+
+Se OneDrive non risponde, o l'accesso è scaduto, **non succede niente di visibile**: si
+continua in locale e il pannello lo segnala. L'app non porta mai via la pagina verso
+Microsoft nel mezzo di un calcolo: quando serve un nuovo accesso compare un bottone.
+
+---
+
+## Sicurezza
+
+L'app è un sito statico senza backend: non esiste un server che tenga i tuoi dati, e non
+esiste un database da violare. Quello che resta da difendere sono tre cose.
+
+**Il browser.** Tutto lo stato vive in `localStorage`, che è leggibile da qualunque codice
+giri nella pagina. Perciò: nessun `eval` (le espressioni della calcolatrice passano da un
+interprete scritto in casa, `src/calc/calcolatrice.ts`), nessun `dangerouslySetInnerHTML`,
+e gli indirizzi che entrano da fuori — il campo della scheda Normativa e i JSON importati —
+passano tutti da `urlSicuro()`, che scarta ciò che non è `http`/`https`. Senza quel filtro
+un file di progetto ricevuto da terzi poteva portarsi dentro un `javascript:` e farlo
+eseguire dentro la pagina dell'app.
+
+**Il trasporto.** `public/_headers` porta le intestazioni servite da Cloudflare Pages: una
+CSP che consente script solo dall'origine e connessioni solo verso Microsoft Graph,
+`frame-ancestors 'none'`, `nosniff`, HSTS e i permessi del dispositivo (camera, microfono,
+posizione) spenti in blocco.
+
+**Il repository.** Non c'è e non ci deve essere nessun segreto nel codice: il client id di
+Azure è pubblico per costruzione, e il flusso PKCE è nato apposta per le app che non
+possono custodire niente. La CI gira con `permissions: contents: read` e un checkout senza
+credenziali persistenti, così una dipendenza compromessa durante `npm ci` non trova un
+token capace di toccare il repository.
+
+Cosa **non** protegge tutto questo: chiunque conosca l'indirizzo può aprire il sito e fare i
+calcoli — è voluto. Ma i dati no: la libreria sta nel *tuo* OneDrive, e senza il tuo account
+Microsoft da qui non è raggiungibile. Chi apre il sito e fa l'accesso lavora sul proprio.
+Il permesso concesso all'app si revoca quando si vuole da *account.microsoft.com → Privacy
+→ App e servizi*.
 
 ---
 
@@ -500,6 +586,11 @@ src/
     parametri-sismici.ts  FILE GENERATO: ag/F0/TC* per comune e per TR
   components/      pattern di UI riusabili e diagrammi SVG
   tabs/            una scheda per file
+  cloud/           libreria personale e sincronizzazione OneDrive (facoltativa)
+    libreria.ts    forma del file e fusione a tre vie fra dispositivo e OneDrive
+    auth.ts        accesso Microsoft (MSAL, authorization code + PKCE)
+    onedrive.ts    il pezzetto di Graph che serve: leggi/scrivi un JSON
+    useSincronia.ts  quando si sincronizza, e cosa succede quando fallisce
   state/           stato dell'app (useReducer + context, persistenza locale)
   styles/          token del design system e fogli di stile
 ```
@@ -509,8 +600,9 @@ così le formule restano verificabili con i test.
 
 ### I dati dei comuni
 
-`src/data/comuni.ts` e `src/data/parametri-sismici.ts` sono generati e committati: l'app
-non fa nessuna chiamata di rete. Vanno rigenerati **insieme** — il secondo è indicizzato
+`src/data/comuni.ts` e `src/data/parametri-sismici.ts` sono generati e committati: il
+calcolo non fa nessuna chiamata di rete (l'unica rete dell'app è la sincronizzazione
+OneDrive, facoltativa e spenta finché non la si collega). Vanno rigenerati **insieme** — il secondo è indicizzato
 sulla posizione del comune nel primo — dopo una revisione della classificazione,
 dell'elenco ISTAT o del reticolo:
 

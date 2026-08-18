@@ -1,5 +1,12 @@
 name: CI
 
+# Il token del workflow non serve a scrivere niente: qui si compila e si
+# testa soltanto. Con i permessi dichiarati in cima, uno script di una
+# dipendenza che girasse durante `npm ci` non troverebbe un token capace di
+# toccare il repository.
+permissions:
+  contents: read
+
 on:
   pull_request:
     branches: [main]
@@ -11,6 +18,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # niente credenziali git lasciate nel runner dopo il checkout
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: 22
