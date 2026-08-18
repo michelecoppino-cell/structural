@@ -516,9 +516,18 @@ se c'è, vince lei.
 
 Ogni giro è **leggi → fondi → riscrivi**, mai «scarica e sostituisci». La fusione è a tre
 vie: le due copie vengono confrontate con la fotografia dell'ultima sincronizzazione
-riuscita, tenuta in locale. È quella terza copia a distinguere «l'ho appena aggiunta qui»
-da «l'ho appena cancellata là» — senza, la voce cancellata sul telefono ricompare al primo
-accesso dal PC. Le regole stanno in `src/cloud/libreria.ts` e sono coperte dai test.
+riuscita. È quella terza copia a distinguere «l'ho appena aggiunta qui» da «l'ho appena
+cancellata là» — senza, la voce cancellata sul telefono ricompare al primo accesso dal PC.
+Le regole stanno in `src/cloud/libreria.ts` e sono coperte dai test.
+
+La fotografia sta **dentro lo stato** (`AppState.libreriaBase`), non in una chiave di
+localStorage per conto suo, e non è un dettaglio implementativo: è la lezione di un guasto
+vero. Separati, i due dati potevano sopravvivere l'uno all'altro, e una fotografia rimasta
+orfana di una libreria azzerata racconta al giro dopo una storia falsa — «queste voci
+c'erano e ora non ci sono più» — facendo cancellare da OneDrive voci che nessuno aveva
+toccato, e quindi anche dall'altro dispositivo. Nello stesso contenitore, o si salvano
+tutt'e due o non si salva nessuna delle due: e senza fotografia la fusione somma, che è
+l'errore che non perde niente.
 
 Se OneDrive non risponde, o l'accesso è scaduto, **non succede niente di visibile**: si
 continua in locale e il pannello lo segnala. L'app non porta mai via la pagina verso

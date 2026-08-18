@@ -47,7 +47,7 @@ import {
 import { UNITA_DEFAULT, normalizzaElenco } from '../calc/unita';
 import { normalizzaBlocchi, nuovoBlocco, type BloccoQuaderno } from '../calc/quaderno';
 import { urlSicuro, type LinkUtente } from '../data/normative';
-import { LIBRERIA_VERSION, type Libreria } from '../cloud/libreria';
+import { LIBRERIA_VERSION, leggiLibreria, type Libreria } from '../cloud/libreria';
 
 export type TabId = 'azioni' | 'sollecitazioni' | 'verifiche' | 'costi' | 'quaderno' | 'normativa';
 /** Capitoli di altre schede che si possono tirare dentro il quaderno. */
@@ -91,6 +91,18 @@ export interface AppState {
   quaderno: StatoQuaderno;
   /** Norme e link aggiunti a mano nella scheda Normativa. */
   normative: LinkUtente[];
+  /**
+   * La libreria com'era all'ultima sincronizzazione riuscita con OneDrive:
+   * l'arbitro della fusione a tre vie. Sta **dentro lo stato**, e non in una
+   * chiave di localStorage per conto suo, per una ragione che è costata dei
+   * dati: se la fotografia sopravvive a un azzeramento della libreria vera,
+   * al giro successivo racconta una storia falsa — «queste voci c'erano e ora
+   * non ci sono più» — e la fusione le cancella da OneDrive, cioè anche
+   * dall'altro dispositivo, dove non le aveva toccate nessuno. Tenendole nello
+   * stesso contenitore, o si salvano tutt'e due o non si salva nessuna delle
+   * due: senza fotografia la fusione somma, che è l'errore innocuo.
+   */
+  libreriaBase: Libreria | null;
   ui: {
     open: Record<string, boolean>;
     exp: Record<string, boolean>;
@@ -185,6 +197,7 @@ export const STATO_INIZIALE: AppState = {
     quadretti: true,
   },
   normative: [],
+  libreriaBase: null,
   ui: {
     open: {
       sisma: true,
@@ -227,7 +240,7 @@ export type Action =
   | { type: 'calcolatrice'; patch: Partial<StatoCalcolatrice> }
   | { type: 'quaderno'; patch: Partial<StatoQuaderno> }
   | { type: 'normative'; voci: LinkUtente[] }
-  | { type: 'libreria'; lib: Libreria }
+  | { type: 'libreria'; lib: Libreria; base?: Libreria | null }
   | { type: 'toggleOpen'; id: string }
   | { type: 'toggleExp'; id: string }
   | { type: 'toggleAllDetails'; tab: TabId }
@@ -288,7 +301,12 @@ export function reducer(state: AppState, action: Action): AppState {
     case 'normative':
       return { ...state, normative: action.voci };
     case 'libreria':
-      return applicaLibreria(state, action.lib);
+      // libreria e fotografia si muovono insieme, in un solo passaggio: è la
+      // condizione che rende impossibile che una sopravviva all'altra
+      return {
+        ...applicaLibreria(state, action.lib),
+        libreriaBase: action.base === undefined ? state.libreriaBase : action.base,
+      };
     case 'toggleOpen':
       return {
         ...state,
@@ -316,7 +334,10 @@ export function reducer(state: AppState, action: Action): AppState {
       // aggiunte a mano, le unità e le formule preimpostate sono di chi usa
       // l'app, non del progetto, e ributtarle via a ogni foglio bianco
       // significherebbe riscriverle ogni volta.
-      return applicaLibreria(STATO_INIZIALE, estraiLibreria(state));
+      return {
+        ...applicaLibreria(STATO_INIZIALE, estraiLibreria(state)),
+        libreriaBase: state.libreriaBase,
+      };
   }
 }
 
@@ -421,6 +442,7 @@ export function migra(raw: Partial<AppState>): AppState {
     quaderno: quadernoMigrato(raw, base.quaderno),
     // l'indirizzo passa da urlSicuro: un file arrivato da fuori non deve poter
     // mettere uno schema eseguibile (`javascript:`) dentro un link dell'app
+    libreriaBase: raw.libreriaBase ? leggiLibreria(raw.libreriaBase) : null,
     normative: (Array.isArray(raw.normative) ? raw.normative : []).flatMap((v, i) => {
       const url = urlSicuro(v?.url);
       return url ? [{ id: v.id || `norma-${i}`, sigla: v.sigla ?? '', titolo: v.titolo ?? '', url }] : [];

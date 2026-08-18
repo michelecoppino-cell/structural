@@ -30,6 +30,35 @@ describe('import di un progetto', () => {
   });
 });
 
+describe('la fotografia di sincronizzazione vive con la libreria', () => {
+  const LIB = { schemaVersion: 1, aggiornato: '', normative: [NORMA], unita: ['kN'], preimpostate: [] };
+
+  it('si aggiornano nello stesso passaggio', () => {
+    const dopo = reducer(STATO_INIZIALE, { type: 'libreria', lib: LIB, base: LIB });
+    expect(dopo.normative).toEqual([NORMA]);
+    expect(dopo.libreriaBase).toEqual(LIB);
+  });
+
+  it('«Svuota tutto» le lascia stare entrambe', () => {
+    const con = reducer(STATO_INIZIALE, { type: 'libreria', lib: LIB, base: LIB });
+    const dopo = reducer(con, { type: 'reset' });
+    expect(dopo.normative).toEqual([NORMA]);
+    expect(dopo.libreriaBase).toEqual(LIB);
+  });
+
+  /**
+   * Il guasto vero, quello che è costato le due norme: la fotografia stava in
+   * una chiave di localStorage per conto suo ed è sopravvissuta a uno stato
+   * azzerato. Al giro dopo raccontava «queste voci c'erano e ora non ci sono
+   * più», e la fusione le cancellava da OneDrive — cioè anche dall'altro
+   * dispositivo, dove nessuno le aveva toccate. Uno stato salvato che non
+   * porta la fotografia non deve inventarsene una: senza, la fusione somma.
+   */
+  it('un salvataggio senza fotografia non se ne inventa una', () => {
+    expect(migra({ normative: [NORMA] }).libreriaBase).toBeNull();
+  });
+});
+
 describe('estrai e applica', () => {
   it('fanno il giro completo senza perdere niente', () => {
     const lib = { schemaVersion: 1, aggiornato: '', normative: [NORMA], unita: ['kN'], preimpostate: [] };

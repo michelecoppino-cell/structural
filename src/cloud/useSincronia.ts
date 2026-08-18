@@ -18,7 +18,7 @@ import { estraiLibreria, useStore } from '../state/store';
 import { ServeAccesso, SINCRONIA_CONFIGURATA, account, initAuth, login, logout } from './auth';
 import { FILE_LIBRERIA } from './config';
 import { leggiJson, scriviJson } from './onedrive';
-import { fondiLibrerie, leggiLibreria, libreriaVuota, stessoContenuto, type Libreria } from './libreria';
+import { fondiLibrerie, leggiLibreria, libreriaVuota, stessoContenuto } from './libreria';
 
 /** Cosa contiene la libreria dopo l'ultimo giro riuscito. */
 export interface Conteggio {
@@ -41,24 +41,22 @@ export type StatoSincronia =
   /** rete assente o Graph che risponde male: si riproverà */
   | 'errore';
 
-/** Fotografia dell'ultima sincronizzazione riuscita: l'arbitro della fusione. */
-const CHIAVE_BASE = 'structural:libreria-base';
+/**
+ * Vecchia casa della fotografia di sincronizzazione, quando stava per conto
+ * suo. Ora vive dentro lo stato (`AppState.libreriaBase`), insieme alla
+ * libreria che descrive: separati, i due potevano sopravvivere l'uno
+ * all'altro, e una fotografia rimasta orfana di una libreria azzerata fa
+ * cancellare da OneDrive voci che nessuno aveva cancellato. La chiave vecchia
+ * si butta via una volta sola, per non lasciare in giro un dato che non è più
+ * la verità di nessuno.
+ */
+const CHIAVE_BASE_VECCHIA = 'structural:libreria-base';
 
-function leggiBase(): Libreria | null {
+function buttaBaseVecchia(): void {
   try {
-    const raw = localStorage.getItem(CHIAVE_BASE);
-    return raw ? leggiLibreria(JSON.parse(raw)) : null;
+    localStorage.removeItem(CHIAVE_BASE_VECCHIA);
   } catch {
-    return null;
-  }
-}
-
-function scriviBase(lib: Libreria): void {
-  try {
-    localStorage.setItem(CHIAVE_BASE, JSON.stringify(lib));
-  } catch {
-    // senza base la prossima fusione somma le due parti invece di rispettare
-    // le cancellazioni: peggio, ma non si perde niente
+    // niente da togliere
   }
 }
 
@@ -101,14 +99,19 @@ export function useSincronia() {
       const remoto = grezzo ? leggiLibreria(grezzo) : libreriaVuota();
       // se su OneDrive non c'è ancora niente non esiste una storia comune da
       // arbitrare: si passa `null`, e le due parti si sommano
-      const base = grezzo ? leggiBase() : null;
+      const base = grezzo ? statoApp.current.libreriaBase : null;
       const fusa = fondiLibrerie(locale, remoto, base);
 
       setDettaglio('');
-      if (!stessoContenuto(fusa, locale)) dispatch({ type: 'libreria', lib: fusa });
-      if (!grezzo || !stessoContenuto(fusa, remoto)) await scriviJson(FILE_LIBRERIA, fusa);
-
-      scriviBase(fusa);
+      // libreria e fotografia in un solo passaggio, prima di scrivere: se la
+      // scrittura fallisce, la fotografia resta quella di prima e il giro
+      // successivo riprova da capo invece di credere a una sincronizzazione
+      // mai avvenuta
+      if (!grezzo || !stessoContenuto(fusa, remoto)) {
+        await scriviJson(FILE_LIBRERIA, fusa);
+      }
+      dispatch({ type: 'libreria', lib: fusa, base: fusa });
+      buttaBaseVecchia();
       setConteggio({
         normative: fusa.normative.length,
         unita: fusa.unita.length,
@@ -183,12 +186,12 @@ export function useSincronia() {
     await logout();
     setUtente(null);
     setStato('scollegata');
-    // la base se ne va con l'account: al prossimo collegamento non c'è una
-    // storia comune da arbitrare, e sommare è l'unica scelta che non perde nulla
-    try {
-      localStorage.removeItem(CHIAVE_BASE);
-    } catch { /* niente da togliere */ }
-  }, []);
+    // la fotografia se ne va con l'account: al prossimo collegamento non c'è
+    // una storia comune da arbitrare, e sommare è l'unica scelta che non
+    // perde nulla
+    dispatch({ type: 'libreria', lib: estraiLibreria(statoApp.current), base: null });
+    buttaBaseVecchia();
+  }, [dispatch]);
 
   return { stato, utente, ultimo, dettaglio, conteggio, sincronizza, collega, scollega };
 }
