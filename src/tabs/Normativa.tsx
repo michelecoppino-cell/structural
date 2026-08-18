@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { ArrowSquareOut, BookOpenText, CaretDown, CaretRight, MagnifyingGlass, Plus, Trash } from '@phosphor-icons/react';
 import { useStore } from '../state/store';
+import PannelloSincronia from '../cloud/PannelloSincronia';
 import { ComandiScheda } from '../components/ComandiScheda';
 import {
   CAPITOLI,
@@ -244,7 +245,7 @@ function Aggiunte({ voci, ricerca }: { voci: LinkUtente[]; ricerca: boolean }) {
               Aggiunte a mano
             </span>
             <span className="norma-titolo">
-              Norme, linee guida e link tuoi — restano nel progetto e viaggiano con l’Esporta JSON
+              Norme, linee guida e link tuoi — restano anche dopo «Svuota tutto» e vanno su OneDrive
             </span>
           </span>
           <button
@@ -414,11 +415,14 @@ export default function Normativa() {
 
       <Aggiunte voci={aggiunte} ricerca={ricerca} />
 
+      <PannelloSincronia />
+
       <p className="note">
         I link aprono la norma <strong>capitolo per capitolo</strong> su studiopetrillo.com: il
         capitolo va alla sua pagina, i paragrafi al PDF del capitolo (sulla pagina indicata, dove è
         segnata). L’indice di NTC e Circolare è parte del sito e resta uguale per tutte le commesse;
-        le voci di «Aggiunte a mano» invece sono dati di progetto e finiscono nell’Esporta JSON.
+        le voci di «Aggiunte a mano» invece sono tue: restano dopo «Svuota tutto» e, se colleghi
+        OneDrive, si ritrovano su tutti i dispositivi.
       </p>
     </div>
   );

@@ -3519,3 +3519,18 @@ button.field-origin:hover {
     min-width: 0;
   }
 }
+
+/* ── pannello della libreria personale (sincronia OneDrive) ── */
+.sincronia {
+  display: grid;
+  gap: 10px;
+  padding-top: 12px;
+}
+.sincronia .note {
+  margin: 0;
+}
+.sincronia-bottoni {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}

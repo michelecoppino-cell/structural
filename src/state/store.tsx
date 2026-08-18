@@ -47,6 +47,7 @@ import {
 import { UNITA_DEFAULT, normalizzaElenco } from '../calc/unita';
 import { normalizzaBlocchi, nuovoBlocco, type BloccoQuaderno } from '../calc/quaderno';
 import { urlSicuro, type LinkUtente } from '../data/normative';
+import { LIBRERIA_VERSION, type Libreria } from '../cloud/libreria';
 
 export type TabId = 'azioni' | 'sollecitazioni' | 'verifiche' | 'costi' | 'quaderno' | 'normativa';
 /** Capitoli di altre schede che si possono tirare dentro il quaderno. */
@@ -226,6 +227,7 @@ export type Action =
   | { type: 'calcolatrice'; patch: Partial<StatoCalcolatrice> }
   | { type: 'quaderno'; patch: Partial<StatoQuaderno> }
   | { type: 'normative'; voci: LinkUtente[] }
+  | { type: 'libreria'; lib: Libreria }
   | { type: 'toggleOpen'; id: string }
   | { type: 'toggleExp'; id: string }
   | { type: 'toggleAllDetails'; tab: TabId }
@@ -285,6 +287,8 @@ export function reducer(state: AppState, action: Action): AppState {
       return { ...state, quaderno: { ...state.quaderno, ...action.patch } };
     case 'normative':
       return { ...state, normative: action.voci };
+    case 'libreria':
+      return applicaLibreria(state, action.lib);
     case 'toggleOpen':
       return {
         ...state,
@@ -308,8 +312,45 @@ export function reducer(state: AppState, action: Action): AppState {
     case 'carica':
       return migra(action.stato);
     case 'reset':
-      return STATO_INIZIALE;
+      // «Svuota tutto» azzera la commessa, non la libreria personale: le norme
+      // aggiunte a mano, le unità e le formule preimpostate sono di chi usa
+      // l'app, non del progetto, e ributtarle via a ogni foglio bianco
+      // significherebbe riscriverle ogni volta.
+      return applicaLibreria(STATO_INIZIALE, estraiLibreria(state));
   }
+}
+
+/* ───────────────────────────── libreria personale ───────────────────────────── */
+
+/**
+ * Le tre cose che nell'app appartengono a chi la usa e non alla commessa: le
+ * norme aggiunte a mano, le unità di misura proposte e le formule
+ * preimpostate. Vivono dentro `AppState` come tutto il resto — nell'uso
+ * quotidiano sono campi come gli altri — ma escono di qui per due strade che il
+ * resto dello stato non ha: sopravvivono a «Svuota tutto» e vanno nel file su
+ * OneDrive, che è quello che le fa ritrovare sul telefono in cantiere.
+ */
+export function estraiLibreria(state: AppState): Libreria {
+  return {
+    schemaVersion: LIBRERIA_VERSION,
+    aggiornato: '',
+    normative: state.normative,
+    unita: state.calcolatrice.unita,
+    preimpostate: state.calcolatrice.preimpostate,
+  };
+}
+
+/** Rimette una libreria dentro lo stato, senza toccare nient'altro. */
+export function applicaLibreria(state: AppState, lib: Libreria): AppState {
+  return {
+    ...state,
+    normative: lib.normative,
+    calcolatrice: {
+      ...state.calcolatrice,
+      unita: normalizzaElenco(lib.unita.length ? lib.unita : state.calcolatrice.unita),
+      preimpostate: lib.preimpostate,
+    },
+  };
 }
 
 /**
