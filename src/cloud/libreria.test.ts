@@ -8,7 +8,7 @@ import {
   type Libreria,
 } from './libreria';
 
-const norma = (id: string, sigla = id) => ({ id, sigla, titolo: '', url: `https://esempio.it/${id}` });
+const norma = (id: string, sigla = id) => ({ id, sigla, titolo: '', url: `https://esempio.it/${id}`, capitoli: [] });
 
 function lib(patch: Partial<Libreria>): Libreria {
   return { ...libreriaVuota(), ...patch };

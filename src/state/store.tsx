@@ -46,7 +46,7 @@ import {
 } from '../calc/calcolatrice';
 import { UNITA_DEFAULT, normalizzaElenco } from '../calc/unita';
 import { normalizzaBlocchi, nuovoBlocco, type BloccoQuaderno } from '../calc/quaderno';
-import { urlSicuro, type LinkUtente } from '../data/normative';
+import { leggiNormative, type LinkUtente } from '../data/normative';
 import { LIBRERIA_VERSION, leggiLibreria, type Libreria } from '../cloud/libreria';
 
 export type TabId = 'azioni' | 'sollecitazioni' | 'verifiche' | 'costi' | 'quaderno' | 'normativa';
@@ -443,10 +443,7 @@ export function migra(raw: Partial<AppState>): AppState {
     // l'indirizzo passa da urlSicuro: un file arrivato da fuori non deve poter
     // mettere uno schema eseguibile (`javascript:`) dentro un link dell'app
     libreriaBase: raw.libreriaBase ? leggiLibreria(raw.libreriaBase) : null,
-    normative: (Array.isArray(raw.normative) ? raw.normative : []).flatMap((v, i) => {
-      const url = urlSicuro(v?.url);
-      return url ? [{ id: v.id || `norma-${i}`, sigla: v.sigla ?? '', titolo: v.titolo ?? '', url }] : [];
-    }),
+    normative: leggiNormative(raw.normative),
     ui: {
       ...base.ui,
       ...raw.ui,
