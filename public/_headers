@@ -11,8 +11,9 @@
 # il token e la sincronizzazione OneDrive. Sono più di quelli che verrebbe da
 # scrivere, e il motivo non è ovvio: **`GET …:/content` su un file di OneDrive
 # non restituisce il file, restituisce un 302** verso l'host di storage vero —
-# `*.files.1drv.com` per gli account personali, `*.sharepoint.com` per quelli
-# aziendali. `fetch` segue il redirect da solo, ma la CSP viene applicata anche
+# `*.files.1drv.com` o `*.livefilestore.com` per gli account personali,
+# `*.sharepoint.com` per quelli aziendali — e quale dei due tocchi dipende
+# dall'account, non dal codice: per questo sono elencati tutti. `fetch` segue il redirect da solo, ma la CSP viene applicata anche
 # alla destinazione: con il solo `graph.microsoft.com` autorizzato, la lettura
 # del file muore lì, e il browser la riporta come un generico «Failed to fetch»
 # che sembra un problema di rete. Allo stesso modo gli account Microsoft
@@ -22,7 +23,7 @@
 # pagina altrui, che è il modo classico di far cliccare a qualcuno cose che
 # non vede.
 /*
-  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://graph.microsoft.com https://login.microsoftonline.com https://login.live.com https://*.1drv.com https://*.storage.live.com https://*.sharepoint.com; frame-src https://login.microsoftonline.com https://login.live.com; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self' https://login.microsoftonline.com https://login.live.com; frame-ancestors 'none'; upgrade-insecure-requests
+  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://graph.microsoft.com https://login.microsoftonline.com https://login.live.com https://*.1drv.com https://*.livefilestore.com https://*.storage.live.com https://*.onedrive.com https://*.sharepoint.com; frame-src https://login.microsoftonline.com https://login.live.com; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self' https://login.microsoftonline.com https://login.live.com; frame-ancestors 'none'; upgrade-insecure-requests
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
   Cross-Origin-Opener-Policy: same-origin

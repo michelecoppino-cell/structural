@@ -89,18 +89,61 @@ function creaCartella(): Promise<void> {
 
 /**
  * Legge un JSON dalla cartella dell'app.
+ *
+ * In due passi invece che in uno, e la ragione è tutta pratica. La strada
+ * ovvia — `GET …:/content` — non restituisce il file: restituisce un **302**
+ * verso l'host di storage vero, che per un OneDrive personale è uno fra
+ * `*.files.1drv.com`, `*.livefilestore.com` e parenti, e cambia da account ad
+ * account. `fetch` segue il redirect da sé, il che è comodo finché tutto va
+ * bene e disastroso quando qualcosa lo blocca: l'errore viene attribuito
+ * all'indirizzo di partenza, e un blocco sul secondo host diventa
+ * indistinguibile da un guasto sul primo.
+ *
+ * Chiedendo prima i metadati (`@microsoft.graph.downloadUrl`) l'indirizzo di
+ * storage arriva **come dato**, e il secondo scarico è una chiamata nostra a un
+ * indirizzo che conosciamo: se fallisce, l'errore lo nomina. Il costo è una
+ * richiesta in più su un file che si legge una volta per sincronizzazione.
+ *
  * @returns il contenuto, o `null` se il file non c'è ancora (primo avvio).
  */
 export async function leggiJson(file: string): Promise<unknown | null> {
-  const r = await chiama(`/me/drive/root:/${CARTELLA}/${file}:/content`);
-  if (r.status === 404) return null;
-  if (!r.ok) throw await erroreDa(r);
+  const meta = await chiama(
+    `/me/drive/root:/${CARTELLA}/${file}?$select=id,name,@microsoft.graph.downloadUrl`,
+  );
+  if (meta.status === 404) return null;
+  if (!meta.ok) throw await erroreDa(meta);
+
+  const info = (await meta.json()) as Record<string, unknown>;
+  const scarico = info['@microsoft.graph.downloadUrl'];
+  // niente indirizzo di scarico: file vuoto o appena creato, si riparte dal
+  // locale invece di far fallire tutta la sincronizzazione
+  if (typeof scarico !== 'string' || !scarico) return null;
+
+  // L'indirizzo è già autenticato: aggiungerci il token sarebbe un errore
+  // (l'header Authorization su quegli host fa scattare un 401).
+  const r = await fetchEsterno(scarico);
+  if (!r.ok) throw new ErroreGraph(r.status, 'downloadFallito', new URL(scarico).host);
   try {
     return await r.json();
   } catch {
     // file troncato da una scrittura interrotta: meglio ripartire dal locale
-    // che far fallire tutta la sincronizzazione
     return null;
+  }
+}
+
+/** Come `fetch`, ma se muore dice **quale host** non ha risposto. */
+async function fetchEsterno(url: string): Promise<Response> {
+  try {
+    return await fetch(url);
+  } catch (e) {
+    const host = (() => {
+      try {
+        return new URL(url).host;
+      } catch {
+        return url;
+      }
+    })();
+    throw new Error(`${e instanceof Error ? e.message : String(e)} — scaricando da ${host}`);
   }
 }
 
