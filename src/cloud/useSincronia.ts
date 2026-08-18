@@ -20,6 +20,13 @@ import { FILE_LIBRERIA } from './config';
 import { leggiJson, scriviJson } from './onedrive';
 import { fondiLibrerie, leggiLibreria, libreriaVuota, stessoContenuto, type Libreria } from './libreria';
 
+/** Cosa contiene la libreria dopo l'ultimo giro riuscito. */
+export interface Conteggio {
+  normative: number;
+  unita: number;
+  preimpostate: number;
+}
+
 export type StatoSincronia =
   /** manca il client id: l'app gira tutta in locale, come prima */
   | 'spenta'
@@ -68,6 +75,11 @@ export function useSincronia() {
   // console non c'è, ed è lì che serve sapere se è un permesso mancante o
   // davvero la rete.
   const [dettaglio, setDettaglio] = useState<string>('');
+  // Quante voci ci sono nella libreria dopo il giro. Sembra un dettaglio
+  // estetico e non lo è: è la sola cosa che, da un dispositivo, distingue
+  // «l'altro dispositivo non ha ancora scritto» da «sto guardando il OneDrive
+  // di un altro account». Senza, quel dubbio si risolve solo indovinando.
+  const [conteggio, setConteggio] = useState<Conteggio | null>(null);
 
   // lo stato più fresco, per non lavorare su una copia vecchia dentro le
   // funzioni asincrone (il classico giro che «riporta indietro» una modifica)
@@ -97,6 +109,11 @@ export function useSincronia() {
       if (!grezzo || !stessoContenuto(fusa, remoto)) await scriviJson(FILE_LIBRERIA, fusa);
 
       scriviBase(fusa);
+      setConteggio({
+        normative: fusa.normative.length,
+        unita: fusa.unita.length,
+        preimpostate: fusa.preimpostate.length,
+      });
       sincronizzata.current = JSON.stringify([fusa.normative, fusa.unita, fusa.preimpostate]);
       setUltimo(new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }));
       setStato('in-pari');
@@ -173,5 +190,5 @@ export function useSincronia() {
     } catch { /* niente da togliere */ }
   }, []);
 
-  return { stato, utente, ultimo, dettaglio, sincronizza, collega, scollega };
+  return { stato, utente, ultimo, dettaglio, conteggio, sincronizza, collega, scollega };
 }
