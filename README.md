@@ -486,6 +486,19 @@ La libreria è la roba che si costruisce una volta e si usa per anni: ributtarla
 foglio bianco, o riscriverla a mano sul telefono, è esattamente il motivo per cui non la si
 costruiva mai davvero.
 
+### Gli host di storage e la CSP
+
+Leggere il file non è una chiamata sola: `graph.microsoft.com` risponde con un redirect
+verso l'host dove il contenuto sta davvero, che per un account personale oggi è
+`my.microsoftpersonalcontent.com` e ieri era `*.files.1drv.com`. Quegli host vanno elencati
+in `connect-src` dentro `public/_headers`, e **la lista è per sua natura incompleta**:
+Microsoft può spostare lo storage senza avvisare nessuno, e il giorno che succede la
+sincronizzazione si ferma con un `Failed to fetch` che non somiglia affatto a un problema
+di CSP.
+
+Per questo l'app, quando uno scarico fallisce, **nomina l'host** nel pannello: l'errore
+dice da solo quale riga aggiungere. È l'unica manutenzione prevista di questa parte.
+
 ### Il file su OneDrive
 
 Uno solo: `strutturale/strutturale-libreria.json`, nella root del OneDrive personale — una
