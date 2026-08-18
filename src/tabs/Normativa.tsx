@@ -1,21 +1,21 @@
 import { useMemo, useState } from 'react';
-import { ArrowSquareOut, BookOpenText, CaretDown, CaretRight, MagnifyingGlass, Plus, Trash } from '@phosphor-icons/react';
+import {
+  ArrowSquareOut,
+  BookOpenText,
+  CaretDown,
+  CaretRight,
+  Check,
+  MagnifyingGlass,
+  PencilSimple,
+  Plus,
+  Trash,
+} from '@phosphor-icons/react';
 import { useStore } from '../state/store';
+import { apriLink } from '../cloud/apriLink';
 import PannelloSincronia from '../cloud/PannelloSincronia';
 import type { useSincronia } from '../cloud/useSincronia';
 import { ComandiScheda } from '../components/ComandiScheda';
-import {
-  CAPITOLI,
-  DOCUMENTI,
-  linkCapitolo,
-  linkVoce,
-  livello,
-  urlSicuro,
-  type Capitolo,
-  type Documento,
-  type LinkUtente,
-  type VoceNorma,
-} from '../data/normative';
+import { livelloCapitolo, urlSicuro, type CapitoloIndice, type LinkUtente } from '../data/normative';
 
 const normalizza = (s: string) =>
   s
@@ -29,333 +29,244 @@ const corrisponde = (testo: string, chiavi: string[]) => {
 };
 
 /**
- * Filtro della ricerca: un capitolo resta se corrisponde lui (e allora tiene
- * tutti i suoi paragrafi) oppure se corrisponde qualche paragrafo.
+ * Filtro della ricerca: un documento resta se corrisponde lui (e allora tiene
+ * tutto il suo indice) oppure se corrisponde qualche capitolo.
  */
-function filtra(capitoli: Capitolo[], q: string): Capitolo[] {
+function filtraDocumenti(voci: LinkUtente[], q: string): LinkUtente[] {
   const chiavi = normalizza(q).split(/\s+/).filter(Boolean);
-  if (!chiavi.length) return capitoli;
-  return capitoli
-    .map((c) => {
-      if (corrisponde(`${c.etichetta} ${c.titolo} ${c.tag ?? ''}`, chiavi)) return c;
-      const voci = c.voci.filter((v) => corrisponde(`${v.codice} ${v.titolo} ${v.tag ?? ''}`, chiavi));
-      return voci.length ? { ...c, voci } : null;
-    })
-    .filter((c): c is Capitolo => c !== null);
+  if (!chiavi.length) return voci;
+  return voci.flatMap((v) => {
+    if (corrisponde(`${v.sigla} ${v.titolo}`, chiavi)) return [v];
+    const capitoli = v.capitoli.filter((c) => corrisponde(`${c.numero} ${c.titolo}`, chiavi));
+    return capitoli.length ? [{ ...v, capitoli }] : [];
+  });
 }
 
-/* ─────────────────────────── paragrafo ─────────────────────────── */
+const urlValida = (url: string) => {
+  const u = urlSicuro(url) ?? '';
+  return !!u && /^https?:\/\/[^\s]+\.[^\s]+/i.test(u);
+};
 
-function Voce({ voce, cap, doc }: { voce: VoceNorma; cap: Capitolo; doc: Documento }) {
-  // il rientro cresce con la profondità del numero: 4.1 → 4.1.2 → 4.1.2.3.5.2;
-  // il passo del rientro è un token CSS, più stretto su cellulare
-  const rientro = { '--liv': Math.max(0, livello(voce.codice) - 1) } as React.CSSProperties;
+/* ─────────────────────────── un capitolo dell'indice ─────────────────────────── */
+
+function RigaCapitolo({ cap }: { cap: CapitoloIndice }) {
+  const rientro = { '--liv': livelloCapitolo(cap.numero) } as React.CSSProperties;
   return (
-    <li>
-      <a
-        className="norma-voce"
-        style={rientro}
-        href={linkVoce(voce, cap, doc)}
-        target="_blank"
-        rel="noopener noreferrer"
-        title={
-          voce.pagina
-            ? `Apre il PDF del ${cap.etichetta} a pagina ${voce.pagina}`
-            : `Apre il PDF del ${cap.etichetta} di ${doc.sigla}`
-        }
-      >
-        <span className="codice">{voce.codice}</span>
-        <span className="titolo">{voce.titolo}</span>
-        {voce.pagina && <span className="pagina">pag. {voce.pagina}</span>}
-        <ArrowSquareOut size={13} />
-      </a>
+    <li className="norma-voce" style={rientro}>
+      <span className="codice">{cap.numero}</span>
+      <span className="titolo">{cap.titolo}</span>
+      {cap.pagina && <span className="pagina">p. {cap.pagina}</span>}
     </li>
   );
 }
 
-/* ─────────────────────────── capitolo ─────────────────────────── */
-
-function CapitoloRiga({
+function RigaCapitoloModifica({
   cap,
-  doc,
-  forzaAperto,
+  onChange,
+  onRemove,
 }: {
-  cap: Capitolo;
-  doc: Documento;
-  /** Durante una ricerca i capitoli trovati si aprono da soli. */
-  forzaAperto: boolean;
+  cap: CapitoloIndice;
+  onChange: (patch: Partial<CapitoloIndice>) => void;
+  onRemove: () => void;
 }) {
-  const { state, dispatch } = useStore();
-  const id = `norma:${doc.id}:${cap.n}`;
-  const aperto = forzaAperto || !!state.ui.open[id];
-  const vuoto = cap.voci.length === 0;
-  const destinazione = cap.url
-    ? `Apre la pagina del ${cap.etichetta} — ${doc.sigla}`
-    : `Apre il PDF del ${cap.etichetta} — ${doc.sigla}`;
-
   return (
     <li className="norma-cap">
-      <div className="norma-cap-riga">
-        {/* un capitolo senza paragrafi indicizzati non ha niente da aprire:
-            tutta la riga diventa il link al capitolo */}
-        {vuoto ? (
-          <a
-            className="norma-cap-testa"
-            href={linkCapitolo(cap, doc)}
-            target="_blank"
-            rel="noopener noreferrer"
-            title={destinazione}
-          >
-            <span className="caret" />
-            <span className="codice">{cap.etichetta}</span>
-            <span className="titolo">{cap.titolo}</span>
-          </a>
-        ) : (
-          <button
-            type="button"
-            className="norma-cap-testa"
-            aria-expanded={aperto}
-            title={aperto ? 'Chiudi i paragrafi' : 'Mostra i paragrafi'}
-            onClick={() => dispatch({ type: 'toggleOpen', id })}
-          >
-            <span className="caret">{aperto ? <CaretDown size={13} /> : <CaretRight size={13} />}</span>
-            <span className="codice">{cap.etichetta}</span>
-            <span className="titolo">{cap.titolo}</span>
-            <span className="conta">{cap.voci.length}</span>
-          </button>
-        )}
-        <a
-          className="norma-cap-link"
-          href={linkCapitolo(cap, doc)}
-          target="_blank"
-          rel="noopener noreferrer"
-          title={destinazione}
-        >
-          <ArrowSquareOut size={14} />
-        </a>
+      <div className="norma-cap-modifica">
+        <input
+          className="input"
+          value={cap.numero}
+          placeholder="2.1"
+          aria-label="Numero del capitolo"
+          onChange={(e) => onChange({ numero: e.target.value })}
+        />
+        <input
+          className="input"
+          value={cap.titolo}
+          placeholder="Titolo del capitolo"
+          aria-label="Titolo del capitolo"
+          onChange={(e) => onChange({ titolo: e.target.value })}
+        />
+        <input
+          className="input"
+          value={cap.pagina}
+          placeholder="p."
+          aria-label="Pagina del capitolo"
+          onChange={(e) => onChange({ pagina: e.target.value })}
+        />
+        <button type="button" className="btn btn-secondary btn-icon" title="Togli il capitolo" onClick={onRemove}>
+          <Trash size={13} />
+        </button>
       </div>
-
-      {aperto && !vuoto && (
-        <ul className="norma-voci">
-          {cap.voci.map((v) => (
-            <Voce key={v.codice} voce={v} cap={cap} doc={doc} />
-          ))}
-        </ul>
-      )}
     </li>
   );
 }
 
-/* ─────────────────────────── documento ─────────────────────────── */
+/* ─────────────────────────── un documento della libreria ─────────────────────────── */
 
 function DocumentoPanel({
-  doc,
-  capitoli,
+  voce,
+  modifica,
   ricerca,
+  onChange,
+  onRemove,
 }: {
-  doc: Documento;
-  capitoli: Capitolo[];
+  voce: LinkUtente;
+  modifica: boolean;
   ricerca: boolean;
+  onChange: (patch: Partial<LinkUtente>) => void;
+  onRemove: () => void;
 }) {
   const { state, dispatch } = useStore();
-  const id = `norma:${doc.id}`;
-  // di default si vede solo il titolo della norma; una ricerca apre tutto
-  const aperto = ricerca || !!state.ui.open[id];
+  const [nuovoCap, setNuovoCap] = useState({ numero: '', titolo: '', pagina: '' });
+  const id = `norma:${voce.id}`;
+  // in modifica l'indice sta sempre aperto — è lì che si scrive
+  const aperto = modifica || ricerca || !!state.ui.open[id];
+  const url = urlSicuro(voce.url) ?? '';
+  const valida = urlValida(voce.url);
 
-  return (
-    <section className="panel">
-      <div className="panel-body" style={{ paddingTop: 12 }}>
-        <div className="norma-testa">
-          <button
-            type="button"
-            className="norma-doc-testa"
-            aria-expanded={aperto}
-            aria-controls={`${id}-corpo`}
-            onClick={() => dispatch({ type: 'toggleOpen', id })}
-          >
-            <span className="caret">{aperto ? <CaretDown size={14} /> : <CaretRight size={14} />}</span>
-            {/* solo sigla e titolo: gli estremi di pubblicazione e i conteggi
-                riempivano la testata senza aggiungere niente all'uso */}
-            <span>
-              <span className="norma-sigla">
-                <BookOpenText size={15} />
-                {doc.sigla}
-              </span>
-              <span className="norma-titolo" title={doc.estremi}>
-                {doc.titolo}
-              </span>
-            </span>
-          </button>
-          <a className="btn btn-secondary" href={doc.pdf} target="_blank" rel="noopener noreferrer">
-            <ArrowSquareOut size={14} />
-            Testo completo
-          </a>
-        </div>
-
-        {aperto &&
-          (capitoli.length === 0 ? (
-            <p className="note">Nessun capitolo di questo documento corrisponde alla ricerca.</p>
-          ) : (
-            <ul className="norma-capitoli" id={`${id}-corpo`}>
-              {capitoli.map((c) => (
-                <CapitoloRiga key={c.n} cap={c} doc={doc} forzaAperto={ricerca} />
-              ))}
-            </ul>
-          ))}
-      </div>
-    </section>
-  );
-}
-
-/* ─────────────────── norme e link aggiunti a mano ─────────────────── */
-
-
-function Aggiunte({ voci, ricerca }: { voci: LinkUtente[]; ricerca: boolean }) {
-  const { state, dispatch } = useStore();
-  const [apri, setApri] = useState(false);
-  const [bozza, setBozza] = useState({ sigla: '', titolo: '', url: '' });
-
-  const setVoci = (v: LinkUtente[]) => dispatch({ type: 'normative', voci: v });
-
-  // urlSicuro completa lo schema mancante e scarta tutto ciò che non è http(s)
-  const url = urlSicuro(bozza.url) ?? '';
-  const urlValido = !!url && /^https?:\/\/[^\s]+\.[^\s]+/i.test(url);
-  const pronto = !!bozza.sigla.trim() && urlValido;
-
-  const aggiungi = () => {
-    if (!pronto) return;
-    setVoci([
-      ...state.normative,
-      {
-        id: `norma-${Date.now()}`,
-        sigla: bozza.sigla.trim(),
-        titolo: bozza.titolo.trim(),
-        url,
-      },
-    ]);
-    setBozza({ sigla: '', titolo: '', url: '' });
+  const setCapitoli = (capitoli: CapitoloIndice[]) => onChange({ capitoli });
+  const aggiornaCap = (capId: string, patch: Partial<CapitoloIndice>) =>
+    setCapitoli(voce.capitoli.map((c) => (c.id === capId ? { ...c, ...patch } : c)));
+  const rimuoviCap = (capId: string) => setCapitoli(voce.capitoli.filter((c) => c.id !== capId));
+  const aggiungiCap = () => {
+    if (!nuovoCap.numero.trim() && !nuovoCap.titolo.trim()) return;
+    setCapitoli([...voce.capitoli, { id: `cap-${Date.now()}`, ...nuovoCap }]);
+    setNuovoCap({ numero: '', titolo: '', pagina: '' });
   };
 
   return (
     <section className="panel">
       <div className="panel-body" style={{ paddingTop: 12 }}>
         <div className="norma-testa">
-          <span>
-            <span className="norma-sigla">
-              <BookOpenText size={15} />
-              Aggiunte a mano
+          {!modifica && voce.capitoli.length > 0 ? (
+            <button
+              type="button"
+              className="norma-doc-testa"
+              aria-expanded={aperto}
+              aria-controls={`${id}-corpo`}
+              onClick={() => dispatch({ type: 'toggleOpen', id })}
+            >
+              <span className="caret">{aperto ? <CaretDown size={14} /> : <CaretRight size={14} />}</span>
+              <span>
+                <span className="norma-sigla">
+                  <BookOpenText size={15} />
+                  {voce.sigla || 'Senza sigla'}
+                </span>
+                <span className="norma-titolo" title={voce.titolo}>
+                  {voce.titolo || voce.url}
+                </span>
+              </span>
+            </button>
+          ) : (
+            <span className="norma-doc-testa" style={{ cursor: 'default' }}>
+              <span className="caret" />
+              <span>
+                <span className="norma-sigla">
+                  <BookOpenText size={15} />
+                  {voce.sigla || 'Senza sigla'}
+                </span>
+                <span className="norma-titolo" title={voce.titolo}>
+                  {voce.titolo || voce.url}
+                </span>
+              </span>
             </span>
-            <span className="norma-titolo">
-              Norme, linee guida e link tuoi — restano anche dopo «Svuota tutto» e vanno su OneDrive
-            </span>
-          </span>
-          <button
-            type="button"
-            className="btn btn-primary"
-            aria-expanded={apri}
-            onClick={() => setApri((v) => !v)}
-          >
-            <Plus size={14} />
-            Aggiungi
-          </button>
+          )}
+          <div style={{ display: 'flex', gap: 6, flex: 'none' }}>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              disabled={!valida}
+              title={valida ? url : 'Nessun indirizzo valido'}
+              onClick={() => apriLink(url)}
+            >
+              <ArrowSquareOut size={14} />
+              Testo completo
+            </button>
+            {modifica && (
+              <button type="button" className="btn btn-secondary btn-icon" title="Togli il documento" onClick={onRemove}>
+                <Trash size={14} />
+              </button>
+            )}
+          </div>
         </div>
 
-        {apri && (
-          <div className="norma-aggiungi">
-            <div className="mini-campo">
-              <label htmlFor="na-sigla">Sigla</label>
-              <input
-                id="na-sigla"
-                className="input"
-                value={bozza.sigla}
-                placeholder="CNR-DT 207"
-                autoComplete="off"
-                onChange={(e) => setBozza({ ...bozza, sigla: e.target.value })}
-              />
-            </div>
-            <div className="mini-campo norma-campo-titolo">
-              <label htmlFor="na-titolo">Titolo</label>
-              <input
-                id="na-titolo"
-                className="input"
-                value={bozza.titolo}
-                placeholder="Istruzioni per la valutazione delle azioni del vento"
-                autoComplete="off"
-                onChange={(e) => setBozza({ ...bozza, titolo: e.target.value })}
-              />
-            </div>
-            <div className="mini-campo norma-campo-url">
-              <label htmlFor="na-url">Indirizzo</label>
-              <input
-                id="na-url"
-                className={`input${bozza.url.trim() && !urlValido ? ' is-error' : ''}`}
-                value={bozza.url}
-                placeholder="https://…"
-                inputMode="url"
-                autoComplete="off"
-                spellCheck={false}
-                onChange={(e) => setBozza({ ...bozza, url: e.target.value })}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    aggiungi();
-                  }
-                }}
-              />
-            </div>
-            <button type="button" className="btn btn-primary norma-btn-aggiungi" disabled={!pronto} onClick={aggiungi}>
-              <Plus size={14} />
-              Aggiungi all’elenco
-            </button>
+        {modifica && (
+          <div className="norma-doc-modifica">
+            <input
+              className="input"
+              value={voce.sigla}
+              placeholder="NTC 2018"
+              aria-label="Sigla o tipo del documento"
+              onChange={(e) => onChange({ sigla: e.target.value })}
+            />
+            <input
+              className="input norma-campo-titolo"
+              value={voce.titolo}
+              placeholder="Norme Tecniche per le Costruzioni"
+              aria-label="Titolo del documento"
+              onChange={(e) => onChange({ titolo: e.target.value })}
+            />
+            <input
+              className={`input norma-campo-url${voce.url.trim() && !valida ? ' is-error' : ''}`}
+              value={voce.url}
+              placeholder="Indirizzo — di preferenza il link OneDrive del PDF"
+              aria-label="Indirizzo del documento"
+              inputMode="url"
+              autoComplete="off"
+              spellCheck={false}
+              onChange={(e) => onChange({ url: e.target.value })}
+            />
           </div>
         )}
-
-        {apri && bozza.url.trim() && !urlValido && (
+        {modifica && voce.url.trim() && !valida && (
           <div className="field-error">L’indirizzo non sembra valido: serve un link tipo «https://…».</div>
         )}
 
-        {voci.length === 0 ? (
-          <p className="note" style={{ marginTop: 10 }}>
-            {ricerca
-              ? 'Nessuna voce aggiunta a mano corrisponde alla ricerca.'
-              : 'Nessuna voce aggiunta a mano: con «Aggiungi» metti qui le norme che usi e che non sono nell’indice — CNR, Eurocodici, circolari regionali, capitolati.'}
-          </p>
-        ) : (
-          <ul className="norma-capitoli">
-            {voci.map((v) => (
-              <li className="norma-cap" key={v.id}>
-                <div className="norma-cap-riga">
-                  <a
-                    className="norma-cap-testa"
-                    href={v.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    title={v.url}
-                  >
-                    <span className="caret" />
-                    <span className="codice">{v.sigla}</span>
-                    <span className="titolo">{v.titolo || v.url}</span>
-                  </a>
-                  <a
-                    className="norma-cap-link"
-                    href={v.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    title={`Apri ${v.sigla}`}
-                  >
-                    <ArrowSquareOut size={14} />
-                  </a>
-                  <button
-                    type="button"
-                    className="norma-cap-link"
-                    title={`Togli ${v.sigla} dall’elenco`}
-                    onClick={() => setVoci(state.normative.filter((x) => x.id !== v.id))}
-                  >
-                    <Trash size={14} />
+        {aperto && (voce.capitoli.length > 0 || modifica) && (
+          <ul className="norma-capitoli" id={`${id}-corpo`}>
+            {voce.capitoli.map((c) =>
+              modifica ? (
+                <RigaCapitoloModifica key={c.id} cap={c} onChange={(patch) => aggiornaCap(c.id, patch)} onRemove={() => rimuoviCap(c.id)} />
+              ) : (
+                <RigaCapitolo key={c.id} cap={c} />
+              ),
+            )}
+            {modifica && (
+              <li className="norma-cap">
+                <div className="norma-cap-modifica is-nuova">
+                  <input
+                    className="input"
+                    value={nuovoCap.numero}
+                    placeholder="2.1"
+                    aria-label="Numero del nuovo capitolo"
+                    onChange={(e) => setNuovoCap({ ...nuovoCap, numero: e.target.value })}
+                  />
+                  <input
+                    className="input"
+                    value={nuovoCap.titolo}
+                    placeholder="Titolo"
+                    aria-label="Titolo del nuovo capitolo"
+                    onChange={(e) => setNuovoCap({ ...nuovoCap, titolo: e.target.value })}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        aggiungiCap();
+                      }
+                    }}
+                  />
+                  <input
+                    className="input"
+                    value={nuovoCap.pagina}
+                    placeholder="p."
+                    aria-label="Pagina del nuovo capitolo"
+                    onChange={(e) => setNuovoCap({ ...nuovoCap, pagina: e.target.value })}
+                  />
+                  <button type="button" className="btn btn-primary btn-icon" title="Aggiungi il capitolo" onClick={aggiungiCap}>
+                    <Plus size={13} />
                   </button>
                 </div>
               </li>
-            ))}
+            )}
           </ul>
         )}
       </div>
@@ -366,28 +277,19 @@ function Aggiunte({ voci, ricerca }: { voci: LinkUtente[]; ricerca: boolean }) {
 /* ─────────────────────────── scheda ─────────────────────────── */
 
 export default function Normativa({ sincronia }: { sincronia: ReturnType<typeof useSincronia> }) {
-  const { state } = useStore();
+  const { state, dispatch } = useStore();
   const [q, setQ] = useState('');
+  const [modifica, setModifica] = useState(false);
   const ricerca = q.trim().length > 0;
 
-  const aggiunte = useMemo(() => {
-    const chiavi = normalizza(q).split(/\s+/).filter(Boolean);
-    if (!chiavi.length) return state.normative;
-    return state.normative.filter((v) => corrisponde(`${v.sigla} ${v.titolo} ${v.url}`, chiavi));
-  }, [state.normative, q]);
+  const documenti = useMemo(() => filtraDocumenti(state.normative, q), [state.normative, q]);
 
-  const gruppi = useMemo(
-    () =>
-      DOCUMENTI.map((doc) => ({
-        doc,
-        capitoli: filtra(
-          CAPITOLI.filter((c) => c.doc === doc.id),
-          q,
-        ),
-      })),
-    [q],
-  );
-  const trovate = gruppi.reduce((s, g) => s + g.capitoli.length, 0);
+  const setVoci = (v: LinkUtente[]) => dispatch({ type: 'normative', voci: v });
+  const aggiornaDoc = (id: string, patch: Partial<LinkUtente>) =>
+    setVoci(state.normative.map((v) => (v.id === id ? { ...v, ...patch } : v)));
+  const rimuoviDoc = (id: string) => setVoci(state.normative.filter((v) => v.id !== id));
+  const aggiungiDoc = () =>
+    setVoci([...state.normative, { id: `norma-${Date.now()}`, sigla: '', titolo: '', url: '', capitoli: [] }]);
 
   return (
     <div className="stack">
@@ -399,31 +301,60 @@ export default function Normativa({ sincronia }: { sincronia: ReturnType<typeof 
             type="search"
             value={q}
             placeholder="Cerca capitolo, argomento o simbolo (taglio, neve, VRd, C8.5…)"
-            aria-label="Cerca nell’indice della normativa"
+            aria-label="Cerca nella libreria delle norme"
             onChange={(e) => setQ(e.target.value)}
           />
         </div>
         {ricerca && (
           <span className="calc-conteggio">
-            {trovate} {trovate === 1 ? 'capitolo' : 'capitoli'}
+            {documenti.length} {documenti.length === 1 ? 'documento' : 'documenti'}
           </span>
         )}
+        <button
+          type="button"
+          className={`btn ${modifica ? 'btn-primary' : 'btn-secondary'}`}
+          aria-pressed={modifica}
+          onClick={() => setModifica((v) => !v)}
+        >
+          {modifica ? <Check size={14} /> : <PencilSimple size={14} />}
+          {modifica ? 'Fine' : 'Edita'}
+        </button>
       </ComandiScheda>
 
-      {gruppi.map((g) => (
-        <DocumentoPanel key={g.doc.id} doc={g.doc} capitoli={g.capitoli} ricerca={ricerca} />
-      ))}
+      {documenti.length === 0 ? (
+        <p className="note">
+          {ricerca
+            ? 'Nessun documento corrisponde alla ricerca.'
+            : 'Nessuna norma in libreria: con «Edita» aggiungi i documenti che usi — NTC, Circolare, CNR, Eurocodici, capitolati — con il loro indirizzo e, se vuoi, l’indice dei capitoli.'}
+        </p>
+      ) : (
+        documenti.map((v) => (
+          <DocumentoPanel
+            key={v.id}
+            voce={v}
+            modifica={modifica}
+            ricerca={ricerca}
+            onChange={(patch) => aggiornaDoc(v.id, patch)}
+            onRemove={() => rimuoviDoc(v.id)}
+          />
+        ))
+      )}
 
-      <Aggiunte voci={aggiunte} ricerca={ricerca} />
+      {modifica && (
+        <button type="button" className="btn btn-secondary" onClick={aggiungiDoc}>
+          <Plus size={14} />
+          Aggiungi documento
+        </button>
+      )}
 
       <PannelloSincronia sincronia={sincronia} />
 
       <p className="note">
-        I link aprono la norma <strong>capitolo per capitolo</strong> su studiopetrillo.com: il
-        capitolo va alla sua pagina, i paragrafi al PDF del capitolo (sulla pagina indicata, dove è
-        segnata). L’indice di NTC e Circolare è parte del sito e resta uguale per tutte le commesse;
-        le voci di «Aggiunte a mano» invece sono tue: restano dopo «Svuota tutto» e, se colleghi
-        OneDrive, si ritrovano su tutti i dispositivi.
+        Ogni documento è tuo: sigla, titolo, indirizzo e indice dei capitoli restano dopo «Svuota tutto» e, se
+        colleghi OneDrive, si ritrovano su tutti i dispositivi. L’indice si scrive da «Edita»: aiuta a ritrovare in
+        fretta la pagina quando riapri il documento, ma non porta a nessun link — la pagina va cercata a mano una
+        volta aperto. Con un indirizzo di OneDrive, «Testo completo» prova prima ad aprire l’app desktop, se è
+        installata, e se non risponde apre il documento sul web.
       </p>
     </div>
   );

@@ -11,11 +11,16 @@
  * Qui dentro non si parla né di rete né di Microsoft: c'è solo la forma del
  * file e la regola con cui due copie della libreria tornano a essere una.
  */
-import { urlSicuro, type LinkUtente } from '../data/normative';
+import { leggiNormative, type LinkUtente } from '../data/normative';
 import type { Preimpostata } from '../calc/calcolatrice';
 
-/** Versione del formato del file su OneDrive. */
-export const LIBRERIA_VERSION = 1;
+/**
+ * Versione del formato del file su OneDrive. È salita a 2 quando i documenti
+ * hanno preso l'indice scritto a mano (`capitoli`): i file scritti dalla
+ * versione precedente si rileggono lo stesso, `leggiNormative` li completa con
+ * un indice vuoto.
+ */
+export const LIBRERIA_VERSION = 2;
 
 export interface Libreria {
   schemaVersion: number;
@@ -40,12 +45,7 @@ export function leggiLibreria(raw: unknown): Libreria {
   return {
     schemaVersion: LIBRERIA_VERSION,
     aggiornato: typeof o.aggiornato === 'string' ? o.aggiornato : '',
-    normative: (Array.isArray(o.normative) ? o.normative : []).flatMap((v, i) => {
-      const url = urlSicuro((v as LinkUtente)?.url);
-      if (!url) return [];
-      const n = v as LinkUtente;
-      return [{ id: n.id || `norma-${i}`, sigla: n.sigla ?? '', titolo: n.titolo ?? '', url }];
-    }),
+    normative: leggiNormative(o.normative),
     unita: (Array.isArray(o.unita) ? o.unita : []).filter((u): u is string => typeof u === 'string' && !!u.trim()),
     preimpostate: (Array.isArray(o.preimpostate) ? o.preimpostate : []).flatMap((v, i) => {
       const p = v as Preimpostata;

@@ -2150,34 +2150,38 @@ button.field-origin:hover {
   max-width: var(--reading-max);
 }
 
-/* form di aggiunta di una norma o di un link, nella scheda Normativa */
-.norma-aggiungi {
+/* modifica della testata di un documento, nella scheda Normativa */
+.norma-doc-modifica {
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-end;
   gap: 8px;
   margin-top: 12px;
 }
 
-.norma-aggiungi .mini-campo {
-  width: 150px;
+.norma-doc-modifica .input {
+  flex: 1 1 140px;
+  min-width: 120px;
 }
 
-.norma-aggiungi .norma-campo-titolo {
-  flex: 1 1 260px;
-  width: auto;
-  min-width: 200px;
+.norma-doc-modifica .norma-campo-titolo,
+.norma-doc-modifica .norma-campo-url {
+  flex: 2 1 240px;
 }
 
-.norma-aggiungi .norma-campo-url {
-  flex: 1 1 220px;
-  width: auto;
-  min-width: 180px;
+/* riga di un capitolo dell'indice, in modifica: numero, titolo, pagina */
+.norma-cap-modifica {
+  display: grid;
+  grid-template-columns: 64px 1fr 60px auto;
+  gap: 4px;
+  align-items: center;
+  padding: 5px 6px;
+  width: 100%;
+  border-bottom: 1px solid var(--border-faint);
 }
 
-.norma-btn-aggiungi {
-  flex: none;
-  height: var(--control-h);
+.norma-cap-modifica .input {
+  min-height: 28px;
+  font-size: 12px;
 }
 
 .norma-capitoli,
