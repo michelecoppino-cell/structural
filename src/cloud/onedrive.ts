@@ -43,10 +43,19 @@ async function erroreDa(r: Response): Promise<ErroreGraph> {
 
 async function chiama(percorso: string, init: RequestInit = {}): Promise<Response> {
   const t = await token();
-  const r = await fetch(`${GRAPH}${percorso}`, {
-    ...init,
-    headers: { ...init.headers, Authorization: `Bearer ${t}` },
-  });
+  const url = `${GRAPH}${percorso}`;
+  let r: Response;
+  try {
+    r = await fetch(url, { ...init, headers: { ...init.headers, Authorization: `Bearer ${t}` } });
+  } catch (e) {
+    // «Failed to fetch» da solo non dice niente: è la stessa frase per la rete
+    // assente, per una CSP che blocca e per un redirect finito su un host non
+    // autorizzato — e quest'ultimo è il caso vero più insidioso, perché
+    // `…:/content` risponde con un 302 verso lo storage (`*.files.1drv.com`),
+    // che è un host diverso da quello chiamato. Nominare l'indirizzo di
+    // partenza fa almeno capire quale chiamata sia morta.
+    throw new Error(`${e instanceof Error ? e.message : String(e)} — chiamando ${url}`);
+  }
   // Un 401 non è un guasto: è il token che Graph non accetta più — o perché è
   // scaduto, o perché il permesso non è mai stato concesso davvero. In
   // entrambi i casi la cura è la stessa, un accesso nuovo fatto a mano, ed è
