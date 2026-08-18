@@ -316,3 +316,29 @@ export function linkVoce(voce: VoceNorma, cap: Capitolo, doc: Documento): string
 export function livello(codice: string): number {
   return codice.replace(/^C/i, '').split('.').filter(Boolean).length - 1;
 }
+
+/**
+ * Ripulisce un indirizzo scritto o importato: completa lo schema mancante
+ * (`cnr.it/…` → `https://cnr.it/…`) e restituisce `null` per tutto ciò che non
+ * è `http`/`https`.
+ *
+ * Serve nei due punti in cui un URL entra nell'app: il campo della scheda
+ * Normativa e il JSON di un progetto importato. Il secondo è quello che conta
+ * davvero — un file arrivato da fuori (per mail, da un collega, ritrovato in
+ * una cartella) può portarsi dentro un `javascript:…` che l'app finirebbe per
+ * mettere in un `href`, cioè per eseguire al primo clic dentro la propria
+ * pagina, con tutto quello che c'è in localStorage a portata di mano.
+ */
+export function urlSicuro(url: unknown): string | null {
+  if (typeof url !== 'string') return null;
+  const u = url.trim();
+  if (!u) return null;
+  const completo = /^[a-z][a-z0-9+.-]*:/i.test(u) ? u : `https://${u}`;
+  try {
+    const parsed = new URL(completo);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null;
+    return completo;
+  } catch {
+    return null;
+  }
+}

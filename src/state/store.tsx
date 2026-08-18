@@ -46,7 +46,7 @@ import {
 } from '../calc/calcolatrice';
 import { UNITA_DEFAULT, normalizzaElenco } from '../calc/unita';
 import { normalizzaBlocchi, nuovoBlocco, type BloccoQuaderno } from '../calc/quaderno';
-import type { LinkUtente } from '../data/normative';
+import { urlSicuro, type LinkUtente } from '../data/normative';
 
 export type TabId = 'azioni' | 'sollecitazioni' | 'verifiche' | 'costi' | 'quaderno' | 'normativa';
 /** Capitoli di altre schede che si possono tirare dentro il quaderno. */
@@ -378,11 +378,12 @@ export function migra(raw: Partial<AppState>): AppState {
       selezioni: { ...base.calcolatrice.selezioni, ...raw.calcolatrice?.selezioni },
     },
     quaderno: quadernoMigrato(raw, base.quaderno),
-    normative: (Array.isArray(raw.normative) ? raw.normative : []).flatMap((v, i) =>
-      v?.url
-        ? [{ id: v.id || `norma-${i}`, sigla: v.sigla ?? '', titolo: v.titolo ?? '', url: v.url }]
-        : [],
-    ),
+    // l'indirizzo passa da urlSicuro: un file arrivato da fuori non deve poter
+    // mettere uno schema eseguibile (`javascript:`) dentro un link dell'app
+    normative: (Array.isArray(raw.normative) ? raw.normative : []).flatMap((v, i) => {
+      const url = urlSicuro(v?.url);
+      return url ? [{ id: v.id || `norma-${i}`, sigla: v.sigla ?? '', titolo: v.titolo ?? '', url }] : [];
+    }),
     ui: {
       ...base.ui,
       ...raw.ui,

@@ -1,0 +1,15 @@
+# Intestazioni HTTP servite da Cloudflare Pages (file letto in fase di deploy).
+#
+# L'app è un sito statico senza backend: il valore di queste righe è chiudere
+# le strade che restano aperte per default. La CSP in particolare è la rete di
+# protezione se un giorno una dipendenza compromessa o un dato importato
+# riuscisse a iniettare codice nella pagina — senza di lei quel codice
+# potrebbe chiamare qualunque server; con lei non può parlare con nessuno.
+/*
+  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; upgrade-insecure-requests
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  Cross-Origin-Opener-Policy: same-origin
+  # nessuna funzione del dispositivo serve all'app: si spengono tutte
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()
+  Strict-Transport-Security: max-age=31536000; includeSubDomains

@@ -8,6 +8,7 @@ import {
   linkCapitolo,
   linkVoce,
   livello,
+  urlSicuro,
   type Capitolo,
   type Documento,
   type LinkUtente,
@@ -206,12 +207,6 @@ function DocumentoPanel({
 
 /* ─────────────────── norme e link aggiunti a mano ─────────────────── */
 
-/** Completa un indirizzo scritto senza schema: `cnr.it/…` → `https://cnr.it/…`. */
-function indirizzo(url: string): string {
-  const u = url.trim();
-  if (!u) return '';
-  return /^[a-z][a-z0-9+.-]*:/i.test(u) ? u : `https://${u}`;
-}
 
 function Aggiunte({ voci, ricerca }: { voci: LinkUtente[]; ricerca: boolean }) {
   const { state, dispatch } = useStore();
@@ -220,8 +215,9 @@ function Aggiunte({ voci, ricerca }: { voci: LinkUtente[]; ricerca: boolean }) {
 
   const setVoci = (v: LinkUtente[]) => dispatch({ type: 'normative', voci: v });
 
-  const url = indirizzo(bozza.url);
-  const urlValido = /^https?:\/\/[^\s]+\.[^\s]+/i.test(url);
+  // urlSicuro completa lo schema mancante e scarta tutto ciò che non è http(s)
+  const url = urlSicuro(bozza.url) ?? '';
+  const urlValido = !!url && /^https?:\/\/[^\s]+\.[^\s]+/i.test(url);
   const pronto = !!bozza.sigla.trim() && urlValido;
 
   const aggiungi = () => {
