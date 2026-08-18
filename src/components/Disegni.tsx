@@ -799,3 +799,83 @@ export function Falda({
     </Cornice>
   );
 }
+
+/* ─────────────────── piega dell'armatura sul mandrino ─────────────────── */
+
+/**
+ * Che cosa sono il mandrino, il raggio di curvatura e il diametro della barra.
+ *
+ * Il ferro si piega avvolgendolo su un rullo — il mandrino — di diametro ⌀m:
+ * la faccia interna della barra copia il rullo, quindi il raggio di curvatura
+ * è il raggio del mandrino, cioè ⌀m/2. Il diametro ⌀ è quello della barra e si
+ * legge nello spessore del ferro, non nella piega.
+ *
+ * Il disegno è a proporzioni fisse (non dipende dal ⌀ scelto): serve a dire
+ * dove si misurano le tre quote della tabella, non a rappresentarne una.
+ */
+export function PiegaArmatura() {
+  // geometria del disegno: centro della piega, raggio di curvatura e spessore barra
+  const cx = 105;
+  const cy = 100;
+  const r = 38; // raggio di curvatura = raggio del mandrino
+  const t = 18; // diametro della barra
+  const rc = r + t / 2; // asse della barra in curva
+
+  return (
+    <Cornice titolo="Dove si misurano mandrino, raggio e diametro" viewBox="0 0 280 190">
+      {/* il mandrino: il rullo su cui il ferro viene avvolto */}
+      <circle cx={cx} cy={cy} r={r} className="dg-area" />
+      <circle cx={cx} cy={cy} r={r} className="dg-axis" strokeWidth={1} strokeDasharray="4 3" fill="none" />
+
+      {/* la barra: tratto dritto, piega di 90°, tratto dritto */}
+      <path
+        className="dg-line"
+        strokeWidth={t}
+        strokeLinecap="butt"
+        d={`M215,${cy + rc} L${cx},${cy + rc} A${rc},${rc} 0 0 1 ${cx - rc},${cy} L${cx - rc},26`}
+      />
+
+      {/* quota del mandrino, in mezzo al rullo */}
+      <path
+        className="dg-axis"
+        strokeWidth={1}
+        d={`M${cx - r},${cy} L${cx + r},${cy} M${cx - r},${cy - 4} L${cx - r},${cy + 4} M${cx + r},${cy - 4} L${cx + r},${cy + 4}`}
+      />
+      <text x={cx} y={cy - 8} className="dg-testo" textAnchor="middle">
+        ⌀m mandrino
+      </text>
+
+      {/* raggio di curvatura: dal centro del mandrino alla faccia interna del
+          ferro, misurato in mezzo alla piega */}
+      <path
+        className="dg-quota"
+        strokeWidth={1}
+        d={`M${cx},${cy} L${cx - r * Math.SQRT1_2},${cy + r * Math.SQRT1_2}`}
+      />
+      <circle cx={cx} cy={cy} r={2} className="dg-nodo" />
+      <text x={cx - 11} y={cy + 22} className="dg-testo is-accent">
+        r
+      </text>
+      <text x={cx + 45} y={cy + 16} className="dg-testo is-accent">
+        r = ⌀m/2
+      </text>
+      <text x={cx + 45} y={cy + 28} className="dg-testo is-accent">
+        raggio curvatura
+      </text>
+
+      {/* diametro della barra: si legge nello spessore del ferro, non nella piega */}
+      <path
+        className="dg-axis"
+        strokeWidth={1}
+        d={
+          `M190,${cy + rc - t / 2} L190,${cy + rc + t / 2 + 12} ` +
+          `M186,${cy + rc - t / 2} L194,${cy + rc - t / 2} ` +
+          `M186,${cy + rc + t / 2} L194,${cy + rc + t / 2}`
+        }
+      />
+      <text x={190} y={cy + rc + t / 2 + 22} className="dg-testo" textAnchor="middle">
+        ⌀ barra
+      </text>
+    </Cornice>
+  );
+}

@@ -1,10 +1,10 @@
 /**
  * Tabellina delle armature: quello che serve a bordo tavolo quando si
  * disegnano i ferri — area, peso al metro, diametro del mandrino di piega e
- * raggio interno di curvatura.
+ * raggio di curvatura.
  *
  * Il mandrino è quello minimo di EC2 §8.3, Tab. 8.1N, ripreso dalla Circolare
- * 2019: 4⌀ fino a ⌀16, 7⌀ oltre. Il raggio interno di curvatura è metà del
+ * 2019: 4⌀ fino a ⌀16, 7⌀ oltre. Il raggio di curvatura è metà del
  * mandrino. Il peso è quello dell'acciaio, 7850 kg/m³.
  */
 
@@ -24,7 +24,7 @@ export function mandrinoPiega(fi: number): number {
   return fi <= 16 ? 4 * fi : 7 * fi;
 }
 
-/** Raggio interno di curvatura (mm): metà del mandrino. */
+/** Raggio di curvatura (mm): la faccia interna del ferro copia il mandrino, quindi è metà del mandrino. */
 export function raggioPiega(fi: number): number {
   return mandrinoPiega(fi) / 2;
 }
@@ -37,7 +37,7 @@ export interface RigaArmatura {
   peso: number;
   /** Diametro minimo del mandrino di piega (mm). */
   mandrino: number;
-  /** Raggio interno di curvatura (mm). */
+  /** Raggio di curvatura (mm). */
   raggio: number;
 }
 
