@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { fondiLibrerie, leggiLibreria, libreriaVuota, stessoContenuto, type Libreria } from './libreria';
+import {
+  fondiLibrerie,
+  leggiLibreria,
+  libreriaVuota,
+  perditeIngiustificate,
+  stessoContenuto,
+  type Libreria,
+} from './libreria';
 
 const norma = (id: string, sigla = id) => ({ id, sigla, titolo: '', url: `https://esempio.it/${id}` });
 
@@ -69,5 +76,33 @@ describe('fusione a tre vie', () => {
     const a = lib({ normative: [norma('a')], aggiornato: '2026-01-01T00:00:00.000Z' });
     const b = lib({ normative: [norma('a')], aggiornato: '2026-08-18T00:00:00.000Z' });
     expect(stessoContenuto(a, b)).toBe(true);
+  });
+});
+
+describe('rete di protezione prima di scrivere', () => {
+  it('una cancellazione vera non è una perdita', () => {
+    const base = lib({ normative: [norma('a'), norma('b')] });
+    const fusa = lib({ normative: [norma('a')] });   // «b» cancellata sul dispositivo
+    expect(perditeIngiustificate(base, fusa, base)).toEqual([]);
+  });
+
+  it('una voce che sparisce senza essere stata cancellata viene segnalata', () => {
+    const remoto = lib({ normative: [norma('a'), norma('b')] });
+    const fusa = lib({ normative: [norma('a')] });
+    // nessuna fotografia: nessuno può aver cancellato «b», quindi è un guasto
+    expect(perditeIngiustificate(remoto, fusa, null)).toEqual(['b']);
+  });
+
+  it('vale anche per unità e formule', () => {
+    const remoto = lib({ unita: ['kN', 'kNm'], preimpostate: [{ id: 'p1', nome: 'M', espressione: 'q*l', nota: '', um: '' }] });
+    expect(perditeIngiustificate(remoto, libreriaVuota(), null)).toEqual(['kN', 'kNm', 'M']);
+  });
+
+  it('il caso che è costato le norme: remoto pieno, locale vuoto, nessuna fotografia', () => {
+    const remoto = lib({ normative: [norma('a'), norma('b')], unita: ['kN'] });
+    const fusa = fondiLibrerie(libreriaVuota(), remoto, null);
+    // la fusione somma, quindi non perde niente — e la rete lo conferma
+    expect(fusa.normative.map((n) => n.id)).toEqual(['a', 'b']);
+    expect(perditeIngiustificate(remoto, fusa, null)).toEqual([]);
   });
 });
