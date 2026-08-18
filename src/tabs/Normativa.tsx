@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react';
 import {
   ArrowSquareOut,
+  ArrowUp,
+  ArrowDown,
   BookOpenText,
   CaretDown,
   CaretRight,
@@ -107,14 +109,22 @@ function DocumentoPanel({
   voce,
   modifica,
   ricerca,
+  primo,
+  ultimo,
   onChange,
   onRemove,
+  onSposta,
 }: {
   voce: LinkUtente;
   modifica: boolean;
   ricerca: boolean;
+  /** Primo e ultimo dell'elenco vero, non di quello filtrato dalla ricerca. */
+  primo: boolean;
+  ultimo: boolean;
   onChange: (patch: Partial<LinkUtente>) => void;
   onRemove: () => void;
+  /** Un posto più su (−1) o più giù (+1) nell'ordine della libreria. */
+  onSposta: (verso: -1 | 1) => void;
 }) {
   const { state, dispatch } = useStore();
   const [nuovoCap, setNuovoCap] = useState({ numero: '', titolo: '', pagina: '' });
@@ -183,9 +193,31 @@ function DocumentoPanel({
               Testo completo
             </button>
             {modifica && (
-              <button type="button" className="btn btn-secondary btn-icon" title="Togli il documento" onClick={onRemove}>
-                <Trash size={14} />
-              </button>
+              <>
+                {/* l'ordine della libreria si cambia anche dopo: i documenti che
+                    si aprono tutti i giorni stanno in cima */}
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-icon"
+                  disabled={primo || ricerca}
+                  title={ricerca ? 'Svuota la ricerca per cambiare l’ordine' : 'Spostalo più in alto'}
+                  onClick={() => onSposta(-1)}
+                >
+                  <ArrowUp size={14} />
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-icon"
+                  disabled={ultimo || ricerca}
+                  title={ricerca ? 'Svuota la ricerca per cambiare l’ordine' : 'Spostalo più in basso'}
+                  onClick={() => onSposta(1)}
+                >
+                  <ArrowDown size={14} />
+                </button>
+                <button type="button" className="btn btn-secondary btn-icon" title="Togli il documento" onClick={onRemove}>
+                  <Trash size={14} />
+                </button>
+              </>
             )}
           </div>
         </div>
@@ -288,6 +320,19 @@ export default function Normativa({ sincronia }: { sincronia: ReturnType<typeof 
   const aggiornaDoc = (id: string, patch: Partial<LinkUtente>) =>
     setVoci(state.normative.map((v) => (v.id === id ? { ...v, ...patch } : v)));
   const rimuoviDoc = (id: string) => setVoci(state.normative.filter((v) => v.id !== id));
+  /**
+   * Sposta un documento di un posto nell'elenco. L'ordine della libreria è una
+   * scelta come le altre — e si cambia quando serve, non solo mentre si
+   * scrive: quello che si apre tutti i giorni va in cima.
+   */
+  const spostaDoc = (id: string, verso: -1 | 1) => {
+    const da = state.normative.findIndex((v) => v.id === id);
+    const a = da + verso;
+    if (da < 0 || a < 0 || a >= state.normative.length) return;
+    const nuove = [...state.normative];
+    [nuove[da], nuove[a]] = [nuove[a], nuove[da]];
+    setVoci(nuove);
+  };
   const aggiungiDoc = () =>
     setVoci([...state.normative, { id: `norma-${Date.now()}`, sigla: '', titolo: '', url: '', capitoli: [] }]);
 
@@ -334,8 +379,11 @@ export default function Normativa({ sincronia }: { sincronia: ReturnType<typeof 
             voce={v}
             modifica={modifica}
             ricerca={ricerca}
+            primo={state.normative[0]?.id === v.id}
+            ultimo={state.normative[state.normative.length - 1]?.id === v.id}
             onChange={(patch) => aggiornaDoc(v.id, patch)}
             onRemove={() => rimuoviDoc(v.id)}
+            onSposta={(verso) => spostaDoc(v.id, verso)}
           />
         ))
       )}
@@ -350,7 +398,8 @@ export default function Normativa({ sincronia }: { sincronia: ReturnType<typeof 
       <PannelloSincronia sincronia={sincronia} />
 
       <p className="note">
-        Ogni documento è tuo: sigla, titolo, indirizzo e indice dei capitoli restano dopo «Svuota tutto» e, se
+        Ogni documento è tuo: sigla, titolo, indirizzo, indice dei capitoli e l’ordine in cui stanno — le frecce
+        di «Edita» lo cambiano quando vuoi — restano dopo «Svuota tutto» e, se
         colleghi OneDrive, si ritrovano su tutti i dispositivi. L’indice si scrive da «Edita»: aiuta a ritrovare in
         fretta la pagina quando riapri il documento, ma non porta a nessun link — la pagina va cercata a mano una
         volta aperto. Con un indirizzo di OneDrive, «Testo completo» prova prima ad aprire l’app desktop, se è

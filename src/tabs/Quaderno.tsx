@@ -1,7 +1,9 @@
-import { useMemo, useRef, useState, type CSSProperties, type DragEvent, type ReactNode } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent, type ReactNode } from 'react';
 import {
   ArrowLeft,
   ArrowRight,
+  ArrowLineDown,
+  ArrowLineUp,
   ArrowsOutLineHorizontal,
   Backspace,
   CaretDown,
@@ -47,6 +49,8 @@ import {
   livelloEsito,
   nuovoBlocco,
   ricalcolaQuaderno,
+  saltoValido,
+  spanBlocco,
   type BloccoCalcolato,
   type BloccoQuaderno,
   type TipoBlocco,
@@ -478,6 +482,8 @@ export default function Quaderno() {
   const [nuovaPre, setNuovaPre] = useState({ nome: '', espressione: '', um: '', nota: '' });
   /** Ultimo campo di formula toccato: è lì che scrive il tastierino. */
   const ultimoCampo = useRef<HTMLInputElement | null>(null);
+  /** Blocco appena aggiunto: nasce con il cursore già dentro, si scrive e via. */
+  const [daScrivere, setDaScrivere] = useState('');
 
   const setQ = (patch: Partial<typeof q>) => dispatch({ type: 'quaderno', patch });
   const setCalc = (patch: Partial<typeof calc>) => dispatch({ type: 'calcolatrice', patch });
@@ -519,6 +525,18 @@ export default function Quaderno() {
     const i = dove == null ? q.blocchi.length : Math.max(0, Math.min(q.blocchi.length, dove));
     setQ({ blocchi: [...q.blocchi.slice(0, i), b, ...q.blocchi.slice(i)] });
   };
+  /**
+   * Una formula nuova: si propone nel primo posto libero — subito dopo il
+   * blocco da cui si è partiti — e nasce con il cursore dentro. Da lì, se il
+   * posto non va bene, la si porta più in basso con i suoi comandi (o con
+   * Ctrl+↓): il foglio è una griglia, e i posti sono le sue caselle.
+   */
+  const aggiungiFormula = (dove?: number) => {
+    const b = nuovoBlocco('formula');
+    aggiungi(b, dove);
+    setDaScrivere(b.id);
+  };
+
   const aggiornaBlocco = (id: string, patch: Partial<BloccoQuaderno>) =>
     setQ({ blocchi: q.blocchi.map((b) => (b.id === id ? { ...b, ...patch } : b)) });
   const eliminaBlocco = (id: string) => setQ({ blocchi: q.blocchi.filter((b) => b.id !== id) });
@@ -535,6 +553,17 @@ export default function Quaderno() {
     const meta = Math.max(0, Math.min(senza.length, dove > da ? dove - 1 : dove));
     if (meta === da) return;
     setQ({ blocchi: [...senza.slice(0, meta), q.blocchi[da], ...senza.slice(meta)] });
+  };
+
+  /**
+   * Porta un blocco più in basso sulla griglia (o lo fa risalire) lasciando
+   * liberi i posti che stanno prima: l'ordine del calcolo non cambia, cambia
+   * dove la riga si posa sul foglio.
+   */
+  const salta = (id: string, verso: -1 | 1) => {
+    const b = q.blocchi.find((x) => x.id === id);
+    if (!b) return;
+    aggiornaBlocco(id, { salto: saltoValido(b.salto + verso) });
   };
 
   /** Un passo avanti o indietro: il riordino da dito, dove il trascinamento non c'è. */
@@ -812,8 +841,8 @@ export default function Quaderno() {
               <button
                 type="button"
                 className="btn btn-secondary"
-                onClick={() => aggiungi(nuovoBlocco('formula'))}
-                title="Una riga di calcolo scritta qui, con la sua unità"
+                onClick={() => aggiungiFormula()}
+                title="Una riga di calcolo scritta qui, con la sua unità — da una cella, Ctrl+Tab"
               >
                 <PencilSimple size={14} />
                 Formula
@@ -827,23 +856,42 @@ export default function Quaderno() {
             {calcolati.length > 0 && (
               <div className="quad-blocchi">
                 {calcolati.map((b, i) => (
-                  <BloccoCard
-                    key={b.blocco.id}
-                    b={b}
-                    primo={i === 0}
-                    ultimo={i === calcolati.length - 1}
-                    campoRef={ultimoCampo}
-                    onAggiorna={(patch) => aggiornaBlocco(b.blocco.id, patch)}
-                    onElimina={() => eliminaBlocco(b.blocco.id)}
-                    onScorri={(verso) => scorri(b.blocco.id, verso)}
-                    onInserisci={() => aggiungi(nuovoBlocco('formula'), i + 1)}
-                    onDropPrima={(e) => onDrop(e, i)}
-                    capitolo={
-                      b.blocco.tipo === 'capitolo'
-                        ? blocchiCapitolo(state, b.blocco.fonte as CapitoloId)
-                        : undefined
-                    }
-                  />
+                  <Fragment key={b.blocco.id}>
+                    {/* i posti che il blocco ha scelto di saltare: caselle vuote,
+                        si premono per farlo risalire e ci si può lasciar cadere
+                        il prossimo passaggio */}
+                    {Array.from({ length: b.blocco.salto }, (_, k) => (
+                      <button
+                        key={k}
+                        type="button"
+                        className="quad-vuoto"
+                        title="Posto libero: premi per far risalire la riga che segue"
+                        aria-label="Posto libero sulla griglia"
+                        onDragOver={(e) => e.preventDefault()}
+                        onDrop={(e) => onDrop(e, i)}
+                        onClick={() => salta(b.blocco.id, -1)}
+                      />
+                    ))}
+                    <BloccoCard
+                      b={b}
+                      primo={i === 0}
+                      ultimo={i === calcolati.length - 1}
+                      campoRef={ultimoCampo}
+                      scrivi={b.blocco.id === daScrivere}
+                      onScritto={() => setDaScrivere('')}
+                      onAggiorna={(patch) => aggiornaBlocco(b.blocco.id, patch)}
+                      onElimina={() => eliminaBlocco(b.blocco.id)}
+                      onScorri={(verso) => scorri(b.blocco.id, verso)}
+                      onSalta={(verso) => salta(b.blocco.id, verso)}
+                      onInserisci={() => aggiungiFormula(i + 1)}
+                      onDropPrima={(e) => onDrop(e, i)}
+                      capitolo={
+                        b.blocco.tipo === 'capitolo'
+                          ? blocchiCapitolo(state, b.blocco.fonte as CapitoloId)
+                          : undefined
+                      }
+                    />
+                  </Fragment>
                 ))}
               </div>
             )}
@@ -1228,9 +1276,12 @@ function BloccoCard({
   primo,
   ultimo,
   campoRef,
+  scrivi,
+  onScritto,
   onAggiorna,
   onElimina,
   onScorri,
+  onSalta,
   onInserisci,
   onDropPrima,
   capitolo,
@@ -1239,10 +1290,15 @@ function BloccoCard({
   primo: boolean;
   ultimo: boolean;
   campoRef: { current: HTMLInputElement | null };
+  /** true = è appena nato: il cursore va qui dentro. */
+  scrivi: boolean;
+  onScritto: () => void;
   onAggiorna: (patch: Partial<BloccoQuaderno>) => void;
   onElimina: () => void;
   /** Un passo indietro (−1) o avanti (+1) nella sequenza del foglio. */
   onScorri: (verso: -1 | 1) => void;
+  /** Una casella più in basso (+1) o più in su (−1) sulla griglia. */
+  onSalta: (verso: -1 | 1) => void;
   /** Una formula nuova subito dopo questo blocco. */
   onInserisci: () => void;
   /** Qualcosa lasciato su questo blocco: entra *prima* di lui. */
@@ -1252,12 +1308,40 @@ function BloccoCard({
 }) {
   const bl = b.blocco;
   const fileRef = useRef<HTMLInputElement>(null);
+  /** Il campo della formula: è lì che si mette il cursore su un blocco nuovo. */
+  const esprRef = useRef<HTMLInputElement | null>(null);
   const [bersaglio, setBersaglio] = useState(false);
   /** La nota del passaggio: si apre con la (i) e resta aperta finché serve. */
   const [notaAperta, setNotaAperta] = useState(false);
   // il semaforo dei rapporti di verifica: colora il numero, non l'intero blocco
   const livello = livelloEsito(b);
-  const colonne = colonneBlocco(bl);
+  // la larghezza non si sceglie più a mano su una riga di calcolo: la decide
+  // quanto è lunga la riga, così una formula corta non tiene una colonna vuota
+  const colonne = spanBlocco(b);
+
+  useEffect(() => {
+    if (!scrivi) return;
+    esprRef.current?.focus();
+    onScritto();
+  }, [scrivi, onScritto]);
+
+  /**
+   * Le scorciatoie della cella: Ctrl+Tab infila una formula subito dopo —
+   * si scrive un passaggio e si va al successivo senza staccare le mani — e
+   * Ctrl+↓ / Ctrl+↑ portano la riga più in basso o più in su sulla griglia.
+   */
+  const tasti = (e: React.KeyboardEvent) => {
+    if (!e.ctrlKey || e.altKey || e.metaKey) return;
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      e.stopPropagation();
+      onInserisci();
+    } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      e.stopPropagation();
+      onSalta(e.key === 'ArrowDown' ? 1 : -1);
+    }
+  };
 
   /**
    * Una riga già sul foglio si può riprendere in mano: il blocco diventa una
@@ -1286,6 +1370,8 @@ function BloccoCard({
         bersaglio ? ' is-bersaglio' : ''
       }`}
       style={{ '--span': colonne } as CSSProperties}
+      tabIndex={-1}
+      onKeyDown={tasti}
       onDragOver={(e) => {
         e.preventDefault();
         setBersaglio(true);
@@ -1314,15 +1400,36 @@ function BloccoCard({
         )}
         {b.provenienza && bl.tipo === 'import' && <span className="fonte">↩ {b.provenienza}</span>}
         <span className="tasti">
-          <button
-            type="button"
-            className={`larghezza${colonne > 1 ? ' is-larga' : ''}`}
-            title={`Occupa ${colonne} ${colonne === 1 ? 'colonna' : 'colonne'} su ${COLONNE_FOGLIO} — premi per cambiare, fino a tenere la riga per sé`}
-            onClick={() => onAggiorna({ colonne: (colonne % COLONNE_FOGLIO) + 1 })}
-          >
-            <ArrowsOutLineHorizontal size={11} weight="bold" />
-            <span className="n">{colonne}</span>
-          </button>
+          {b.pieno ? (
+            <button
+              type="button"
+              className={`larghezza${colonne > 1 ? ' is-larga' : ''}`}
+              title={`Occupa ${colonne} ${colonne === 1 ? 'colonna' : 'colonne'} su ${COLONNE_FOGLIO} — premi per cambiare, fino a tenere la riga per sé`}
+              onClick={() => onAggiorna({ colonne: (colonneBlocco(bl) % COLONNE_FOGLIO) + 1 })}
+            >
+              <ArrowsOutLineHorizontal size={11} weight="bold" />
+              <span className="n">{colonne}</span>
+            </button>
+          ) : (
+            <>
+              <button
+                type="button"
+                disabled={bl.salto === 0}
+                title="Riportalo su di una casella (Ctrl+↑)"
+                onClick={() => onSalta(-1)}
+              >
+                <ArrowLineUp size={11} weight="bold" />
+              </button>
+              <button
+                type="button"
+                className={bl.salto ? 'is-acceso' : undefined}
+                title="Portalo più in basso di una casella: il posto prima resta libero (Ctrl+↓)"
+                onClick={() => onSalta(1)}
+              >
+                <ArrowLineDown size={11} weight="bold" />
+              </button>
+            </>
+          )}
           <button
             type="button"
             className={notaAperta || bl.appunto ? 'is-acceso' : undefined}
@@ -1347,7 +1454,7 @@ function BloccoCard({
           <button type="button" disabled={ultimo} title="Spostalo un passo dopo" onClick={() => onScorri(1)}>
             <ArrowRight size={11} weight="bold" />
           </button>
-          <button type="button" title="Infila una formula subito dopo" onClick={onInserisci}>
+          <button type="button" title="Infila una formula subito dopo (Ctrl+Tab)" onClick={onInserisci}>
             <Plus size={11} weight="bold" />
           </button>
           <button type="button" className="chiudi" title="Togli dal quaderno" onClick={onElimina}>
@@ -1482,6 +1589,7 @@ function BloccoCard({
                   spellCheck={false}
                   data-blocco={bl.id}
                   ref={(el) => {
+                    esprRef.current = el;
                     if (el && document.activeElement === el) campoRef.current = el;
                   }}
                   onFocus={(e) => {
@@ -1500,7 +1608,9 @@ function BloccoCard({
                 {b.espressione && !SOLO_NUMERO.test(b.espressione) && (
                   <>
                     <span className="uguale">=</span>
-                    <span className="espr">{b.espressione}</span>
+                    <span className="espr" title={b.espressione}>
+                      {b.espressione}
+                    </span>
                   </>
                 )}
               </>

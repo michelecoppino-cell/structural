@@ -69,11 +69,18 @@ export interface BloccoQuaderno {
    */
   appunto: string;
   /**
-   * Quante colonne occupa sulla griglia del foglio (1…3); 0 = come viene:
-   * una colonna per una riga di calcolo, tutte e tre per note, schemi e
-   * capitoli. È il modo di dire «questa formula sta da sola sulla sua riga».
+   * Quante colonne occupa sulla griglia del foglio (1…3); 0 = come viene.
+   * Vale ancora per note, schemi e capitoli — una riga di calcolo, invece,
+   * prende da sé le colonne che le servono (vedi `spanBlocco`).
    */
   colonne: number;
+  /**
+   * Quanti posti liberi lasciare **prima** di questo blocco sulla griglia.
+   * Una formula nuova si propone nel primo posto libero — `salto` è il modo
+   * di dire «no, questa va più in basso»: uno slot saltato la sposta di una
+   * casella, tre la portano alla riga dopo.
+   */
+  salto: number;
   /** Immagine incollata o trascinata, come data URL. */
   img: string;
   /**
@@ -96,6 +103,7 @@ export function nuovoBlocco(tipo: TipoBlocco, patch: Partial<BloccoQuaderno> = {
     testo: '',
     appunto: '',
     colonne: 0,
+    salto: 0,
     img: '',
     larghezza: 0,
     ...patch,
@@ -111,6 +119,49 @@ export function colonneBlocco(b: BloccoQuaderno): number {
 
 /** Colonne della griglia del foglio: tre, come su un quaderno a quadretti. */
 export const COLONNE_FOGLIO = 3;
+
+/**
+ * Quanti caratteri stanno comodi in una colonna del foglio: è la misura con
+ * cui una riga di calcolo decide da sé quanto è larga. Non è un numero esatto
+ * — i caratteri non hanno tutti la stessa larghezza — ma è quello che serve:
+ * distinguere `A = b*h = 0,12 mq` da una formula che va a capo.
+ */
+const CARATTERI_COLONNA = 30;
+
+/**
+ * Larghezza di una riga di calcolo, in colonne: **la decide il contenuto**.
+ * Una formula corta sta in una colonna, una lunga se ne prende due o tre —
+ * così sul foglio non ci sono né righe mozzate né mezze colonne vuote.
+ *
+ * Note, schemi e capitoli non c'entrano: quelli tengono la loro larghezza
+ * scelta (`colonne`), tutta la riga se non se n'è scelta una.
+ */
+export function spanBlocco(b: BloccoCalcolato): number {
+  if (b.pieno) return colonneBlocco(b.blocco);
+  const caratteri = lunghezzaRiga(b);
+  return Math.min(COLONNE_FOGLIO, Math.max(1, Math.ceil(caratteri / CARATTERI_COLONNA)));
+}
+
+/**
+ * Quanto è lunga, in caratteri, la riga che il blocco scrive sul foglio:
+ * `nome = formula = risultato unità`. Al testo si aggiunge quello che il testo
+ * non dice — il riquadro dell'unità, e sulle formule scritte qui i bordi dei
+ * campi — se no una riga corta nasce stretta al punto che la formula non si
+ * legge più. Un blocco `formula` ancora vuoto conta il suo minimo: nasce di
+ * una colonna e si allarga da sé mentre lo si scrive.
+ */
+function lunghezzaRiga(b: BloccoCalcolato): number {
+  const nome = (b.blocco.tipo === 'formula' ? b.blocco.nome : b.nome).trim();
+  const espressione = (b.blocco.tipo === 'formula' ? b.blocco.espressione : b.espressione).trim();
+  const esito = b.errore
+    ? b.errore
+    : b.mancanti.length
+      ? `manca ${b.mancanti.join(', ')}`
+      : b.testo || `${formattaIn(b.valore, b.um)} ${b.um}`;
+  const scritta = b.blocco.tipo === 'formula';
+  const scritto = (nome.length ? nome.length + 3 : 0) + (espressione ? espressione.length + 3 : 0);
+  return Math.max(scritta ? 14 : 0, scritto + esito.trim().length) + (scritta ? 12 : 8);
+}
 
 /**
  * Un risultato pronto da tirare dentro dalle altre schede: il taglio delle
@@ -410,6 +461,16 @@ export function larghezzaValida(v: unknown): number {
   return Math.round(Math.min(100, Math.max(LARGHEZZA_MIN, n)));
 }
 
+/** Quanti posti liberi si possono lasciare prima di un blocco: due righe piene. */
+export const SALTO_MAX = 2 * COLONNE_FOGLIO;
+
+/** Posti liberi prima di un blocco, riportati fra 0 e `SALTO_MAX`. */
+export function saltoValido(v: unknown): number {
+  const n = typeof v === 'number' ? v : Number(v);
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  return Math.min(SALTO_MAX, Math.round(n));
+}
+
 /** Colonne di un blocco riportate fra 1 e 3; 0 = lascia decidere al tipo. */
 export function colonneValide(v: unknown): number {
   const n = typeof v === 'number' ? v : Number(v);
@@ -434,6 +495,7 @@ export function normalizzaBlocchi(raw: Partial<BloccoQuaderno>[]): BloccoQuadern
         testo: b?.testo ?? '',
         appunto: b?.appunto ?? '',
         colonne: colonneValide(b?.colonne),
+        salto: saltoValido(b?.salto),
         img: typeof b?.img === 'string' ? b.img : '',
         larghezza: larghezzaValida(b?.larghezza),
       },

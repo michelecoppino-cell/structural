@@ -9,6 +9,9 @@ import {
   normalizzaBlocchi,
   nuovoBlocco,
   ricalcolaQuaderno,
+  SALTO_MAX,
+  saltoValido,
+  spanBlocco,
   testoBlocco,
   type BloccoQuaderno,
   type ImportoScheda,
@@ -246,6 +249,37 @@ describe('blocchi del quaderno', () => {
     // la scelta esplicita vince su tutte e due
     expect(colonneBlocco(nuovoBlocco('formula', { colonne: 3 }))).toBe(3);
     expect(colonneBlocco(nuovoBlocco('nota', { colonne: 1 }))).toBe(1);
+  });
+
+  it('i posti liberi prima di un blocco restano fra 0 e due righe piene', () => {
+    expect(saltoValido(2)).toBe(2);
+    expect(saltoValido(99)).toBe(SALTO_MAX);
+    expect(saltoValido(-1)).toBe(0);
+    expect(saltoValido(undefined)).toBe(0);
+    expect(saltoValido('giù')).toBe(0);
+    // un salvataggio di prima non ce l'ha: nasce nel primo posto libero
+    expect(normalizzaBlocchi([{ tipo: 'formula' } as Partial<BloccoQuaderno>])[0].salto).toBe(0);
+    expect(normalizzaBlocchi([{ tipo: 'formula', salto: 4 } as Partial<BloccoQuaderno>])[0].salto).toBe(4);
+  });
+
+  it('una riga di calcolo si prende le colonne che le serve, non quelle che le si danno', () => {
+    const corta = nuovoBlocco('formula', { nome: 'A', espressione: '2*3' });
+    const lunga = nuovoBlocco('formula', {
+      nome: 'MRd',
+      espressione: 'N1*b1+(N+N2)*b2+0,5*γC*B1*H1*L1*(b1+b2)',
+    });
+    const [c, l] = ricalcolaQuaderno([corta, lunga], sorgenti(TRAVE));
+    expect(spanBlocco(c)).toBe(1);
+    expect(spanBlocco(l)).toBe(COLONNE_FOGLIO);
+    expect(spanBlocco(l)).toBeGreaterThan(spanBlocco(c));
+
+    // note, schemi e capitoli tengono invece la larghezza scelta
+    const [nota, schema] = ricalcolaQuaderno(
+      [nuovoBlocco('nota'), nuovoBlocco('immagine', { colonne: 1 })],
+      sorgenti(TRAVE),
+    );
+    expect(spanBlocco(nota)).toBe(COLONNE_FOGLIO);
+    expect(spanBlocco(schema)).toBe(1);
   });
 
   it('la nota scritta su un passaggio viaggia con il blocco', () => {
