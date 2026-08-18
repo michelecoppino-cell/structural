@@ -13,11 +13,13 @@ import {
   Books,
   NotebookIcon,
   Trash,
+  ArrowsClockwise,
 } from '@phosphor-icons/react';
 import { useStore, type TabId } from './state/store';
 import { migra, svuotaMemoria } from './state/store';
 import { testoRelazione, esitiVerifiche } from './calc/relazione';
 import { SlotProvider } from './components/ComandiScheda';
+import { useSincronia } from './cloud/useSincronia';
 import Azioni from './tabs/Azioni';
 import Sollecitazioni from './tabs/Sollecitazioni';
 import Verifiche from './tabs/Verifiche';
@@ -56,6 +58,7 @@ const TABS: { id: TabId; label: string; icon: React.ReactNode; sub: string }[] =
 
 export default function App() {
   const { state, dispatch } = useStore();
+  const sincronia = useSincronia();
   const [toast, setToast] = useState('');
   const [slot, setSlot] = useState<HTMLDivElement | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -174,6 +177,17 @@ export default function App() {
             <DownloadSimple size={14} />
             <span>Esporta JSON</span>
           </button>
+          {(sincronia.stato === 'in-pari' || sincronia.stato === 'in-corso' || sincronia.stato === 'errore') && (
+            <button
+              type="button"
+              className="btn btn-secondary"
+              disabled={sincronia.stato === 'in-corso'}
+              onClick={() => void sincronia.sincronizza()}
+            >
+              <ArrowsClockwise size={14} />
+              <span>Sincronizza ora</span>
+            </button>
+          )}
           <button
             type="button"
             className="btn btn-secondary btn-svuota"
@@ -269,7 +283,7 @@ export default function App() {
             {state.tab === 'verifiche' && <Verifiche />}
             {state.tab === 'costi' && <Costi />}
             {state.tab === 'quaderno' && <Quaderno />}
-            {state.tab === 'normativa' && <Libreria />}
+            {state.tab === 'normativa' && <Libreria sincronia={sincronia} />}
           </SlotProvider>
         </main>
       </div>

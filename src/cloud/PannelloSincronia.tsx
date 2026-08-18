@@ -6,12 +6,12 @@
  * tocca i suoi file: *cosa esce da qui, e dove va a finire*. Per questo il
  * pannello nomina la cartella e il file, e dice cosa **non** viene toccato.
  */
-import { ArrowsClockwise, CloudCheck, CloudSlash, CloudWarning } from '@phosphor-icons/react';
+import { CloudCheck, CloudSlash, CloudWarning } from '@phosphor-icons/react';
 import { CARTELLA, FILE_LIBRERIA } from './config';
-import { useSincronia } from './useSincronia';
+import type { useSincronia } from './useSincronia';
 
-export default function PannelloSincronia() {
-  const { stato, utente, ultimo, dettaglio, conteggio, sincronizza, collega, scollega } = useSincronia();
+export default function PannelloSincronia({ sincronia }: { sincronia: ReturnType<typeof useSincronia> }) {
+  const { stato, utente, ultimo, dettaglio, conteggio, collega, scollega } = sincronia;
 
   if (stato === 'spenta') {
     return (
@@ -67,20 +67,9 @@ export default function PannelloSincronia() {
                 Collega OneDrive
               </button>
             ) : (
-              <>
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  disabled={stato === 'in-corso'}
-                  onClick={() => void sincronizza()}
-                >
-                  <ArrowsClockwise size={14} />
-                  Sincronizza ora
-                </button>
-                <button type="button" className="btn btn-secondary" onClick={() => void scollega()}>
-                  Scollega
-                </button>
-              </>
+              <button type="button" className="btn btn-secondary" onClick={() => void scollega()}>
+                Scollega
+              </button>
             )}
           </div>
         </div>
