@@ -132,7 +132,15 @@ function disegna(lato, { pieno = false, scala = 1 } = {}) {
 mkdirSync(PUBLIC, { recursive: true });
 
 const file = [
+  // taglie piccole: le usano Chrome e il sistema operativo per la scorciatoia
+  // sul desktop e per la barra delle applicazioni, dove un 512 ridotto a 32
+  // impasta il tratto del triangolo
+  ['icon-48.png', 48, {}],
+  ['icon-64.png', 64, {}],
+  ['icon-96.png', 96, {}],
+  ['icon-128.png', 128, {}],
   ['icon-192.png', 192, {}],
+  ['icon-256.png', 256, {}],
   ['icon-512.png', 512, {}],
   // maskable: sfondo a filo e marchio dentro la zona sicura (80% centrale),
   // perché Android ritaglia l'icona con la forma del launcher

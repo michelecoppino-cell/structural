@@ -12,8 +12,17 @@
  *    cambia a ogni build, quindi non si serve mai roba vecchia per sbaglio.
  */
 
-const CACHE = 'structural-v1';
-const GUSCIO = ['/', '/index.html', '/manifest.webmanifest', '/icon.svg', '/icon-192.png', '/icon-512.png'];
+const CACHE = 'structural-v2';
+const GUSCIO = [
+  '/',
+  '/index.html',
+  '/manifest.webmanifest',
+  '/icon.svg',
+  '/icon-128.png',
+  '/icon-192.png',
+  '/icon-256.png',
+  '/icon-512.png',
+];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(
