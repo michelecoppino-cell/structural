@@ -63,6 +63,11 @@ export function useSincronia() {
   const [stato, setStato] = useState<StatoSincronia>(SINCRONIA_CONFIGURATA ? 'scollegata' : 'spenta');
   const [utente, setUtente] = useState<string | null>(null);
   const [ultimo, setUltimo] = useState<string>('');
+  // Cosa ha detto Microsoft, parola per parola. Il pannello lo mostra invece di
+  // tenerselo nella console: questa app si usa anche dal telefono, dove una
+  // console non c'è, ed è lì che serve sapere se è un permesso mancante o
+  // davvero la rete.
+  const [dettaglio, setDettaglio] = useState<string>('');
 
   // lo stato più fresco, per non lavorare su una copia vecchia dentro le
   // funzioni asincrone (il classico giro che «riporta indietro» una modifica)
@@ -87,6 +92,7 @@ export function useSincronia() {
       const base = grezzo ? leggiBase() : null;
       const fusa = fondiLibrerie(locale, remoto, base);
 
+      setDettaglio('');
       if (!stessoContenuto(fusa, locale)) dispatch({ type: 'libreria', lib: fusa });
       if (!grezzo || !stessoContenuto(fusa, remoto)) await scriviJson(FILE_LIBRERIA, fusa);
 
@@ -96,6 +102,7 @@ export function useSincronia() {
       setStato('in-pari');
     } catch (e) {
       setStato(e instanceof ServeAccesso ? 'scaduta' : 'errore');
+      setDettaglio(e instanceof Error ? e.message : String(e));
       if (!(e instanceof ServeAccesso)) console.error('Sincronizzazione OneDrive', e);
     }
   }, [dispatch]);
@@ -166,5 +173,5 @@ export function useSincronia() {
     } catch { /* niente da togliere */ }
   }, []);
 
-  return { stato, utente, ultimo, sincronizza, collega, scollega };
+  return { stato, utente, ultimo, dettaglio, sincronizza, collega, scollega };
 }
