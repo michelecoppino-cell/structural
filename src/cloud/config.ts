@@ -26,12 +26,26 @@
  *     l'accesso;
  *  5. copia l'*ID applicazione (client)* e incollalo qui sotto.
  *
- * Finché `CLIENT_ID` resta vuoto l'app funziona esattamente come prima —
- * tutto in locale — e il pannello di sincronizzazione dice cosa manca.
+ * L'id sta scritto qui sotto, in chiaro e nel repository pubblico, ed è giusto
+ * così: non è una credenziale. Chi lo copiasse in un'altra pagina non
+ * otterrebbe niente, perché Microsoft consegna il token solo agli indirizzi
+ * registrati nell'app — e quelli li decidi tu dal portale.
+ *
+ * `VITE_MS_CLIENT_ID`, se valorizzata in fase di build, ha la precedenza: serve
+ * a provare una registrazione diversa senza toccare il codice. Se qui non ci
+ * fosse niente, l'app funzionerebbe esattamente come prima — tutto in locale —
+ * e il pannello di sincronizzazione direbbe cosa manca.
  */
-export const CLIENT_ID = import.meta.env.VITE_MS_CLIENT_ID ?? '';
+export const CLIENT_ID = import.meta.env.VITE_MS_CLIENT_ID ?? '6592c276-9c3e-42c5-8497-57acff94cb68';
 
-/** Torna esattamente qui dopo il login: dev'essere uno dei Redirect URI SPA. */
+/**
+ * Torna esattamente qui dopo il login. Dev'essere **uno dei Redirect URI SPA**
+ * registrati su Azure, carattere per carattere, barra finale compresa: è il
+ * motivo numero uno per cui un login che sembra a posto finisce su una pagina
+ * di errore Microsoft (`AADSTS50011`). Servono almeno due voci registrate —
+ * l'indirizzo del sito pubblicato e `http://localhost:5173/` per lo sviluppo —
+ * più, se ci si lavora, quello dell'anteprima di Cloudflare.
+ */
 export const REDIRECT_URI = `${window.location.origin}/`;
 
 /**

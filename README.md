@@ -494,21 +494,23 @@ finisce dentro.**
 
 ### Come si accende
 
-L'accesso Microsoft è **facoltativo e configurabile**: senza `VITE_MS_CLIENT_ID` l'app è
-identica a prima, tutta in locale, e il pannello in fondo alla scheda Normativa lo dice.
-Per accenderlo serve una registrazione su Azure — la procedura, passo per passo, è scritta
-in testa a `src/cloud/config.ts`. In sintesi: app **SPA**, account `common`, Redirect URI
-uguale all'origin del sito con la barra finale, permessi *delegated* `Files.ReadWrite` e
-`offline_access`. Poi l'ID applicazione va nelle variabili d'ambiente:
+L'app è registrata su Azure e il suo client id sta in chiaro in `src/cloud/config.ts`:
+non serve configurare niente per usarla. **Non è un segreto** — finisce nel bundle come
+tutto il resto, ed è giusto così: nel flusso *authorization code con PKCE* il client id da
+solo non apre niente, perché Microsoft consegna il token solo agli indirizzi registrati
+nell'applicazione.
 
-```bash
-echo "VITE_MS_CLIENT_ID=<id-applicazione>" > .env.local     # in locale
-```
+Quello che invece va tenuto allineato sono proprio i **Redirect URI**: ogni indirizzo da
+cui si apre l'app (sito pubblicato, `http://localhost:5173/` per lo sviluppo, eventuale
+anteprima di Cloudflare) dev'essere registrato su Azure come piattaforma *Single-page
+application*, identico carattere per carattere, barra finale compresa. Un indirizzo non
+registrato non dà un login rotto a metà: dà un errore Microsoft secco (`AADSTS50011`).
 
-e, per il sito pubblicato, in *Cloudflare Pages → Settings → Environment variables* con lo
-stesso nome. Non è un segreto — finisce nel bundle come tutto il resto, ed è giusto così:
-nel flusso *authorization code con PKCE* il client id da solo non apre niente, perché
-Microsoft rimanda il token solo agli indirizzi registrati.
+La registrazione completa — permessi *delegated* `Files.ReadWrite` e `offline_access`,
+account `common` — è descritta passo per passo in testa a `src/cloud/config.ts`, per il
+giorno in cui servisse rifarla. Per provarne una diversa senza toccare il codice basta
+`VITE_MS_CLIENT_ID`, in `.env.local` o fra le variabili d'ambiente di Cloudflare Pages:
+se c'è, vince lei.
 
 ### Come si fondono due dispositivi
 
