@@ -292,11 +292,20 @@ una **riga di premessa** e una **nota a piè di pagina**, e in mezzo i blocchi, 
 passaggi di un calcolo a mano. Si aggiungono dove servono — in coda o fra due blocchi già
 scritti — si **riordinano** (maniglia, frecce o trascinamento) e si eliminano con la ×.
 
-I blocchi stanno su una **griglia a tre colonne**, e ognuno decide quante ne occupa: il
-comando con il numero, fra i tasti del blocco, gira fra 1, 2 e 3, così una formula o un testo
-si può tenere **la riga per sé**. Note, schemi e capitoli partono a riga intera. Il corpo del
-testo è quello di un foglio scritto in Arial Narrow 11: piccolo, perché tre colonne di calcolo
-ci stiano senza andare a capo.
+I blocchi stanno su una **griglia a tre colonne** con il passo di una riga: sono quelle le
+posizioni possibili. Una riga di calcolo occupa **una riga sola** — nome, formula e risultato
+non vanno mai a capo — e si prende **le colonne che le servono**: la larghezza non si sceglie,
+la decide il contenuto, così una formula lunga si allarga e una corta non tiene una colonna
+vuota. Se la riga ha una nota, quella va **sotto, in grigetto piccolo**. Note, schemi e
+capitoli restano a riga intera, con il loro comando 1-2-3. Il corpo del testo è quello di un
+foglio scritto in Arial Narrow 11.
+
+Una formula nuova si propone nel **primo posto libero** — in coda, o subito dopo il blocco da
+cui si è partiti — e nasce con il cursore dentro. Se il posto non va bene la si **porta più in
+basso** con le due frecce del blocco (o `Ctrl+↓` e `Ctrl+↑`): le caselle saltate restano lì,
+vuote, e si premono per farla risalire o ci si lascia cadere il passaggio successivo. Da una
+cella, **`Ctrl+Tab` infila una formula subito dopo**: si scrive un passaggio e si va al
+prossimo senza staccare le mani dalla tastiera.
 
 Ogni blocco porta due comandi in più: la **(i)** apre la sua **nota** — il perché del
 passaggio, che a rileggere il foglio fra sei mesi è l'unica cosa che non si ricostruisce, e
@@ -393,27 +402,24 @@ L'algebra e la conversione delle unità stanno in `src/calc/unita.ts`; i test in
 Due fogli, si passa dall'uno all'altro dalle linguette in testa e il foglio aperto si ricorda.
 
 #### Foglio «Norme»
-Indice dei riferimenti: NTC2018 (DM 17/01/2018) e Circolare n. 7 del 2019.
+La **libreria personale** dei documenti che si aprono tutti i giorni: NTC, Circolare, CNR,
+Eurocodici, capitolati, qualunque link. Non c'è nessun indice di serie — ci sta quello che ci
+si mette, con «Edita».
 
-- **Due livelli apribili**: di default si vedono solo i titoli delle norme; aprendo una norma
-  compare l'elenco dei capitoli, aprendo un capitolo i suoi paragrafi, **rientrati secondo la
-  profondità del numero** (`4.1` → `4.1.2.3` → `4.1.2.3.5.2`). Lo stato di apertura si ricorda.
-- **Ricerca** su numero, titolo e parole chiave (`taglio`, `neve`, `VRd`, `C8.5`…): i capitoli
-  che contengono un risultato si aprono da soli.
-- **I link vanno sul capitolo**, non sul decreto intero: puntano a
-  [studiopetrillo.com](https://www.studiopetrillo.com/ntc2018.html), che pubblica NTC e
-  Circolare divise per capitolo. Il capitolo apre la sua pagina web dove c'è (Cap. 2, 3, 4, 6,
-  7, 8) e il PDF del capitolo altrove; i paragrafi aprono il PDF del capitolo, sulla pagina
-  indicata se il campo `pagina` è valorizzato (`#page=N`).
+- **Un documento** è sigla (la riga ocra), titolo e **indirizzo** — di preferenza il link
+  OneDrive del PDF. «Testo completo» con un indirizzo di OneDrive prova prima l'app desktop e,
+  se non risponde, apre il documento sul web.
+- **Indice dei capitoli** scritto a mano: numero, titolo e pagina. Non porta a nessun link —
+  serve a ricordare a colpo d'occhio a che pagina sta un capitolo, per trovarla in fretta una
+  volta aperto il documento. I punti nel numero danno il **rientro** (`2.1` sotto `2`).
+- **Ordine a piacere, anche dopo**: in «Edita» ogni documento ha le frecce **su** e **giù** e
+  si porta dove serve — quello che si apre tutti i giorni sta in cima. (Con una ricerca in
+  corso le frecce si spengono: l'elenco che si vede non è quello vero.)
+- **Ricerca** su sigla, titolo e capitoli (`taglio`, `neve`, `VRd`, `C8.5`…): resta il
+  documento che corrisponde, o i soli capitoli che corrispondono.
 
-- **Aggiunte a mano**: il pulsante *Aggiungi* mette in fondo alla scheda norme e link tuoi —
-  CNR, Eurocodici, circolari regionali, capitolati — con sigla, titolo e indirizzo. A
-  differenza dell'indice di serie queste sono **dati di commessa**: viaggiano nell'Esporta JSON.
-
-L'indice di NTC e Circolare **è parte del sito, non del progetto**: sta in
-`src/data/normative.ts`, è uguale per tutte le commesse e non entra nel JSON esportato. Nuove
-norme, capitoli e paragrafi si aggiungono a mano in quel file, un po' alla volta — le
-istruzioni sono nel commento in testa.
+Sono **dati di chi usa l'app, non della commessa**: sopravvivono a «Svuota tutto» e, con
+OneDrive collegato, si ritrovano su tutti i dispositivi (vedi `src/cloud/libreria.ts`).
 
 #### Foglio «Utili»
 Le tabelle che si tengono a bordo tavolo, con una **ricerca sola** che filtra le righe di

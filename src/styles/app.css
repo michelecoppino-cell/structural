@@ -2538,16 +2538,19 @@ button.field-origin:hover {
   gap: 6px;
 }
 
-/* ── i blocchi: una griglia a tre colonne, come la carta a quadretti ──
-      Ogni blocco occupa le colonne che gli si danno (`--span`, da 1 a 3): una
-      formula sta in una colonna, e quando merita la riga per sé la si allarga.
-      Note, schemi e capitoli prendono tutta la riga di serie. */
+/* ── i blocchi: una griglia a tre colonne e una riga di passo ──
+      Le posizioni possibili sono le caselle di questa griglia. Una riga di
+      calcolo occupa **una riga sola**, alta quanto il testo che ci sta, e si
+      prende le colonne che le servono (`--span`): la larghezza la decide il
+      contenuto, non un comando. Note, schemi e capitoli prendono tutta la
+      riga di serie. Un blocco può saltare qualche casella per posarsi più in
+      basso: le caselle saltate restano lì, vuote (`.quad-vuoto`). */
 
 .quad-blocchi {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   align-items: start;
-  gap: 6px 8px;
+  gap: 3px 6px;
 }
 
 .quad-blocco {
@@ -2556,16 +2559,49 @@ button.field-origin:hover {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 3px;
-  padding: 5px 8px;
+  gap: 0;
+  padding: 1px 6px;
   background: rgba(20, 24, 31, 0.02);
   border: 1px solid var(--segno);
   border-radius: var(--radius-md);
   break-inside: avoid;
 }
 
+.quad-blocco:focus {
+  outline: none;
+}
+
 .quad-blocco.is-pieno {
   grid-column: span var(--span, 3);
+  gap: 3px;
+  padding: 5px 8px;
+}
+
+/* una casella lasciata libera: si vede appena, si preme per far risalire la
+   riga che segue e ci si può lasciar cadere il prossimo passaggio */
+.quad-vuoto {
+  min-height: 22px;
+  padding: 0;
+  background: transparent;
+  border: 1px dashed transparent;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+
+.quad-blocchi:hover .quad-vuoto {
+  border-color: var(--segno);
+}
+
+.quad-vuoto:hover {
+  border-color: var(--color-accent-400);
+  background: rgba(20, 24, 31, 0.02);
+}
+
+@media print {
+  .quad-vuoto {
+    border-color: transparent;
+    background: transparent;
+  }
 }
 
 /* su cellulare il foglio si stringe e le colonne non hanno più senso: un
@@ -2578,6 +2614,11 @@ button.field-origin:hover {
   .quad-blocco,
   .quad-blocco.is-pieno {
     grid-column: 1 / -1;
+  }
+
+  /* niente caselle vuote dove c'è una colonna sola: sarebbero righe bianche */
+  .quad-vuoto {
+    display: none;
   }
 }
 
@@ -2603,10 +2644,10 @@ button.field-origin:hover {
   background: transparent;
   border: 0;
   border-top: 1px dashed var(--segno);
-  padding: 3px 0 0;
+  padding: 2px 0 0;
   color: var(--inchiostro-2);
   font-family: inherit;
-  font-size: 10.5px;
+  font-size: 9.5px;
 }
 
 .quad-appunto:focus {
@@ -2614,12 +2655,18 @@ button.field-origin:hover {
   border-color: var(--color-accent-600);
 }
 
+/* la nota del passaggio: una riga grigina piccola, subito sotto la formula —
+   è l'unica cosa che ha il diritto di aggiungere una riga alla cella */
 .quad-appunto-letto {
-  font-size: 10.5px;
-  line-height: 1.4;
+  font-size: 9.5px;
+  line-height: 1.3;
   color: var(--inchiostro-3);
-  border-top: 1px dashed var(--segno);
-  padding-top: 3px;
+  overflow-wrap: anywhere;
+}
+
+.quad-blocco:hover,
+.quad-blocco:focus-within {
+  z-index: 2;
 }
 
 .quad-blocco.is-errore {
@@ -2632,21 +2679,30 @@ button.field-origin:hover {
   border-color: var(--color-accent-400);
 }
 
-/* i comandi del blocco: nessuna etichetta, compaiono al passaggio e non
-   rubano una riga al calcolo */
+/* i comandi del blocco: nessuna etichetta e nessuno spazio riservato — stanno
+   sospesi sul bordo alto della cella e compaiono al passaggio, così la riga di
+   calcolo è alta quanto il suo testo e basta */
 .quad-blocco-azioni {
+  position: absolute;
+  top: -15px;
+  right: 4px;
+  z-index: 3;
   display: flex;
   align-items: center;
-  gap: 4px;
-  min-height: 14px;
+  gap: 3px;
+  padding: 0 3px;
   font-size: 10px;
+  background: var(--carta);
+  border: 1px solid var(--segno);
+  border-radius: 999px;
+  opacity: 0;
+  pointer-events: none;
 }
 
 .quad-blocco-azioni .maniglia {
   display: inline-flex;
   color: var(--inchiostro-3);
   cursor: grab;
-  opacity: 0;
 }
 
 .quad-blocco-azioni .maniglia:active {
@@ -2667,13 +2723,12 @@ button.field-origin:hover {
   display: inline-flex;
   align-items: center;
   gap: 2px;
-  opacity: 0;
 }
 
 .quad-blocco-azioni .tasti button {
   display: inline-flex;
   align-items: center;
-  padding: 3px;
+  padding: 2px;
   color: var(--inchiostro-3);
   background: transparent;
   border: 0;
@@ -2691,11 +2746,10 @@ button.field-origin:hover {
   cursor: default;
 }
 
-.quad-blocco:hover .maniglia,
-.quad-blocco:hover .tasti,
-.quad-blocco:focus-within .maniglia,
-.quad-blocco:focus-within .tasti {
+.quad-blocco:hover .quad-blocco-azioni,
+.quad-blocco:focus-within .quad-blocco-azioni {
   opacity: 1;
+  pointer-events: auto;
 }
 
 .quad-blocco-azioni .tasti .chiudi:hover {
@@ -2703,11 +2757,18 @@ button.field-origin:hover {
   background: var(--err-bg);
 }
 
-/* su cellulare non c'è passaggio del mouse: i comandi stanno sempre lì */
+/* su cellulare non c'è passaggio del mouse: i comandi stanno sempre lì — e
+   siccome stanno sempre lì, la cella si tiene la striscia che gli serve invece
+   di lasciarli sopra a quella di prima */
 @media (hover: none) {
-  .quad-blocco-azioni .maniglia,
-  .quad-blocco-azioni .tasti {
+  .quad-blocco-azioni {
+    top: 1px;
     opacity: 1;
+    pointer-events: auto;
+  }
+
+  .quad-blocco {
+    padding-top: 18px;
   }
 }
 
@@ -2722,22 +2783,27 @@ button.field-origin:hover {
 .quad-calcolo {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 1px;
+  min-width: 0;
 }
 
-/* nome, formula e risultato sulla stessa riga: un passaggio = una riga.
-   La misura è quella di un foglio scritto in Arial Narrow 11: piccola, tre
-   colonne di calcolo ci stanno senza andare a capo */
+/* nome, formula e risultato su **una riga sola**, sempre: un passaggio è una
+   riga di quaderno, non un riquadro. Quando il testo cresce non va a capo —
+   è la cella che si allarga, prendendosi la colonna che le serve. La misura è
+   quella di un foglio scritto in Arial Narrow 11. */
 .quad-linea {
   display: flex;
   align-items: center;
   gap: 4px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  min-width: 0;
   font-size: 11.5px;
+  line-height: 1.25;
 }
 
 .quad-linea .nome {
   font-weight: 600;
+  white-space: nowrap;
 }
 
 .quad-linea .espr,
@@ -2747,8 +2813,13 @@ button.field-origin:hover {
   color: var(--inchiostro-2);
 }
 
+/* se proprio la formula non ci sta (una riga lunghissima in una cella sola)
+   si accorcia con i puntini: il testo intero resta nel suggerimento */
 .quad-linea .espr {
-  overflow-wrap: anywhere;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 /* il risultato sta in fondo alla stessa riga: non va mai a capo per conto suo,
@@ -2790,8 +2861,8 @@ button.field-origin:hover {
   width: auto;
   min-width: 40px;
   max-width: 78px;
-  min-height: 20px;
-  padding: 1px 3px;
+  min-height: 18px;
+  padding: 0 3px;
   font-size: 10.5px;
   font-family: var(--font-mono);
   color: var(--inchiostro-2);
@@ -2807,10 +2878,11 @@ button.field-origin:hover {
 }
 
 .quad-in-nome.input {
-  flex: 0 1 56px;
-  width: 56px;
-  min-width: 36px;
-  min-height: 21px;
+  flex: 0 1 52px;
+  width: 52px;
+  min-width: 32px;
+  min-height: 18px;
+  padding-block: 0;
   padding-inline: 4px;
   font-weight: 600;
 }
@@ -2820,7 +2892,8 @@ button.field-origin:hover {
      piccola apposta, poi cresce con lo spazio che avanza */
   flex: 1 1 48px;
   min-width: 0;
-  min-height: 21px;
+  min-height: 18px;
+  padding-block: 0;
   font-family: var(--font-mono);
   font-size: 10.5px;
 }
@@ -2844,8 +2917,12 @@ button.field-origin:hover {
 }
 
 .quad-nota-riga {
-  font-size: 10px;
+  font-size: 9.5px;
+  line-height: 1.3;
   color: var(--inchiostro-3);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 /* ── nota, schema, capitolo ── */
