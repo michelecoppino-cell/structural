@@ -4,6 +4,7 @@ import {
   SELEZIONI_DEFAULT,
   VOCI_DEFAULT,
   formatta,
+  haOperazioni,
   nomeAmmesso,
   nomiMancanti,
   nomiRichiesti,
@@ -361,5 +362,38 @@ describe('grandezze fisse scelte dalla libreria', () => {
     expect(N.valoreBase).toBeCloseTo(4 * 201.1 * ((0.85 * 25) / 1.5), -1);
     expect(N.umEffettiva).toBe('kN');
     expect(N.valore).toBeCloseTo(11.4, 1);
+  });
+});
+
+describe('definizione o formula', () => {
+  it('un numero scritto e basta non è un\u2019operazione', () => {
+    for (const e of ['0,3', '0.30', '-3', '+4', '1e3', '(80)', '50%', '  12  ']) {
+      expect(haOperazioni(e), e).toBe(false);
+    }
+  });
+
+  it('appena compare un\u2019operazione la riga diventa una formula', () => {
+    for (const e of ['b*h', '2+3', 'q*l^2/8', 'sqrt(2)', '2(3+4)', 'b', '-b', '3*2%']) {
+      expect(haOperazioni(e), e).toBe(true);
+    }
+  });
+
+  it('un\u2019espressione illeggibile è una formula, non un numero', () => {
+    expect(haOperazioni('3 §')).toBe(true);
+  });
+
+  it('una riga vuota non è né l\u2019una né l\u2019altra', () => {
+    expect(haOperazioni('')).toBe(false);
+    expect(haOperazioni('   ')).toBe(false);
+  });
+
+  it('testoVoce non ripete il numero di una definizione', () => {
+    const voci = ricalcola([
+      { id: 'b', nome: 'b', espressione: '0,3', nota: '', um: 'm', tipo: 'compilabile' },
+      { id: 'h', nome: 'h', espressione: '0,5', nota: '', um: 'm', tipo: 'compilabile' },
+      { id: 'a', nome: 'A', espressione: 'b*h', nota: '', um: 'mq', tipo: 'operazione' },
+    ]);
+    expect(testoVoce(voci[0])).toBe('b = 0.3 m');
+    expect(testoVoce(voci[2])).toBe('A = b*h = 0.15 mq');
   });
 });

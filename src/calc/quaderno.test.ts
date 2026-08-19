@@ -68,7 +68,14 @@ describe('blocchi del quaderno', () => {
     expect(b.valore).toBeCloseTo(0.3, 9);
     expect(b.um).toBe('m');
     expect(b.collegato).toBe(true);
-    expect(testoBlocco(b)).toBe('b = 0,3 = 0.3 m');
+    // una grandezza scritta come numero è una definizione: niente secondo uguale
+    expect(testoBlocco(b)).toBe('b = 0.3 m');
+  });
+
+  it('una grandezza calcolata tiene la formula prima del risultato', () => {
+    const voci = [...TRAVE, voce('A', 'b*h', 'mq')];
+    const [b] = ricalcolaQuaderno([nuovoBlocco('valore', { fonte: 'v-A' })], sorgenti(voci));
+    expect(testoBlocco(b)).toBe('A = b*h = 0.15 mq');
   });
 
   it('cambiare la grandezza nel pannello aggiorna il blocco, senza toccarlo', () => {

@@ -16,11 +16,13 @@ import type { Preimpostata } from '../calc/calcolatrice';
 
 /**
  * Versione del formato del file su OneDrive. È salita a 2 quando i documenti
- * hanno preso l'indice scritto a mano (`capitoli`): i file scritti dalla
- * versione precedente si rileggono lo stesso, `leggiNormative` li completa con
- * un indice vuoto.
+ * hanno preso l'indice scritto a mano (`capitoli`) e a 3 quando hanno preso la
+ * categoria: i file scritti dalle versioni precedenti si rileggono lo stesso,
+ * `leggiNormative` li completa con un indice vuoto e senza categoria — i
+ * documenti finiscono tutti nello scaffale «Senza categoria», da dove si
+ * smistano quando fa comodo.
  */
-export const LIBRERIA_VERSION = 2;
+export const LIBRERIA_VERSION = 3;
 
 export interface Libreria {
   schemaVersion: number;

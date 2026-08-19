@@ -33,6 +33,7 @@ import {
   VOCI_DEFAULT,
   formatta,
   formattaIn,
+  haOperazioni,
   ricalcola,
   vociDaSelezioni,
   type Preimpostata,
@@ -57,15 +58,13 @@ import {
 } from '../calc/quaderno';
 import { CAPITOLI, blocchiCapitolo, importiDaSchede, titoloCapitolo } from '../calc/relazione';
 import { documentoHtml, documentoTesto, nomeFile, oggi } from '../calc/esportazione';
+import { salvaConNome } from '../calc/salvataggio';
 import { UNITA_DEFAULT, normalizzaElenco, unitaInElenco } from '../calc/unita';
 import { ACCIAI, CLS, DIAMETRI, SIGLE_ACCIAIO } from '../data/materiali';
 import { TAGLIE_BULLONE } from '../data/bulloni';
 import { TIPI_PROFILO, taglieDisponibili, type TipoProfilo } from '../data/profili-acciaio';
 
 /* ─────────────────────────── cose di servizio ─────────────────────────── */
-
-/** Un valore scritto come numero e basta: non si ripete il risultato. */
-const SOLO_NUMERO = /^[+-]?[\d\s.,]+$/;
 
 /** Che cosa dice il colore di un rapporto letto in percento. */
 const SEMAFORO = {
@@ -680,15 +679,17 @@ export default function Quaderno() {
     }
   };
 
-  const scarica = () => {
-    const blob = new Blob([documentoHtml(state)], { type: 'text/html;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${nomeFile(state)}.html`;
-    a.click();
-    URL.revokeObjectURL(url);
-    flash('File HTML scaricato: si apre con qualunque browser');
+  /** Anche la stampa esce come un «Salva con nome»: nome e cartella si scelgono. */
+  const scarica = async () => {
+    const esito = await salvaConNome({
+      nome: `${nomeFile(state)}.html`,
+      tipo: 'text/html;charset=utf-8',
+      descrizione: 'Documento da stampare',
+      estensioni: ['.html'],
+      contenuto: documentoHtml(state),
+    });
+    if (esito === 'annullato') return flash('Salvataggio annullato');
+    flash('File HTML salvato: si apre con qualunque browser');
   };
 
   const p = state.progetto;
@@ -730,11 +731,11 @@ export default function Quaderno() {
         <button
           type="button"
           className="btn btn-secondary"
-          title="Scarica un file HTML autonomo, leggibile senza questa app"
-          onClick={scarica}
+          title="Salva con nome un file HTML autonomo, leggibile senza questa app"
+          onClick={() => void scarica()}
         >
           <DownloadSimple size={14} />
-          Scarica HTML
+          Salva HTML
         </button>
         <button
           type="button"
@@ -1350,6 +1351,14 @@ function BloccoCard({
    * in avanti è testo che si edita.
    */
   const modificabile = !b.pieno && bl.tipo !== 'formula' && !!b.espressione.trim();
+  /**
+   * La riga definisce una grandezza invece di calcolarla: quello che c'è
+   * scritto è un numero e basta, senza nessuna operazione. Allora il secondo
+   * uguale non serve — `b = 0,30 m`, non `b = 0,30 = 0,30 m` — e resta solo
+   * l'unità con cui il numero va letto. Appena si scrive un'operazione la riga
+   * torna una formula e il risultato ricompare a destra.
+   */
+  const definizione = !b.pieno && !haOperazioni(bl.tipo === 'formula' ? bl.espressione : b.espressione);
   const rendiModificabile = () =>
     onAggiorna({
       tipo: 'formula',
@@ -1605,7 +1614,7 @@ function BloccoCard({
                     <Nome nome={b.nome} />
                   </span>
                 )}
-                {b.espressione && !SOLO_NUMERO.test(b.espressione) && (
+                {b.espressione && !definizione && (
                   <>
                     <span className="uguale">=</span>
                     <span className="espr" title={b.espressione}>
@@ -1625,6 +1634,9 @@ function BloccoCard({
                 <span className="quad-manca">manca {b.mancanti.join(', ')}</span>
               ) : b.testo ? (
                 <strong>{b.testo}</strong>
+              ) : definizione && bl.tipo === 'formula' ? (
+                // il numero è già nel campo qui accanto: si mostra solo l'unità
+                <UnitaBlocco b={b} onAggiorna={onAggiorna} />
               ) : (
                 <>
                   <span className="uguale">=</span>

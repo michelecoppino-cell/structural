@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import {
+  ArrowLeft,
   ArrowSquareOut,
   ArrowUp,
   ArrowDown,
@@ -7,6 +8,8 @@ import {
   CaretDown,
   CaretRight,
   Check,
+  FolderOpen,
+  FolderSimple,
   MagnifyingGlass,
   PencilSimple,
   Plus,
@@ -17,7 +20,15 @@ import { apriLink } from '../cloud/apriLink';
 import PannelloSincronia from '../cloud/PannelloSincronia';
 import type { useSincronia } from '../cloud/useSincronia';
 import { ComandiScheda } from '../components/ComandiScheda';
-import { livelloCapitolo, urlSicuro, type CapitoloIndice, type LinkUtente } from '../data/normative';
+import {
+  SENZA_CATEGORIA,
+  categorie,
+  livelloCapitolo,
+  nomeCategoria,
+  urlSicuro,
+  type CapitoloIndice,
+  type LinkUtente,
+} from '../data/normative';
 
 const normalizza = (s: string) =>
   s
@@ -111,6 +122,7 @@ function DocumentoPanel({
   ricerca,
   primo,
   ultimo,
+  mostraCategoria,
   onChange,
   onRemove,
   onSposta,
@@ -118,9 +130,11 @@ function DocumentoPanel({
   voce: LinkUtente;
   modifica: boolean;
   ricerca: boolean;
-  /** Primo e ultimo dell'elenco vero, non di quello filtrato dalla ricerca. */
+  /** Primo e ultimo della sua categoria, non dell'elenco filtrato dalla ricerca. */
   primo: boolean;
   ultimo: boolean;
+  /** Scrive da che scaffale viene: serve nella ricerca, che pesca ovunque. */
+  mostraCategoria: boolean;
   onChange: (patch: Partial<LinkUtente>) => void;
   onRemove: () => void;
   /** Un posto più su (−1) o più giù (+1) nell'ordine della libreria. */
@@ -165,6 +179,11 @@ function DocumentoPanel({
                 <span className="norma-titolo" title={voce.titolo}>
                   {voce.titolo || voce.url}
                 </span>
+                {mostraCategoria && (
+                  <span className="norma-categoria-segno">
+                    <FolderSimple size={11} /> {nomeCategoria(voce)}
+                  </span>
+                )}
               </span>
             </button>
           ) : (
@@ -178,6 +197,11 @@ function DocumentoPanel({
                 <span className="norma-titolo" title={voce.titolo}>
                   {voce.titolo || voce.url}
                 </span>
+                {mostraCategoria && (
+                  <span className="norma-categoria-segno">
+                    <FolderSimple size={11} /> {nomeCategoria(voce)}
+                  </span>
+                )}
               </span>
             </span>
           )}
@@ -224,6 +248,17 @@ function DocumentoPanel({
 
         {modifica && (
           <div className="norma-doc-modifica">
+            {/* la categoria è un campo come gli altri: si scrive il nome di uno
+                scaffale che c'è già (l'elenco lo propone) o uno nuovo, che
+                nasce nel momento in cui il primo documento ci finisce dentro */}
+            <input
+              className="input norma-campo-categoria"
+              value={voce.categoria}
+              list="norma-elenco-categorie"
+              placeholder="Categoria — Eurocodici, Capitolati…"
+              aria-label="Categoria del documento"
+              onChange={(e) => onChange({ categoria: e.target.value })}
+            />
             <input
               className="input"
               value={voce.sigla}
@@ -306,39 +341,147 @@ function DocumentoPanel({
   );
 }
 
+/* ─────────────────────────── uno scaffale della libreria ─────────────────────────── */
+
+/**
+ * La copertina di una categoria: quello che si vede aprendo la libreria.
+ * Dice come si chiama lo scaffale, quanti documenti ci stanno e le sigle dei
+ * primi — perché «Eurocodici (4)» da solo non basta a ricordarsi che dentro
+ * c'è proprio quello che si sta cercando.
+ */
+function CopertinaCategoria({
+  nome,
+  orfana,
+  voci,
+  onApri,
+}: {
+  nome: string;
+  orfana: boolean;
+  voci: LinkUtente[];
+  onApri: () => void;
+}) {
+  const sigle = voci.map((v) => v.sigla || v.titolo || v.url).filter(Boolean);
+  const mostrate = sigle.slice(0, 4);
+  return (
+    <button type="button" className={`norma-cat${orfana ? ' is-orfana' : ''}`} onClick={onApri}>
+      <span className="norma-cat-testa">
+        <FolderSimple size={18} weight="fill" />
+        <span className="norma-cat-nome">{nome}</span>
+        <span className="norma-cat-conta">
+          {voci.length} {voci.length === 1 ? 'documento' : 'documenti'}
+        </span>
+      </span>
+      <span className="norma-cat-sigle">
+        {mostrate.join(' · ')}
+        {sigle.length > mostrate.length ? ` · +${sigle.length - mostrate.length}` : ''}
+      </span>
+    </button>
+  );
+}
+
 /* ─────────────────────────── scheda ─────────────────────────── */
 
+/**
+ * La libreria delle norme, a due livelli: aprendola si vedono le **categorie**
+ * — gli scaffali, con quanti documenti hanno dentro — e si entra in quella che
+ * serve. Con venti documenti in fila non si trovava più niente; con gli
+ * scaffali si va dritti dove si sa che sta la norma.
+ *
+ * Le due scorciatoie che saltano il livello:
+ *  - la **ricerca** pesca in tutta la libreria, categorie comprese: quando si
+ *    cerca «taglio» non importa su che scaffale sta;
+ *  - una libreria con una **sola** categoria non ha niente da smistare, e si
+ *    apre già sui documenti.
+ */
 export default function Normativa({ sincronia }: { sincronia: ReturnType<typeof useSincronia> }) {
   const { state, dispatch } = useStore();
   const [q, setQ] = useState('');
   const [modifica, setModifica] = useState(false);
+  const [apertaCat, setApertaCat] = useState<string | null>(null);
+  const [nuovaCat, setNuovaCat] = useState('');
   const ricerca = q.trim().length > 0;
 
-  const documenti = useMemo(() => filtraDocumenti(state.normative, q), [state.normative, q]);
+  const gruppi = useMemo(() => categorie(state.normative), [state.normative]);
+
+  /**
+   * La categoria aperta: quella scelta, se esiste ancora — l'ultimo documento
+   * può essere stato spostato altrove o cancellato, e restare dentro uno
+   * scaffale vuoto non ha senso — oppure l'unica che c'è.
+   */
+  const cat = (apertaCat && gruppi.find((g) => g.nome === apertaCat)?.nome) || (gruppi.length === 1 ? gruppi[0].nome : null);
+  const dentro = ricerca || !!cat;
+
+  const documenti = useMemo(() => {
+    if (ricerca) return filtraDocumenti(state.normative, q);
+    const gruppo = gruppi.find((g) => g.nome === cat);
+    return gruppo ? gruppo.voci : [];
+  }, [state.normative, gruppi, cat, q, ricerca]);
+
+  /** I documenti che stanno sullo stesso scaffale di questo: l'ordine è lì. */
+  const vicini = (v: LinkUtente) => gruppi.find((g) => g.nome === nomeCategoria(v))?.voci ?? [];
 
   const setVoci = (v: LinkUtente[]) => dispatch({ type: 'normative', voci: v });
   const aggiornaDoc = (id: string, patch: Partial<LinkUtente>) =>
     setVoci(state.normative.map((v) => (v.id === id ? { ...v, ...patch } : v)));
   const rimuoviDoc = (id: string) => setVoci(state.normative.filter((v) => v.id !== id));
   /**
-   * Sposta un documento di un posto nell'elenco. L'ordine della libreria è una
-   * scelta come le altre — e si cambia quando serve, non solo mentre si
-   * scrive: quello che si apre tutti i giorni va in cima.
+   * Sposta un documento di un posto **dentro la sua categoria**: l'ordine si
+   * legge scaffale per scaffale, e scavalcare un documento di un altro
+   * scaffale non vorrebbe dire niente. Lo scambio avviene comunque
+   * sull'elenco vero — è quello l'ordine che si salva.
    */
   const spostaDoc = (id: string, verso: -1 | 1) => {
+    const voce = state.normative.find((v) => v.id === id);
+    if (!voce) return;
+    const gruppo = vicini(voce);
+    const posto = gruppo.findIndex((v) => v.id === id) + verso;
+    const vicino = gruppo[posto];
+    if (!vicino) return;
     const da = state.normative.findIndex((v) => v.id === id);
-    const a = da + verso;
-    if (da < 0 || a < 0 || a >= state.normative.length) return;
+    const a = state.normative.findIndex((v) => v.id === vicino.id);
     const nuove = [...state.normative];
     [nuove[da], nuove[a]] = [nuove[a], nuove[da]];
     setVoci(nuove);
   };
-  const aggiungiDoc = () =>
-    setVoci([...state.normative, { id: `norma-${Date.now()}`, sigla: '', titolo: '', url: '', capitoli: [] }]);
+  /** Un documento nuovo nasce sullo scaffale che si sta guardando. */
+  const aggiungiDoc = (categoria = cat && cat !== SENZA_CATEGORIA ? cat : '') =>
+    setVoci([
+      ...state.normative,
+      { id: `norma-${Date.now()}`, sigla: '', titolo: '', url: '', categoria, capitoli: [] },
+    ]);
+  /** Una categoria nuova nasce con dentro il primo documento da compilare. */
+  const aggiungiCategoria = () => {
+    const nome = nuovaCat.trim();
+    if (!nome) return;
+    aggiungiDoc(nome);
+    setNuovaCat('');
+    setApertaCat(nome);
+  };
+  /** Rinominare uno scaffale è riscrivere l'etichetta su tutto quello che c'è dentro. */
+  const rinominaCategoria = (vecchio: string, nuovo: string) => {
+    setVoci(state.normative.map((v) => (nomeCategoria(v) === vecchio ? { ...v, categoria: nuovo } : v)));
+    setApertaCat(nuovo.trim() ? nuovo : SENZA_CATEGORIA);
+  };
+
+  const gruppoAperto = gruppi.find((g) => g.nome === cat);
+  const soloUna = gruppi.length === 1;
 
   return (
     <div className="stack">
+      {/* i nomi degli scaffali che ci sono già: il campo categoria li propone */}
+      <datalist id="norma-elenco-categorie">
+        {gruppi.filter((g) => !g.orfana).map((g) => (
+          <option key={g.nome} value={g.nome} />
+        ))}
+      </datalist>
+
       <ComandiScheda>
+        {cat && !ricerca && !soloUna && (
+          <button type="button" className="btn btn-secondary" onClick={() => setApertaCat(null)}>
+            <ArrowLeft size={14} />
+            Categorie
+          </button>
+        )}
         <div className="norma-ricerca">
           <MagnifyingGlass size={14} />
           <input
@@ -346,13 +489,13 @@ export default function Normativa({ sincronia }: { sincronia: ReturnType<typeof 
             type="search"
             value={q}
             placeholder="Cerca capitolo, argomento o simbolo (taglio, neve, VRd, C8.5…)"
-            aria-label="Cerca nella libreria delle norme"
+            aria-label="Cerca in tutta la libreria delle norme"
             onChange={(e) => setQ(e.target.value)}
           />
         </div>
         {ricerca && (
           <span className="calc-conteggio">
-            {documenti.length} {documenti.length === 1 ? 'documento' : 'documenti'}
+            {documenti.length} {documenti.length === 1 ? 'documento' : 'documenti'} in tutta la libreria
           </span>
         )}
         <button
@@ -366,44 +509,118 @@ export default function Normativa({ sincronia }: { sincronia: ReturnType<typeof 
         </button>
       </ComandiScheda>
 
-      {documenti.length === 0 ? (
-        <p className="note">
-          {ricerca
-            ? 'Nessun documento corrisponde alla ricerca.'
-            : 'Nessuna norma in libreria: con «Edita» aggiungi i documenti che usi — NTC, Circolare, CNR, Eurocodici, capitolati — con il loro indirizzo e, se vuoi, l’indice dei capitoli.'}
-        </p>
-      ) : (
-        documenti.map((v) => (
-          <DocumentoPanel
-            key={v.id}
-            voce={v}
-            modifica={modifica}
-            ricerca={ricerca}
-            primo={state.normative[0]?.id === v.id}
-            ultimo={state.normative[state.normative.length - 1]?.id === v.id}
-            onChange={(patch) => aggiornaDoc(v.id, patch)}
-            onRemove={() => rimuoviDoc(v.id)}
-            onSposta={(verso) => spostaDoc(v.id, verso)}
-          />
-        ))
+      {/* ── primo livello: gli scaffali ── */}
+      {!dentro && (
+        gruppi.length === 0 ? (
+          <p className="note">
+            Nessuna norma in libreria: con «Edita» aggiungi i documenti che usi — NTC, Circolare, CNR, Eurocodici,
+            capitolati — con il loro indirizzo e, se vuoi, l’indice dei capitoli. Ogni documento sta su una
+            categoria, e le categorie sono quello che vedi aprendo la libreria.
+          </p>
+        ) : (
+          <div className="norma-categorie">
+            {gruppi.map((g) => (
+              <CopertinaCategoria
+                key={g.nome}
+                nome={g.nome}
+                orfana={g.orfana}
+                voci={g.voci}
+                onApri={() => setApertaCat(g.nome)}
+              />
+            ))}
+          </div>
+        )
       )}
 
-      {modifica && (
-        <button type="button" className="btn btn-secondary" onClick={aggiungiDoc}>
-          <Plus size={14} />
-          Aggiungi documento
-        </button>
+      {/* ── secondo livello: i documenti dello scaffale aperto (o la ricerca) ── */}
+      {dentro && !ricerca && gruppoAperto && (
+        <div className="norma-cat-aperta">
+          <FolderOpen size={16} weight="fill" />
+          {modifica && !gruppoAperto.orfana ? (
+            <input
+              className="input norma-cat-rinomina"
+              value={gruppoAperto.nome}
+              aria-label="Nome della categoria"
+              onChange={(e) => rinominaCategoria(gruppoAperto.nome, e.target.value)}
+            />
+          ) : (
+            <h2>{gruppoAperto.nome}</h2>
+          )}
+          <span className="calc-conteggio">
+            {gruppoAperto.voci.length} {gruppoAperto.voci.length === 1 ? 'documento' : 'documenti'}
+          </span>
+        </div>
+      )}
+
+      {dentro &&
+        (documenti.length === 0 ? (
+          <p className="note">Nessun documento corrisponde alla ricerca.</p>
+        ) : (
+          documenti.map((v) => {
+            const gruppo = vicini(v);
+            return (
+              <DocumentoPanel
+                key={v.id}
+                voce={v}
+                modifica={modifica}
+                ricerca={ricerca}
+                primo={gruppo[0]?.id === v.id}
+                ultimo={gruppo[gruppo.length - 1]?.id === v.id}
+                mostraCategoria={ricerca}
+                onChange={(patch) => aggiornaDoc(v.id, patch)}
+                onRemove={() => rimuoviDoc(v.id)}
+                onSposta={(verso) => spostaDoc(v.id, verso)}
+              />
+            );
+          })
+        ))}
+
+      {modifica && !ricerca && (
+        <div className="norma-aggiunte">
+          {dentro ? (
+            <button type="button" className="btn btn-secondary" onClick={() => aggiungiDoc()}>
+              <Plus size={14} />
+              Aggiungi documento{cat && cat !== SENZA_CATEGORIA ? ` in «${cat}»` : ''}
+            </button>
+          ) : (
+            <>
+              <input
+                className="input norma-campo-categoria"
+                value={nuovaCat}
+                placeholder="Nome della nuova categoria"
+                aria-label="Nome della nuova categoria"
+                onChange={(e) => setNuovaCat(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    aggiungiCategoria();
+                  }
+                }}
+              />
+              <button type="button" className="btn btn-secondary" disabled={!nuovaCat.trim()} onClick={aggiungiCategoria}>
+                <Plus size={14} />
+                Aggiungi categoria
+              </button>
+              <button type="button" className="btn btn-secondary" onClick={() => aggiungiDoc('')}>
+                <Plus size={14} />
+                Documento senza categoria
+              </button>
+            </>
+          )}
+        </div>
       )}
 
       <PannelloSincronia sincronia={sincronia} />
 
       <p className="note">
-        Ogni documento è tuo: sigla, titolo, indirizzo, indice dei capitoli e l’ordine in cui stanno — le frecce
-        di «Edita» lo cambiano quando vuoi — restano dopo «Svuota tutto» e, se
-        colleghi OneDrive, si ritrovano su tutti i dispositivi. L’indice si scrive da «Edita»: aiuta a ritrovare in
-        fretta la pagina quando riapri il documento, ma non porta a nessun link — la pagina va cercata a mano una
-        volta aperto. Con un indirizzo di OneDrive, «Testo completo» prova prima ad aprire l’app desktop, se è
-        installata, e se non risponde apre il documento sul web.
+        Ogni documento è tuo: categoria, sigla, titolo, indirizzo, indice dei capitoli e l’ordine in cui stanno — le
+        frecce di «Edita» lo cambiano quando vuoi — restano dopo «Svuota tutto» e, se colleghi OneDrive, si
+        ritrovano su tutti i dispositivi. Le categorie sono gli scaffali della libreria: si aprono per vedere che
+        cosa c’è dentro, e ne nasce una nuova appena scrivi il suo nome nel campo «Categoria» di un documento. Chi
+        non ne ha una finisce in «{SENZA_CATEGORIA}». L’indice si scrive da «Edita»: aiuta a ritrovare in fretta la
+        pagina quando riapri il documento, ma non porta a nessun link — la pagina va cercata a mano una volta
+        aperto. Con un indirizzo di OneDrive, «Testo completo» prova prima ad aprire l’app desktop, se è installata,
+        e se non risponde apre il documento sul web.
       </p>
     </div>
   );

@@ -24,8 +24,8 @@
  */
 
 import {
-  formatta,
   formattaIn,
+  haOperazioni,
   leggiRisultato,
   nomeAmmesso,
   nomiMancanti,
@@ -159,7 +159,10 @@ function lunghezzaRiga(b: BloccoCalcolato): number {
       ? `manca ${b.mancanti.join(', ')}`
       : b.testo || `${formattaIn(b.valore, b.um)} ${b.um}`;
   const scritta = b.blocco.tipo === 'formula';
-  const scritto = (nome.length ? nome.length + 3 : 0) + (espressione ? espressione.length + 3 : 0);
+  // una definizione (`b = 0,30`) non mostra la formula: non le serve il posto
+  const mostraEspressione = scritta || haOperazioni(espressione);
+  const scritto =
+    (nome.length ? nome.length + 3 : 0) + (espressione && mostraEspressione ? espressione.length + 3 : 0);
   return Math.max(scritta ? 14 : 0, scritto + esito.trim().length) + (scritta ? 12 : 8);
 }
 
@@ -430,7 +433,9 @@ export function testoBlocco(b: BloccoCalcolato): string {
   if (b.testo) return `${testa}${b.testo}`;
   const um = b.um ? ` ${b.um}` : '';
   const numero = formattaIn(b.valore, b.um);
-  const formula = b.espressione && b.espressione !== formatta(b.valore) ? `${b.espressione} = ` : '';
+  // il secondo uguale serve solo se c'è un conto da mostrare: `b = 0,30 m` è
+  // una definizione, `A = b*h = 0,09 mq` è una formula
+  const formula = haOperazioni(b.espressione) ? `${b.espressione} = ` : '';
   return `${testa}${formula}${numero}${um}`;
 }
 

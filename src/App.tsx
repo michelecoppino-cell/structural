@@ -18,6 +18,7 @@ import {
 import { useStore, type TabId } from './state/store';
 import { migra, svuotaMemoria } from './state/store';
 import { testoRelazione, esitiVerifiche } from './calc/relazione';
+import { salvaConNome } from './calc/salvataggio';
 import { SlotProvider } from './components/ComandiScheda';
 import { useSincronia } from './cloud/useSincronia';
 import Azioni from './tabs/Azioni';
@@ -73,15 +74,26 @@ export default function App() {
     timer.current = window.setTimeout(() => setToast(''), 2200);
   };
 
-  const esporta = () => {
-    const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${state.progetto.commessa || 'commessa'}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-    flash('Progetto esportato in JSON');
+  /**
+   * Esporta il progetto come un «Salva con nome»: prima si sceglie dove
+   * metterlo e come chiamarlo, poi si scrive. Il nome proposto è quello con
+   * cui il progetto si archivia — commessa e revisione — ma resta una
+   * proposta: la commessa vera ha le sue cartelle e i suoi nomi.
+   */
+  const esporta = async () => {
+    const p = state.progetto;
+    const proposto = `${p.commessa || 'commessa'}-rev${p.revisione || '0'}`
+      .replace(/[^\p{L}\p{N}_.-]+/gu, '-')
+      .replace(/-+/g, '-');
+    const esito = await salvaConNome({
+      nome: `${proposto}.json`,
+      tipo: 'application/json',
+      descrizione: 'Progetto del predimensionatore',
+      estensioni: ['.json'],
+      contenuto: JSON.stringify(state, null, 2),
+    });
+    if (esito === 'annullato') return flash('Salvataggio annullato');
+    flash(esito === 'salvato' ? 'Progetto salvato in JSON' : 'Progetto esportato in JSON');
   };
 
   const importa = async (file: File) => {
@@ -173,7 +185,7 @@ export default function App() {
               e.target.value = '';
             }}
           />
-          <button type="button" className="btn btn-secondary" title="Esporta JSON" onClick={esporta}>
+          <button type="button" className="btn btn-secondary" title="Salva con nome: scegli dove metterlo e come chiamarlo" onClick={() => void esporta()}>
             <DownloadSimple size={14} />
             <span>Esporta JSON</span>
           </button>
