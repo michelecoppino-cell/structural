@@ -12,7 +12,13 @@ import { inputVerifiche } from '../state/store';
 import { calcolaAzioni, num } from './azioni';
 import { COMBINAZIONI, calcolaSollecitazioni } from './sollecitazioni';
 import { SCHEMI_BY_ID } from './trave';
-import { verificaFlessioneCA, verificaTaglioArmato, verificaTaglioNonArmato } from './verifiche';
+import {
+  verificaAcciaioSezione,
+  verificaFlessioneCA,
+  verificaTaglioArmato,
+  verificaTaglioNonArmato,
+} from './verifiche';
+import { CONDIZIONI_CARICO, verificaInstabilitaLT } from './instabilita';
 import { valido, validaTaglioArmato, validaTaglioNonArmato } from './validazione';
 import { ricalcola, testoVoce, vociDaSelezioni, type VoceCalcolata } from './calcolatrice';
 import {
@@ -198,6 +204,11 @@ function blocchiVerifiche(state: AppState): Blocco[] {
   const ar = verificaTaglioArmato(inp.taglioArmato);
   const fl = verificaFlessioneCA(state.verifiche.flessioneCA);
   const flIn = state.verifiche.flessioneCA;
+  const acIn = state.verifiche.acciaio;
+  const ac = verificaAcciaioSezione(acIn);
+  const ltIn = state.verifiche.instabilitaLT;
+  const lt = verificaInstabilitaLT(acIn, ltIn);
+  const condizione = CONDIZIONI_CARICO.find((c) => c.id === ltIn.carico);
 
   return [
     {
@@ -231,6 +242,32 @@ function blocchiVerifiche(state: AppState): Blocco[] {
         `MRd = 0.8·x·b·fcd·(d − 0.4·x) + A′s·fyd·(d − c′) = ${fx(fl.MRd, 1)} kNm`,
         `MEd = ${flIn.MEd} kNm → MEd/MRd = ${fx(fl.esito.sfruttamento, 3)} — ${fl.esito.ok ? 'VERIFICATO' : 'NON VERIFICATO'} (margine ${fx(fl.esito.margine, 1)}%)`,
       ],
+    },
+    {
+      titolo: 'Acciaio — sezione, verifiche elastiche (NTC2018 §4.2.4.1.2)',
+      righe: [
+        `Profilo ${acIn.profilo} in ${acIn.acciaio}; A = ${fx(ac.proprieta?.A ?? 0, 1)} cm²; Wel,x = ${fx(ac.proprieta?.Wx ?? 0, 1)} cm³; Avz = ${fx(ac.proprieta?.Avz ?? 0, 2)} cm²`,
+        `fyd = fyk / γM0 = ${fx(ac.fyk, 0)} / ${acIn.gammaM0} = ${fx(ac.fyd, 0)} N/mm²`,
+        `MEd = ${acIn.MEd} kNm ≤ MRd = Wel,x·fyd = ${fx(ac.MRd, 1)} kNm → ${fx(ac.esitoFlessione.sfruttamento, 3)} — ${ac.esitoFlessione.ok ? 'VERIFICATO' : 'NON VERIFICATO'}`,
+        `NEd = ${acIn.NEd} kN ≤ NRd = A·fyd = ${fx(ac.NRd, 1)} kN → ${fx(ac.esitoCompressione.sfruttamento, 3)} — ${ac.esitoCompressione.ok ? 'VERIFICATO' : 'NON VERIFICATO'}`,
+        `VEd = ${inp.acciaio.VEd} kN ≤ VRd = Avz·fyd/√3 = ${fx(ac.VRd, 1)} kN → ${fx(ac.esitoTaglio.sfruttamento, 3)} — ${ac.esitoTaglio.ok ? 'VERIFICATO' : 'NON VERIFICATO'}`,
+      ],
+    },
+    {
+      titolo: 'Acciaio — instabilità flesso-torsionale (NTC2018 §4.2.4.1.3.2)',
+      righe: lt.richiesta
+        ? [
+            `Profilo ${acIn.profilo} in ${acIn.acciaio}; Imin = ${fx(lt.Iz / 1e4, 1)} cm⁴; It = ${fx(lt.It / 1e4, 2)} cm⁴; Iw = ${fx(lt.Iw / 1e6, 0)} cm⁶; Wy = ${fx(lt.Wy / 1000, 1)} cm³ (modulo ${ltIn.modulo})`,
+            `Tratto libero L = ${ltIn.L} mm; k = ${fx(lt.kUsato, 2)}; kw = ${ltIn.kw}; carico ${condizione?.id ?? ltIn.carico} — ${condizione?.label ?? ''}${condizione?.psi ? `; ψ = ${fx(lt.psiUsato, 2)}` : ''}; zg = ${fx(lt.zg, 0)} mm`,
+            `C1 = ${fx(lt.C1, 3)}; C2 = ${fx(lt.C2, 3)}; C3 = ${fx(lt.C3, 3)} (ENV 1993-1-1, prospetto F.1)`,
+            `Mcr = ${fx(lt.Mcr, 2)} kNm${ltIn.modoMcr === 'manuale' ? ' (imposto a mano)' : ''}; λLT = ${fx(lt.lambdaLT, 3)}; curva ${lt.curva} (αLT = ${fx(lt.alfaLT, 2)}); ΦLT = ${fx(lt.phiLT, 3)}; χLT = ${fx(lt.chiLT, 3)}`,
+            `Mb,Rd = χLT·Wy·fyk/γM1 = ${fx(lt.MbRd, 1)} kNm (Mc,Rd = ${fx(lt.McRd, 1)} kNm)`,
+            `MEd = ${acIn.MEd} kNm → MEd/Mb,Rd = ${fx(lt.esito.sfruttamento, 3)} — ${lt.esito.ok ? 'VERIFICATO' : 'NON VERIFICATO'} (margine ${fx(lt.esito.margine, 1)}%)`,
+          ]
+        : [
+            `Profilo ${acIn.profilo}: inerzia laterale pari a quella nel piano di flessione, sbandamento laterale impossibile — verifica non richiesta (χLT = 1)`,
+            `Mb,Rd = Mc,Rd = ${fx(lt.MbRd, 1)} kNm; MEd = ${acIn.MEd} kNm → ${fx(lt.esito.sfruttamento, 3)} — ${lt.esito.ok ? 'VERIFICATO' : 'NON VERIFICATO'}`,
+          ],
     },
   ];
 }

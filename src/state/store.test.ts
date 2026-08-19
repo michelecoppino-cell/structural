@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { STATO_INIZIALE, applicaLibreria, estraiLibreria, migra, reducer, type AppState } from './store';
+import {
+  STATO_INIZIALE,
+  applicaLibreria,
+  estraiLibreria,
+  inputVerifiche,
+  migra,
+  reducer,
+  type AppState,
+} from './store';
 
 const NORMA = {
   id: 'n1',
@@ -103,5 +111,38 @@ describe('estrai e applica', () => {
       unita: ['kN'],
       preimpostate: [],
     });
+  });
+});
+
+describe('collegamento del VEd alle Sollecitazioni', () => {
+  it('vale anche per la sezione in acciaio, non solo per il calcestruzzo', () => {
+    const stato: AppState = {
+      ...STATO_INIZIALE,
+      verifiche: {
+        ...STATO_INIZIALE.verifiche,
+        collegaSollecitazioni: true,
+        acciaio: { ...STATO_INIZIALE.verifiche.acciaio, VEd: '999' },
+      },
+    };
+    const collegato = inputVerifiche(stato, 42.4);
+    expect(collegato.acciaio.VEd).toBe('42.4');
+    expect(collegato.taglioNonArmato.VEd).toBe('42.4');
+
+    // scollegato resta il numero scritto a mano
+    const libero = inputVerifiche(
+      { ...stato, verifiche: { ...stato.verifiche, collegaSollecitazioni: false } },
+      42.4,
+    );
+    expect(libero.acciaio.VEd).toBe('999');
+  });
+});
+
+describe('migrazione di un progetto senza i dati di instabilità', () => {
+  it('riempie la scheda con i valori di serie', () => {
+    const vecchio = migra({
+      schemaVersion: 7,
+      verifiche: { ...STATO_INIZIALE.verifiche, instabilitaLT: undefined },
+    } as unknown as Partial<AppState>);
+    expect(vecchio.verifiche.instabilitaLT).toEqual(STATO_INIZIALE.verifiche.instabilitaLT);
   });
 });

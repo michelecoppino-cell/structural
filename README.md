@@ -254,7 +254,8 @@ sono (fino a due letti), quelli compressi in alto, la staffa che li racchiude, l
 calcestruzzo compresso alta 0.8·x e l'asse neutro quotato, così si vede subito se x sta
 scendendo troppo.
 
-Il VEd può essere agganciato al taglio massimo calcolato nella scheda Sollecitazioni: con il
+Il VEd può essere agganciato al taglio massimo calcolato nella scheda Sollecitazioni — per le
+verifiche a taglio del calcestruzzo e per il taglio della sezione in acciaio: con il
 collegamento attivo è un **valore derivato**, calcolato in render e non salvato nello stato,
 che conserva solo il numero scritto a mano. Il campo porta il badge `↩ da Sollecitazioni`,
 che premuto scollega il valore.
@@ -271,7 +272,44 @@ I dati in ingresso sono **controllati**: passo delle staffe o luce nulli, d magg
 α fuori da 45°÷90°, γc < 1 marcano il campo e **bloccano l'esito** invece di dichiararne uno
 falso. Accanto ai campi c'è la **sezione quotata** con bw, h, d, staffe e armatura.
 
-Acciaio, legno e muratura sono segnaposto — vedi "Prossimi passi".
+L'**acciaio** ha quattro verifiche, tutte sul profilo scelto dal sagomario (IPE, HEA, HEB,
+UPN, angolari a lati uguali, tubi quadri, rettangolari e tondi): profilo, classe di acciaio
+e MEd sono condivisi fra le quattro, così cambiare taglia le aggiorna tutte insieme.
+
+| Verifica | Formula | Riferimento |
+|---|---|---|
+| Flessione elastica | MRd = Wel,x · fyd | §4.2.4.1.2 |
+| Compressione elastica | NRd = A · fyd (senza instabilità) | §4.2.4.1.2 |
+| Taglio elastico | VRd = Avz · fyd / √3 | §4.2.4.1.2.4 |
+| Instabilità flesso-torsionale | Mb,Rd = χLT · Wy · fyk / γM1 | §4.2.4.1.3.2 |
+
+L'**instabilità flesso-torsionale** è trascritta dal foglio `Verifica_aste_acciaio_rev01.xlsm`
+(foglio "Verifica aste" e funzione VBA `Mom_critico_Mcr`). Il momento critico elastico segue
+il prospetto F.1 della ENV 1993-1-1:
+
+```
+Mcr = C1 · π²·E·Iz/(k·L)² · [ √( (k/kw)²·Iw/Iz + (k·L)²·G·It/(π²·E·Iz) + (C2·zg)² ) − C2·zg ]
+```
+
+e da lì si scende a λLT = √(Wy·fyk/Mcr), alla curva di instabilità (tab. 4.2.VI: `a` o `b`
+per i doppi T laminati secondo h/b, `d` per tutte le altre sezioni) e a χLT. I doppi T
+laminati usano il ramo dedicato delle NTC — λLT,0 = 0.4, β = 0.75 e il tetto χLT ≤ 1/λLT² —
+le altre sezioni il caso generale (λLT,0 = 0.2, β = 1).
+
+Si sceglie la condizione di carico e vincolo fra le sei del prospetto (momenti d'estremità
+con il loro ψ, carico distribuito, forza in mezzeria, due forze a L/3, con estremi appoggiati
+o incastrati), il punto di applicazione del carico — l'ala superiore è destabilizzante,
+quella inferiore no — e se usare il modulo elastico o quello plastico. Mcr si può anche
+imporre a mano, se viene da un'analisi di stabilità fatta a parte.
+
+La verifica **vale per tutti i tipi di profilo**, e non perché sia stata forzata: cambia
+quale dei due termini di Mcr comanda. Nei profili aperti pesa l'ingobbamento, nei tubi la
+rigidezza torsionale, che è così alta da portare λLT sotto la soglia e χLT a 1. Per tubo
+quadro e tubo tondo, che hanno la stessa inerzia in tutte le direzioni, lo sbandamento
+laterale non può proprio avvenire: la scheda lo dice e Mb,Rd coincide con il momento
+resistente della sezione.
+
+Legno e muratura sono segnaposto — vedi "Prossimi passi".
 
 ### 4. Stime costi
 Tabella editabile (categoria, descrizione, u.m., quantità, prezzo unitario), totale generale
@@ -649,7 +687,8 @@ src/
     azioni.ts      azioni NTC2018 cap. 3
     sismica.ts     pericolosità sismica di base: TR, ag/F0/TC*, SS, CC (§3.2)
     sollecitazioni.ts  combinazioni di carico e collegamento con il solutore
-    verifiche.ts   verifiche a taglio (dai fogli Excel)
+    verifiche.ts   verifiche a taglio, flessione e sezioni in acciaio (dai fogli Excel)
+    instabilita.ts instabilità flesso-torsionale delle travi inflesse (§4.2.4.1.3.2)
     calcolatrice.ts  interprete delle espressioni e sequenza delle grandezze
     unita.ts       forma e scala delle unità di misura, e la loro conversione
     quaderno.ts    blocchi del foglio e loro ricalcolo dalle fonti collegate
@@ -660,7 +699,7 @@ src/
     normative.ts   documenti, categorie e capitoli del foglio Norme
     armature.ts    diametri, pesi, mandrini di piega e raggi di curvatura
     bulloni.ts     profilario metrico e classi di resistenza delle viti
-    profili-acciaio.ts  sagomario IPE/HEA/HEB/UPN, angolari e tubi
+    profili-acciaio.ts  sagomario IPE/HEA/HEB/UPN, angolari e tubi (con It, Iw, Wpl)
     comuni.ts      FILE GENERATO: comuni, zona sismica, coordinate
     parametri-sismici.ts  FILE GENERATO: ag/F0/TC* per comune e per TR
   components/      pattern di UI riusabili e diagrammi SVG
@@ -743,6 +782,23 @@ npm test
   (1 kg = 9,80665 N), perché in kg/mc e kg/cmq è una forza — per le masse questa scheda non
   serve; e quando un'unità non è determinabile (una somma fra grandezze diverse) non si
   converte niente, si mostra il numero come è.
+- L'inerzia torsionale **It** dei profili a sagomario è di tabella, non calcolata: la
+  formula di parete sottile Σ b·t³/3 trascura i raccordi e per un IPE 160 dà 2.8 cm⁴ invece
+  di 3.6, cioè il 22% in meno sul termine che regge il momento critico dei profili corti.
+  UPN 50 e 65, che il sagomario del foglio non riporta, ricadono sulle formule geometriche:
+  sono le sole due taglie calcolate, e stanno a favore di sicurezza.
+- Per gli **angolari** il momento critico usa l'inerzia principale minima (Ix − |Ixy|), non
+  quella attorno all'asse geometrico: gli assi principali di un L a lati uguali stanno a 45°
+  e la rigidezza laterale vera è meno della metà di quella che si legge sui lati. Resta
+  comunque una verifica approssimata, perché la flessione attorno a un asse non principale
+  è di per sé deviata: per un angolare caricato sul serio serve un calcolo dedicato.
+- I coefficienti **C1, C2, C3** del prospetto F.1 sono tabellati per punti: k vale 1, 0.7 o
+  0.5 e ψ va di quarto in quarto. Un valore intermedio viene ricondotto al più vicino, e la
+  scheda avvisa quando lo fa.
+- Il **modulo resistente** dell'instabilità flesso-torsionale è una scelta, non una
+  deduzione: la classificazione della sezione (che deciderebbe fra Wpl e Wel) non è
+  implementata, e il valore di serie è quello elastico — a favore di sicurezza per le
+  sezioni compatte, corretto per quelle in classe 3.
 - Prima della versione 7 dello schema l'algebra era **simbolica**: `cm*cm` faceva `cmq` e i
   fattori restavano a chi scriveva i numeri. Un progetto salvato allora si riapre, ma le
   formule che portavano dentro un fattore di conversione scritto a mano (`*1000`, `*1e4`) ora
@@ -750,9 +806,10 @@ npm test
 
 ## Prossimi passi
 
-1. Verifiche in acciaio dal foglio `Verifica_aste_acciaio_rev01.xlsm` (aste, schiacciamento
-   anima, sagomario dei profili): è il foglio più corposo dei tre e conviene affrontarlo
-   come step a sé.
+1. Il resto del foglio `Verifica_aste_acciaio_rev01.xlsm`: classificazione automatica della
+   sezione (§4.2.3), instabilità flessionale delle aste compresse (§4.2.4.1.3.1),
+   presso-flessione biassiale (§4.2.4.1.2.8), aste presso-inflesse con il metodo A della
+   Circolare (§C4.2.4.1.3.3) e verifica a schiacciamento dell'anima.
 2. Verifiche a flessione e pressoflessione per il calcestruzzo.
 3. Legno e muratura.
 4. Spettro di risposta disegnato (Se(T) e Sd(T)) a partire dai parametri già calcolati.
