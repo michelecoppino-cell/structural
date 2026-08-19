@@ -33,6 +33,12 @@ import {
   type RisultatiTaglioNonArmato,
 } from '../calc/verifiche';
 import {
+  INSTABILITA_LT_DEFAULT,
+  verificaInstabilitaLT,
+  type InputInstabilitaLT,
+  type RisultatiInstabilitaLT,
+} from '../calc/instabilita';
+import {
   PREIMPOSTATE_DEFAULT,
   RINOMINATE,
   SELEZIONI_DEFAULT,
@@ -91,6 +97,8 @@ export interface AppState {
     taglioArmato: InputTaglioArmato;
     flessioneCA: InputFlessioneCA;
     acciaio: InputAcciaioSezione;
+    /** Dati del solo controllo di stabilità flesso-torsionale della trave. */
+    instabilitaLT: InputInstabilitaLT;
     /** VEd delle verifiche allineato al taglio calcolato in Sollecitazioni. */
     collegaSollecitazioni: boolean;
   };
@@ -176,6 +184,7 @@ export const STATO_INIZIALE: AppState = {
     taglioArmato: TAGLIO_ARMATO_DEFAULT,
     flessioneCA: FLESSIONE_CA_DEFAULT,
     acciaio: ACCIAIO_SEZIONE_DEFAULT,
+    instabilitaLT: INSTABILITA_LT_DEFAULT,
     collegaSollecitazioni: true,
   },
   costi: VOCI_COSTO_DEFAULT.map((v) => ({ ...v })),
@@ -240,6 +249,7 @@ export type Action =
   | { type: 'taglioArmato'; patch: Partial<InputTaglioArmato> }
   | { type: 'flessioneCA'; patch: Partial<InputFlessioneCA> }
   | { type: 'acciaioSezione'; patch: Partial<InputAcciaioSezione> }
+  | { type: 'instabilitaLT'; patch: Partial<InputInstabilitaLT> }
   | { type: 'costi'; voci: VoceCosto[] }
   | { type: 'calcolatrice'; patch: Partial<StatoCalcolatrice> }
   | { type: 'quaderno'; patch: Partial<StatoQuaderno> }
@@ -294,6 +304,14 @@ export function reducer(state: AppState, action: Action): AppState {
         verifiche: {
           ...state.verifiche,
           acciaio: { ...state.verifiche.acciaio, ...action.patch },
+        },
+      };
+    case 'instabilitaLT':
+      return {
+        ...state,
+        verifiche: {
+          ...state.verifiche,
+          instabilitaLT: { ...state.verifiche.instabilitaLT, ...action.patch },
         },
       };
     case 'costi':
@@ -404,6 +422,7 @@ export function migra(raw: Partial<AppState>): AppState {
       taglioArmato: { ...base.verifiche.taglioArmato, ...raw.verifiche?.taglioArmato },
       flessioneCA: { ...base.verifiche.flessioneCA, ...raw.verifiche?.flessioneCA },
       acciaio: { ...base.verifiche.acciaio, ...raw.verifiche?.acciaio },
+      instabilitaLT: { ...base.verifiche.instabilitaLT, ...raw.verifiche?.instabilitaLT },
     },
     // i file salvati prima del campo `codice` non ce l'hanno: si riempie vuoto,
     // che è esattamente quello che vuol dire («prezzo senza voce di prezzario»)
@@ -570,6 +589,7 @@ export interface Calcoli {
   taglioArmato: RisultatiTaglioArmato;
   flessioneCA: RisultatiFlessioneCA;
   acciaio: RisultatiAcciaioSezione;
+  instabilitaLT: RisultatiInstabilitaLT;
   /** Taglio massimo in valore assoluto dalle Sollecitazioni (kN). */
   VEdSollecitazioni: number;
 }
@@ -627,8 +647,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [state.verifiche.flessioneCA],
   );
   const acciaio = useMemo(
-    () => verificaAcciaioSezione(state.verifiche.acciaio),
-    [state.verifiche.acciaio],
+    () =>
+      verificaAcciaioSezione(
+        collega ? { ...state.verifiche.acciaio, VEd } : state.verifiche.acciaio,
+      ),
+    [state.verifiche.acciaio, collega, VEd],
+  );
+  const instabilitaLT = useMemo(
+    () => verificaInstabilitaLT(state.verifiche.acciaio, state.verifiche.instabilitaLT),
+    [state.verifiche.acciaio, state.verifiche.instabilitaLT],
   );
 
   const calcoli = useMemo<Calcoli>(
@@ -639,9 +666,19 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       taglioArmato,
       flessioneCA,
       acciaio,
+      instabilitaLT,
       VEdSollecitazioni,
     }),
-    [azioni, sollecitazioni, taglioNonArmato, taglioArmato, flessioneCA, acciaio, VEdSollecitazioni],
+    [
+      azioni,
+      sollecitazioni,
+      taglioNonArmato,
+      taglioArmato,
+      flessioneCA,
+      acciaio,
+      instabilitaLT,
+      VEdSollecitazioni,
+    ],
   );
 
   return (
@@ -675,5 +712,9 @@ export function inputVerifiche(state: AppState, VEdSollecitazioni: number) {
       ? { ...state.verifiche.taglioNonArmato, VEd }
       : state.verifiche.taglioNonArmato,
     taglioArmato: collega ? { ...state.verifiche.taglioArmato, VEd } : state.verifiche.taglioArmato,
+    // anche la sezione in acciaio prende il VEd dal collegamento: la scheda lo
+    // mostrava già nel campo e nella tabella, ma l'esito restava sul numero
+    // scritto a mano, cioè diceva una cosa e ne verificava un'altra
+    acciaio: collega ? { ...state.verifiche.acciaio, VEd } : state.verifiche.acciaio,
   };
 }
