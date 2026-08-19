@@ -250,7 +250,10 @@ function blocchiCalcolatrice(state: AppState): Blocco[] {
 function blocchiCosti(state: AppState): Blocco[] {
   const righe = state.costi.map((v) => {
     const tot = num(v.quantita) * num(v.prezzo);
-    return `${v.categoria} | ${v.descrizione} | ${v.quantita} ${v.um} × ${v.prezzo} € = ${tot.toFixed(2)} €`;
+    // il codice di prezzario, quando c'è, va subito dopo la categoria: è il
+    // riferimento che permette di ritrovare il prezzo sul prezzario
+    const rif = v.codice.trim() ? `${v.categoria} [${v.codice.trim()}]` : v.categoria;
+    return `${rif} | ${v.descrizione} | ${v.quantita} ${v.um} × ${v.prezzo} € = ${tot.toFixed(2)} €`;
   });
   const generale = state.costi.reduce((s, v) => s + num(v.quantita) * num(v.prezzo), 0);
   return [

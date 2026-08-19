@@ -46,6 +46,7 @@ import {
 } from '../calc/calcolatrice';
 import { UNITA_DEFAULT, normalizzaElenco } from '../calc/unita';
 import { normalizzaBlocchi, nuovoBlocco, type BloccoQuaderno } from '../calc/quaderno';
+import { VOCI_COSTO_DEFAULT } from '../data/prezzario';
 import { leggiNormative, type LinkUtente } from '../data/normative';
 import { LIBRERIA_VERSION, leggiLibreria, type Libreria } from '../cloud/libreria';
 
@@ -57,6 +58,13 @@ export type MaterialeId = 'cls' | 'acciaio' | 'legno' | 'muratura';
 export interface VoceCosto {
   id: string;
   categoria: string;
+  /**
+   * Codice della voce del prezzario da cui viene il prezzo (es. «11.6.CP1.01»).
+   * È il campo che rende la stima verificabile: chi la rilegge apre il
+   * prezzario a quel codice e ritrova lo stesso numero. Vuoto = prezzo messo a
+   * mano, senza una voce di prezzario dietro.
+   */
+  codice: string;
   descrizione: string;
   um: string;
   quantita: string;
@@ -170,13 +178,7 @@ export const STATO_INIZIALE: AppState = {
     acciaio: ACCIAIO_SEZIONE_DEFAULT,
     collegaSollecitazioni: true,
   },
-  costi: [
-    { id: 'c1', categoria: 'Strutture', descrizione: 'Cls C25/30 per fondazioni', um: 'm³', quantita: '48', prezzo: '145.00' },
-    { id: 'c2', categoria: 'Strutture', descrizione: 'Acciaio B450C in barre', um: 'kg', quantita: '5200', prezzo: '1.85' },
-    { id: 'c3', categoria: 'Strutture', descrizione: 'Casseforme per elevazioni', um: 'm²', quantita: '320', prezzo: '32.00' },
-    { id: 'c4', categoria: 'Scavi e movimenti terra', descrizione: 'Scavo a sezione obbligata', um: 'm³', quantita: '210', prezzo: '18.50' },
-    { id: 'c5', categoria: 'Opere provvisionali', descrizione: 'Ponteggio di servizio', um: 'm²', quantita: '260', prezzo: '14.00' },
-  ],
+  costi: VOCI_COSTO_DEFAULT.map((v) => ({ ...v })),
   calcolatrice: {
     espressione: '',
     nome: '',
@@ -403,7 +405,12 @@ export function migra(raw: Partial<AppState>): AppState {
       flessioneCA: { ...base.verifiche.flessioneCA, ...raw.verifiche?.flessioneCA },
       acciaio: { ...base.verifiche.acciaio, ...raw.verifiche?.acciaio },
     },
-    costi: Array.isArray(raw.costi) && raw.costi.length ? raw.costi : base.costi,
+    // i file salvati prima del campo `codice` non ce l'hanno: si riempie vuoto,
+    // che è esattamente quello che vuol dire («prezzo senza voce di prezzario»)
+    costi:
+      Array.isArray(raw.costi) && raw.costi.length
+        ? raw.costi.map((v) => ({ ...v, codice: typeof v.codice === 'string' ? v.codice : '' }))
+        : base.costi,
     calcolatrice: {
       ...base.calcolatrice,
       ...raw.calcolatrice,
