@@ -3,28 +3,27 @@
  * «Stime costi».
  *
  * La stima di costo di un predimensionamento non ha bisogno di un computo
- * vero: ha bisogno di dieci voci giuste, con l'unità di misura giusta e un
- * prezzo dell'ordine di grandezza giusto. Quelle dieci voci stanno qui.
+ * vero: ha bisogno di dieci voci giuste, con l'unità di misura giusta e il
+ * prezzo giusto. Quelle dieci voci stanno qui, e i prezzi sono quelli veri —
+ * letti sul **Prezzario regionale dei lavori pubblici FVG, edizione 2026/1**
+ * (decreto 30 giugno 2026), non stimati.
  *
- * Ogni voce porta un campo `codice`, che è il posto dove va trascritto il
- * codice della voce del prezzario da cui si è preso il prezzo — è quello che
- * rende la stima difendibile: chi la rilegge apre il prezzario a quel codice e
- * ritrova lo stesso numero. Il codice non se lo può inventare l'app perché la
- * numerazione dei capitoli cambia a ogni edizione (la stessa voce «scavo di
- * sbancamento» sta a 11.7.CP1.01 nell'edizione 2024 e a 11.6.CP1.01 nella
- * 2025): va letto sull'edizione che si sta usando, dai link qui sotto.
+ * Ogni voce porta il suo `codice`: è quello che rende la stima difendibile,
+ * perché chi la rilegge apre il prezzario a quel codice e ritrova lo stesso
+ * numero. Il codice va tenuto insieme al prezzo — se si cambia il prezzo a
+ * mano senza cambiare il codice, la voce racconta una bugia.
  *
- * I prezzi di serie sono valori indicativi di mercato per il Friuli Venezia
- * Giulia, messi lì perché la scheda parta con dei numeri sensati invece che
- * con degli zeri. Non sono i prezzi del prezzario: prima di mettere la stima
- * in un elaborato si aprono i link, si cerca la voce e si riscrivono prezzo e
- * codice.
+ * Attenzione a non contare due volte. Il prezzario ha, per lo stesso getto,
+ * due voci: quella «tutto compreso» (16.5.EQ4.01, che include la casseratura)
+ * e quella «con esclusione del cassero» (16.5.EQ4.03). Qui si usa la seconda,
+ * perché casseri e armature stanno in due righe loro: sommare la prima con le
+ * righe del cassero vorrebbe dire pagare i casseri due volte.
  */
 
 /** Un prezzario consultabile, con il link da cui si cercano voci e codici. */
 export interface RiferimentoPrezzario {
   id: string;
-  /** Sigla breve, quella che va sulla riga ocra. */
+  /** Sigla breve, quella che va sul bottone. */
   sigla: string;
   titolo: string;
   url: string;
@@ -36,23 +35,23 @@ export const PREZZARI: RiferimentoPrezzario[] = [
   {
     id: 'fvg2026',
     sigla: 'FVG 2026',
-    titolo: 'Prezzario regionale dei lavori pubblici FVG — edizione 2026 (PDF)',
+    titolo: 'Prezzario regionale dei lavori pubblici FVG — edizione 2026/1 (PDF)',
     url: 'https://www.regione.fvg.it/rafvg/export/sites/default/RAFVG/infrastrutture-lavori-pubblici/lavori-pubblici/FOGLIA7/allegati/20260806_Prezzario_Regionale_dei_lavori_Pubblici_FVG_2026.pdf',
-    nota: 'Edizione in vigore: è questa la fonte dei prezzi e dei codici da citare.',
+    nota: "Edizione in vigore, ed è da qui che vengono i prezzi e i codici delle voci di partenza.",
   },
   {
     id: 'fvg2025',
     sigla: 'FVG 2025',
     titolo: 'Prezzario FVG 2025 — ricerca online per codice',
     url: 'https://www.regione.fvg.it/rafvg/cms/RAFVG/infrastrutture-lavori-pubblici/lavori-pubblici/prezzario-2025/',
-    nota: 'Il 2026 esce solo in PDF: per cercare una voce a schermo, e per leggerne la descrizione per esteso, si usa la ricerca del 2025 e poi si riporta il prezzo dal PDF 2026.',
+    nota: "Il 2026 esce solo in PDF: per cercare una voce a schermo, e per leggerne la descrizione per esteso, conviene la ricerca del 2025 — la numerazione dei capitoli è la stessa, il prezzo no, quello si riporta dal 2026.",
   },
   {
     id: 'veneto2026',
     sigla: 'Veneto 2026',
     titolo: 'Prezzario regionale Veneto — edizione 2026 (ricerca online)',
     url: 'https://prezzario.regione.veneto.it/?anno=2026',
-    nota: "Confronto: utile per i lavori al confine e per pesare una voce che in FVG non c’è.",
+    nota: "Confronto: utile per i lavori al confine e per pesare una lavorazione che in FVG non ha una voce sua.",
   },
 ];
 
@@ -60,7 +59,7 @@ export const PREZZARI: RiferimentoPrezzario[] = [
 export interface VocePrezzario {
   id: string;
   categoria: string;
-  /** Codice della voce di prezzario da cui viene il prezzo: da compilare. */
+  /** Codice della voce di prezzario da cui viene il prezzo. */
   codice: string;
   descrizione: string;
   um: string;
@@ -70,101 +69,109 @@ export interface VocePrezzario {
 
 /**
  * Le voci di serie: le dieci lavorazioni che compaiono in quasi ogni stima di
- * una struttura, nell'ordine in cui si costruisce (scavi, strutture, opere
- * provvisionali).
+ * una struttura, nell'ordine in cui si costruisce — scavi, demolizioni,
+ * strutture, carpenteria, opere provvisionali.
  *
- * Le descrizioni ricalcano quelle del prezzario FVG, abbreviate: servono a
- * ritrovare la voce quando si apre il PDF, non a sostituirla.
+ * Prezzi e codici sono del prezzario FVG 2026/1. Le quantità no: quelle sono
+ * di un cantiere immaginario, e vanno riscritte tutte.
  */
 export const VOCI_COSTO_DEFAULT: VocePrezzario[] = [
   {
     id: 'c1',
     categoria: 'Scavi e movimenti terra',
-    codice: '',
-    descrizione: 'Scavo di sbancamento a sezione aperta, terreno di qualsiasi natura, fino a 5 m',
+    codice: '11.6.CP1.01.A',
+    descrizione:
+      "Scavo di sbancamento a sezione aperta fino a 5 m, terreno di qualsiasi natura, anche in presenza d'acqua (tirante fino a 20 cm)",
     um: 'm³',
     quantita: '350',
-    prezzo: '9.50',
+    prezzo: '10.41',
   },
   {
     id: 'c2',
     categoria: 'Scavi e movimenti terra',
-    codice: '',
-    descrizione: 'Scavo a sezione obbligata per fondazioni, terreno di qualsiasi natura, fino a 2 m',
+    codice: '11.7.CP1.01.A',
+    descrizione:
+      "Scavo di fondazione a sezione obbligata, terreno di qualsiasi natura, anche in presenza d'acqua (tirante fino a 20 cm)",
     um: 'm³',
     quantita: '210',
-    prezzo: '24.00',
+    prezzo: '20.69',
   },
   {
     id: 'c3',
     categoria: 'Scavi e movimenti terra',
-    codice: '',
-    descrizione: 'Formazione di rilevato/riporto con materiale idoneo, compresi stesa e compattazione',
+    codice: '11.8.CP1.01.A',
+    descrizione:
+      'Riporti in materiale misto di cava, fornitura e posa, costipamento pari al 95% della densità massima AASHTO',
     um: 'm³',
     quantita: '180',
-    prezzo: '14.00',
+    prezzo: '44.92',
   },
   {
     id: 'c4',
     categoria: 'Demolizioni',
-    codice: '',
-    descrizione: 'Demolizione di struttura in c.a. o muratura, con mezzo meccanico, esclusi oneri di discarica',
+    codice: '20.1.BQ4.01.B',
+    descrizione:
+      "Demolizione di strutture in calcestruzzo andante armato, compresi taglio dell'armatura, puntellazioni e calo a terra",
     um: 'm³',
     quantita: '45',
-    prezzo: '120.00',
+    prezzo: '353.92',
   },
   {
     id: 'c5',
     categoria: 'Strutture in c.a.',
-    codice: '',
-    descrizione: 'Calcestruzzo C25/30, classe di esposizione XC2, in opera per fondazioni ed elevazioni',
+    codice: '16.5.EQ4.03.B',
+    descrizione:
+      'Getto di fondazione in calcestruzzo C25/30 Rck30 XC2 S4, esclusi i casseri e il ferro di armatura (compensati a parte)',
     um: 'm³',
     quantita: '48',
-    prezzo: '175.00',
+    prezzo: '240.16',
   },
   {
     id: 'c6',
     categoria: 'Strutture in c.a.',
-    codice: '',
-    descrizione: 'Acciaio per armature B450C in barre ad aderenza migliorata, sagomato e posto in opera',
+    codice: '20.3.DH2.01.A',
+    descrizione:
+      'Acciaio B450C in barre ad aderenza migliorata, sagomato e posto in opera, compresi sfridi, legature e distanziatori',
     um: 'kg',
     quantita: '5200',
-    prezzo: '2.05',
+    prezzo: '2.02',
   },
   {
     id: 'c7',
     categoria: 'Strutture in c.a.',
-    codice: '',
-    descrizione: 'Casseforme per getti in c.a., compresi montaggio, disarmo e disarmante',
+    codice: '20.2.RI1.01.A',
+    descrizione: 'Casseratura per getti di fondazione, compresi armo, disarmo e disarmante',
     um: 'm²',
     quantita: '320',
-    prezzo: '38.00',
+    prezzo: '29.54',
   },
   {
     id: 'c8',
     categoria: 'Carpenteria metallica',
-    codice: '',
-    descrizione: 'Carpenteria metallica S275/S355 in profilati e piatti, lavorata e montata in opera',
+    codice: '20.6.HH2.01.A',
+    descrizione:
+      'Strutture in acciaio primarie in profili laminati a caldo S355J0, manufatti oltre 1500 kg, comprese bullonature, saldature e verniciatura',
     um: 'kg',
     quantita: '8500',
-    prezzo: '4.20',
+    prezzo: '4.94',
   },
   {
     id: 'c9',
     categoria: 'Carpenteria metallica',
-    codice: '',
-    descrizione: 'Zincatura a caldo per immersione di carpenteria metallica',
+    codice: '20.6.IH2.01.D',
+    descrizione: 'Sovrapprezzo per zincatura a caldo della carpenteria metallica',
     um: 'kg',
     quantita: '8500',
-    prezzo: '0.85',
+    prezzo: '1.50',
   },
   {
     id: 'c10',
     categoria: 'Opere provvisionali',
-    codice: '',
-    descrizione: 'Ponteggio metallico a telai prefabbricati, primo mese compreso montaggio e smontaggio',
+    codice: '99.3.AH2.15.A',
+    descrizione:
+      'Ponteggio da costruzione a telai prefabbricati, primo mese, compresi ancoraggi, impalcati, parapetti e sottoponti',
     um: 'm²',
     quantita: '260',
-    prezzo: '16.00',
+    prezzo: '16.42',
   },
 ];

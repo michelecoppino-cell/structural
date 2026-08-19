@@ -210,10 +210,11 @@ export default function Costi() {
           </button>
 
           <p className="note" style={{ marginTop: 12 }}>
-            I prezzi di serie sono valori indicativi di mercato, non voci di prezzario: servono a far
-            partire la stima con numeri sensati. Per un elaborato si apre il prezzario qui sotto, si
-            cerca la lavorazione e si riportano <strong>prezzo</strong> e <strong>codice</strong> —
-            è il codice che rende la stima verificabile da chi la rilegge.
+            Prezzi e codici delle voci di partenza vengono dal{' '}
+            <strong>prezzario FVG 2026/1</strong>; le quantità no, quelle vanno riscritte tutte. Il
+            getto di c.a. è la voce «con esclusione del cassero», perché casseri e armature hanno una
+            riga loro: usare la voce tutto compreso li farebbe pagare due volte. Se si cambia un
+            prezzo a mano, si cambia anche il codice — o la riga racconta una bugia.
           </p>
         </div>
       </section>

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { STATO_INIZIALE, applicaLibreria, estraiLibreria, migra, reducer } from './store';
+import { STATO_INIZIALE, applicaLibreria, estraiLibreria, migra, reducer, type AppState } from './store';
 
 const NORMA = {
   id: 'n1',
@@ -38,7 +38,10 @@ describe('import di un progetto', () => {
 
   it('dà un codice di prezzario vuoto alle voci di costo salvate prima che il campo esistesse', () => {
     const stato = migra({
-      costi: [{ id: 'c1', categoria: 'Strutture', descrizione: 'Cls', um: 'm³', quantita: '10', prezzo: '175.00' }],
+      // di proposito senza `codice`: è la forma dei file salvati prima del campo
+      costi: [
+        { id: 'c1', categoria: 'Strutture', descrizione: 'Cls', um: 'm³', quantita: '10', prezzo: '175.00' },
+      ] as unknown as AppState['costi'],
     });
     expect(stato.costi).toEqual([
       { id: 'c1', categoria: 'Strutture', codice: '', descrizione: 'Cls', um: 'm³', quantita: '10', prezzo: '175.00' },
