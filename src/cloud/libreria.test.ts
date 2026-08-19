@@ -63,6 +63,28 @@ describe('fusione a tre vie', () => {
     expect(out.normative.map((n) => n.id)).toEqual(['a']);
   });
 
+  it('porta qui una voce cambiata solo sull’altro dispositivo', () => {
+    // il caso delle categorie: il PC le ha sistemate, il telefono no — e il
+    // telefono non deve rimandare su OneDrive la sua copia vecchia
+    const base = lib({ normative: [norma('a')] });
+    const out = fondiLibrerie(
+      lib({ normative: [norma('a')] }),
+      lib({ normative: [{ ...norma('a'), categoria: 'Eurocodici' }] }),
+      base,
+    );
+    expect(out.normative).toEqual([{ ...norma('a'), categoria: 'Eurocodici' }]);
+  });
+
+  it('tiene la modifica fatta qui su una voce che l’altro dispositivo non ha toccato', () => {
+    const base = lib({ normative: [norma('a')] });
+    const out = fondiLibrerie(
+      lib({ normative: [{ ...norma('a'), categoria: 'Eurocodici' }] }),
+      lib({ normative: [norma('a')] }),
+      base,
+    );
+    expect(out.normative).toEqual([{ ...norma('a'), categoria: 'Eurocodici' }]);
+  });
+
   it('sulla stessa voce modificata da entrambe le parti vince questo dispositivo', () => {
     const base = lib({ normative: [norma('a', 'vecchia')] });
     const out = fondiLibrerie(

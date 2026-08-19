@@ -1092,6 +1092,24 @@ export function formatta(v: number): string {
 }
 
 /**
+ * Il risultato di un calcolo come lo si scrive a mano su un foglio: **una sola
+ * cifra dopo la virgola**. Un’area di 0,0855 mq si scrive 0,1 mq — le cifre in
+ * più non dicono niente di più di quello che il dato di partenza sa.
+ *
+ * Le due eccezioni sono quelle che renderebbero il numero illeggibile: i valori
+ * enormi o piccolissimi restano in notazione scientifica, e un numero che con
+ * una cifra sola diventerebbe «0» tiene invece le sue due cifre significative
+ * — «0» al posto di 0,0004 non è un arrotondamento, è un dato perso.
+ */
+export function formattaRisultato(v: number): string {
+  if (!Number.isFinite(v)) return '—';
+  const a = Math.abs(v);
+  if (a !== 0 && (a >= 1e9 || a < 1e-6)) return v.toExponential(4).replace('e', '·10^');
+  if (a !== 0 && a < 0.05) return Number(v.toPrecision(2)).toString();
+  return v.toFixed(1).replace(/\.0$/, '');
+}
+
+/**
  * Il numero come si scrive in quell'unità. Le percentuali si leggono a colpo
  * d'occhio, non si misurano: un rapporto di verifica è «66,7 %», non
  * «66,68238 %» — le cifre in più non dicono niente di più.
@@ -1099,7 +1117,7 @@ export function formatta(v: number): string {
 export function formattaIn(valore: number, um: string): string {
   if (!Number.isFinite(valore)) return '—';
   const u = um.trim();
-  if (u !== '%' && u !== '‰') return formatta(valore);
+  if (u !== '%' && u !== '‰') return formattaRisultato(valore);
   const s = valore.toFixed(Math.abs(valore) >= 100 ? 0 : 1);
   return s.replace(/\.0$/, '');
 }

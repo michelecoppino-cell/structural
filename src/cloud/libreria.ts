@@ -74,8 +74,18 @@ export function leggiLibreria(raw: unknown): Libreria {
  *    la cancellazione vince;
  *  - non c'era nella base e ora c'è da una parte → è stata **aggiunta**, e si
  *    tiene;
- *  - c'è da entrambe le parti ma diversa → vince questo dispositivo, che è
- *    quello che l'utente ha in mano.
+ *  - c'è da entrambe le parti ma diversa → ha vinto chi l'ha **cambiata**: se
+ *    qui è rimasta com'era nella base e altrove è cambiata, quella buona è
+ *    quella di là. Solo quando è cambiata da tutte e due le parti vince questo
+ *    dispositivo, che è quello che l'utente ha in mano.
+ *
+ * Quest'ultimo punto è quello che costava le modifiche. Tenere sempre la copia
+ * locale non perde *voci*, ma perde quello che è stato **scritto dentro** una
+ * voce: le categorie sistemate dal PC sparivano al primo giro fatto dal
+ * telefono — che quelle stesse norme le aveva, vecchie, e le rimandava su
+ * OneDrive così com'erano — e poi ricomparivano al giro successivo del PC, che
+ * faceva la stessa cosa al contrario. Un dispositivo che non ha toccato niente
+ * non ha niente da far vincere.
  *
  * Alla prima sincronizzazione in assoluto la base non esiste: si passa `null` e
  * le due liste si sommano, che è l'unica scelta che non butta via niente.
@@ -89,6 +99,9 @@ function fondiElenco<T>(
   const idLocali = new Set(locale.map(chiave));
   const idRemoti = new Set(remoto.map(chiave));
   const idBase = base ? new Set(base.map(chiave)) : null;
+  const perId = (l: T[]) => new Map(l.map((v) => [chiave(v), v]));
+  const remotiPerId = perId(remoto);
+  const basePerId = base ? perId(base) : null;
 
   // cancellate su questo dispositivo: c'erano all'ultima sincronizzazione e ora
   // non ci sono più qui, quindi non devono rientrare da OneDrive
@@ -96,13 +109,43 @@ function fondiElenco<T>(
   // cancellate sull'altro dispositivo: idem, a parti invertite
   const cancellateAltrove = (id: string) => !!idBase && idBase.has(id) && !idRemoti.has(id);
 
-  const fuse = locale.filter((v) => !cancellateAltrove(chiave(v)));
+  /**
+   * La voce da tenere fra le due copie che hanno lo stesso id: quella di qui,
+   * a meno che qui non sia rimasta identica a com'era all'ultima
+   * sincronizzazione — allora la modifica è solo dell'altro dispositivo, e la
+   * modifica batte il «non ho fatto niente».
+   */
+  const piuRecente = (qui: T, id: string): T => {
+    const altrove = remotiPerId.get(id);
+    if (altrove === undefined || !basePerId) return qui;
+    const prima = basePerId.get(id);
+    if (prima === undefined) return qui;
+    const cambiataQui = impronta(qui) !== impronta(prima);
+    return cambiataQui ? qui : altrove;
+  };
+
+  const fuse = locale.filter((v) => !cancellateAltrove(chiave(v))).map((v) => piuRecente(v, chiave(v)));
   for (const v of remoto) {
     const id = chiave(v);
     if (idLocali.has(id) || cancellateQui(id)) continue;
     fuse.push(v);
   }
   return fuse;
+}
+
+/**
+ * Il contenuto di una voce ridotto a testo, per dire se è cambiata. Le chiavi
+ * si ordinano: due dispositivi possono avere costruito lo stesso oggetto in
+ * ordine diverso, e una differenza che non c'è farebbe credere a una modifica.
+ */
+function impronta(v: unknown): string {
+  if (v === null || typeof v !== 'object') return JSON.stringify(v) ?? 'null';
+  if (Array.isArray(v)) return `[${v.map(impronta).join(',')}]`;
+  const o = v as Record<string, unknown>;
+  return `{${Object.keys(o)
+    .sort()
+    .map((k) => `${JSON.stringify(k)}:${impronta(o[k])}`)
+    .join(',')}}`;
 }
 
 /**

@@ -287,9 +287,10 @@ Due colonne: a sinistra il **foglio**, a destra il **pannello** di quello che ci
 dentro. Scorrono per conto loro, così si tiene il foglio sotto gli occhi mentre si cerca una
 grandezza in fondo al pannello.
 
-**Il foglio.** Porta l'intestazione di commessa (nome, commessa, località, revisione, data),
-una **riga di premessa** e una **nota a piè di pagina**, e in mezzo i blocchi, numerati come i
-passaggi di un calcolo a mano. Si aggiungono dove servono — in coda o fra due blocchi già
+**Il foglio.** Porta in testa il **titolo del progetto** e la data — commessa, località e
+revisione restano sull'HTML esportato, che è il documento da consegnare; sul foglio di lavoro
+erano una riga di dati già scritti altrove — una **riga di premessa** e una **nota a piè di
+pagina**, e in mezzo i blocchi, numerati come i passaggi di un calcolo a mano. Si aggiungono dove servono — in coda o fra due blocchi già
 scritti — si **riordinano** (maniglia, frecce o trascinamento) e si eliminano con la ×.
 
 I blocchi stanno su una **griglia a tre colonne** con il passo di una riga: sono quelle le
@@ -309,7 +310,9 @@ copiato e nell'HTML esportato, e lo decide `senzaOperazioni()` leggendo davvero 
 non a occhio con una regex (`src/calc/calcolatrice.ts`).
 
 Una formula nuova si propone nel **primo posto libero** — in coda, o subito dopo il blocco da
-cui si è partiti — e nasce con il cursore dentro. Se il posto non va bene la si **porta più in
+cui si è partiti — e nasce con il cursore sul **nome**: una riga si scrive nell'ordine in cui
+si legge, prima come si chiama il risultato e poi come lo si calcola, e il Tab porta dall'uno
+all'altro. Se il posto non va bene la si **porta più in
 basso** con le due frecce del blocco (o `Ctrl+↓` e `Ctrl+↑`): le caselle saltate restano lì,
 vuote, e si premono per farla risalire o ci si lascia cadere il passaggio successivo. Da una
 cella, **`Ctrl+Tab` infila una formula subito dopo**: si scrive un passaggio e si va al
@@ -322,8 +325,9 @@ riga già scritta: una formula preimpostata, una grandezza o un import diventano
 scrivibile lì, con lo stesso nome, la stessa espressione e la stessa unità. Si stacca dalla
 fonte — è il prezzo per poterla correggere — e da lì in avanti è testo che si edita.
 
-**Il pannello**, sei sezioni ad accordion; tutto quello che sta lì si **trascina** nel foglio o
-si aggiunge con il «+», e ci resta **collegato**:
+**Il pannello**, sei sezioni ad accordion **chiuse di serie** — quello che si guarda è il
+foglio, il pannello si apre quando serve prendere qualcosa da lì; tutto quello che sta dentro
+si **trascina** nel foglio o si aggiunge con il «+», e ci resta **collegato**:
 
 | Sezione | Che cosa dà |
 |---|---|
@@ -349,6 +353,17 @@ blocco). Salvano un contenuto proprio solo la **nota** e lo **schema**.
 - *Screenshot*: uno schema disegnato a mano o preso da un altro programma — si trascina, si
   incolla con Ctrl+V (anche direttamente sul foglio) o si sceglie da file. L'immagine viene
   ridotta a 1400 px e tenuta dentro il progetto, quindi finisce anche nell'HTML esportato.
+
+**Il risultato si legge con una cifra dopo la virgola**: un'area di 0,0855 mq si scrive
+0,1 mq, perché le cifre in più non dicono niente di più di quello che il dato di partenza sa.
+Restano per esteso solo i numeri che con una cifra sola diventerebbero illeggibili — gli
+enormi e i piccolissimi, in notazione scientifica, e quelli che si azzererebbero, che tengono
+le loro due cifre significative (`formattaRisultato()` in `src/calc/calcolatrice.ts`).
+
+**Il semaforo degli sfruttamenti.** Un risultato letto in percento — un rapporto di verifica —
+si colora da sé: **verde** sotto l'80 %, **giallo** fino al 100, **rosso** oltre. È una
+pastiglia piena con il numero in bianco, non un numero colorato: si vede da lontano e di
+sbieco, che è come si guarda un foglio di verifiche.
 
 Sintassi delle espressioni: `+ − × ÷ ^`, parentesi, `%` come «per cento», virgola o punto
 decimale, argomenti separati da `;`, funzioni (`sqrt`, `min`, `max`, `round`, `ln`, `log`,
@@ -422,10 +437,12 @@ si mette, con «Edita».
 
 - **Categorie**: aprendo il foglio si vedono gli **scaffali** — «Norme nazionali»,
   «Eurocodici», «Capitolati», quelli che si vogliono — con quanti documenti hanno dentro e le
-  prime sigle; si entra in uno e si vedono i suoi documenti, «Categorie» torna indietro. Una
-  categoria non è un elenco a parte: nasce scrivendone il nome nel campo *Categoria* di un
-  documento e sparisce da sé quando resta vuota. Chi non ne ha una sta in «Senza categoria».
-  Con una categoria sola non c'è niente da smistare e il foglio si apre già sui documenti.
+  prime sigle; si entra in uno e si vedono i suoi documenti. Lo scaffale aperto si **richiude
+  da dove si è aperto** — un secondo tocco sulla cartella in testa all'elenco — o con
+  «Categorie», che c'è sempre. Una categoria non è un elenco a parte: nasce scrivendone il nome
+  nel campo *Categoria* di un documento e sparisce da sé quando resta vuota. Chi non ne ha una
+  sta in «Senza categoria». Con una categoria sola non c'è niente da smistare e il foglio si
+  apre già sui documenti — ma anche quella si chiude, e restano le cartelle.
 - **Un documento** è categoria, sigla (la riga ocra), titolo e **indirizzo** — di preferenza il
   link OneDrive del PDF. «Testo completo» con un indirizzo di OneDrive prova prima l'app
   desktop e, se non risponde, apre il documento sul web.
@@ -562,6 +579,12 @@ Ogni giro è **leggi → fondi → riscrivi**, mai «scarica e sostituisci». La
 vie: le due copie vengono confrontate con la fotografia dell'ultima sincronizzazione
 riuscita. È quella terza copia a distinguere «l'ho appena aggiunta qui» da «l'ho appena
 cancellata là» — senza, la voce cancellata sul telefono ricompare al primo accesso dal PC.
+Serve anche a sapere **chi ha cambiato che cosa dentro una voce**: quando la stessa norma sta
+da tutte e due le parti ma diversa, vince chi l'ha toccata, e questo dispositivo vince solo se
+l'ha toccata anche lui. Tenere sempre la copia locale non perdeva *voci* ma perdeva quello che
+c'era scritto dentro: la divisione in categorie fatta dal PC spariva al primo giro del
+telefono — che quelle norme le aveva, vecchie, e le rimandava su OneDrive così com'erano — per
+poi ricomparire al giro dopo del PC, che faceva la stessa cosa al contrario.
 Le regole stanno in `src/cloud/libreria.ts` e sono coperte dai test.
 
 La fotografia sta **dentro lo stato** (`AppState.libreriaBase`), non in una chiave di

@@ -75,7 +75,8 @@ describe('blocchi del quaderno', () => {
   it('una grandezza calcolata tiene la formula prima del risultato', () => {
     const voci = [...TRAVE, voce('A', 'b*h', 'mq')];
     const [b] = ricalcolaQuaderno([nuovoBlocco('valore', { fonte: 'v-A' })], sorgenti(voci));
-    expect(testoBlocco(b)).toBe('A = b*h = 0.15 mq');
+    // il risultato si legge con una cifra dopo la virgola: 0,15 mq → 0,1 mq
+    expect(testoBlocco(b)).toBe('A = b*h = 0.1 mq');
   });
 
   it('cambiare la grandezza nel pannello aggiorna il blocco, senza toccarlo', () => {

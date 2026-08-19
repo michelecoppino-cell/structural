@@ -819,9 +819,6 @@ export default function Quaderno() {
             <header className="quad-testa">
               <div>
                 <div className="quad-titolo">{p.nome}</div>
-                <div className="quad-meta">
-                  Commessa {p.commessa} · {p.localita} · NTC2018 (DM 17/01/2018) · rev. {p.revisione}
-                </div>
               </div>
               <div className="quad-data">{oggi()}</div>
             </header>
@@ -1309,7 +1306,9 @@ function BloccoCard({
 }) {
   const bl = b.blocco;
   const fileRef = useRef<HTMLInputElement>(null);
-  /** Il campo della formula: è lì che si mette il cursore su un blocco nuovo. */
+  /** Il campo del nome: è lì che si mette il cursore su un blocco nuovo. */
+  const nomeRef = useRef<HTMLInputElement | null>(null);
+  /** Il campo della formula: ci si arriva col Tab, subito dopo il nome. */
   const esprRef = useRef<HTMLInputElement | null>(null);
   const [bersaglio, setBersaglio] = useState(false);
   /** La nota del passaggio: si apre con la (i) e resta aperta finché serve. */
@@ -1320,9 +1319,11 @@ function BloccoCard({
   // quanto è lunga la riga, così una formula corta non tiene una colonna vuota
   const colonne = spanBlocco(b);
 
+  // una riga si scrive nell'ordine in cui si legge: prima come si chiama il
+  // risultato, poi come lo si calcola — il Tab porta dal nome alla formula
   useEffect(() => {
     if (!scrivi) return;
-    esprRef.current?.focus();
+    (nomeRef.current ?? esprRef.current)?.focus();
     onScritto();
   }, [scrivi, onScritto]);
 
@@ -1586,6 +1587,9 @@ function BloccoCard({
                   aria-label="Nome del risultato"
                   autoComplete="off"
                   spellCheck={false}
+                  ref={(el) => {
+                    nomeRef.current = el;
+                  }}
                   onChange={(e) => onAggiorna({ nome: e.target.value })}
                 />
                 <span className="uguale">=</span>

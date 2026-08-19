@@ -398,6 +398,12 @@ export default function Normativa({ sincronia }: { sincronia: ReturnType<typeof 
   const [q, setQ] = useState('');
   const [modifica, setModifica] = useState(false);
   const [apertaCat, setApertaCat] = useState<string | null>(null);
+  /**
+   * Lo scaffale è stato chiuso a mano. Serve solo per la libreria con una sola
+   * categoria, che si apre da sé: senza questo segno la richiuderebbe e si
+   * riaprirebbe subito, e non ci sarebbe modo di tornare a vedere le cartelle.
+   */
+  const [chiusaAMano, setChiusaAMano] = useState(false);
   const [nuovaCat, setNuovaCat] = useState('');
   const ricerca = q.trim().length > 0;
 
@@ -408,8 +414,21 @@ export default function Normativa({ sincronia }: { sincronia: ReturnType<typeof 
    * può essere stato spostato altrove o cancellato, e restare dentro uno
    * scaffale vuoto non ha senso — oppure l'unica che c'è.
    */
-  const cat = (apertaCat && gruppi.find((g) => g.nome === apertaCat)?.nome) || (gruppi.length === 1 ? gruppi[0].nome : null);
+  const cat =
+    (apertaCat && gruppi.find((g) => g.nome === apertaCat)?.nome) ||
+    (!chiusaAMano && gruppi.length === 1 ? gruppi[0].nome : null);
   const dentro = ricerca || !!cat;
+
+  /** Entrare in uno scaffale. */
+  const apriCat = (nome: string) => {
+    setApertaCat(nome);
+    setChiusaAMano(false);
+  };
+  /** Uscirne: si torna a vedere tutte le cartelle. */
+  const chiudiCat = () => {
+    setApertaCat(null);
+    setChiusaAMano(true);
+  };
 
   const documenti = useMemo(() => {
     if (ricerca) return filtraDocumenti(state.normative, q);
@@ -455,16 +474,15 @@ export default function Normativa({ sincronia }: { sincronia: ReturnType<typeof 
     if (!nome) return;
     aggiungiDoc(nome);
     setNuovaCat('');
-    setApertaCat(nome);
+    apriCat(nome);
   };
   /** Rinominare uno scaffale è riscrivere l'etichetta su tutto quello che c'è dentro. */
   const rinominaCategoria = (vecchio: string, nuovo: string) => {
     setVoci(state.normative.map((v) => (nomeCategoria(v) === vecchio ? { ...v, categoria: nuovo } : v)));
-    setApertaCat(nuovo.trim() ? nuovo : SENZA_CATEGORIA);
+    apriCat(nuovo.trim() ? nuovo : SENZA_CATEGORIA);
   };
 
   const gruppoAperto = gruppi.find((g) => g.nome === cat);
-  const soloUna = gruppi.length === 1;
 
   return (
     <div className="stack">
@@ -476,8 +494,8 @@ export default function Normativa({ sincronia }: { sincronia: ReturnType<typeof 
       </datalist>
 
       <ComandiScheda>
-        {cat && !ricerca && !soloUna && (
-          <button type="button" className="btn btn-secondary" onClick={() => setApertaCat(null)}>
+        {cat && !ricerca && (
+          <button type="button" className="btn btn-secondary" onClick={chiudiCat}>
             <ArrowLeft size={14} />
             Categorie
           </button>
@@ -525,7 +543,7 @@ export default function Normativa({ sincronia }: { sincronia: ReturnType<typeof 
                 nome={g.nome}
                 orfana={g.orfana}
                 voci={g.voci}
-                onApri={() => setApertaCat(g.nome)}
+                onApri={() => apriCat(g.nome)}
               />
             ))}
           </div>
@@ -535,7 +553,17 @@ export default function Normativa({ sincronia }: { sincronia: ReturnType<typeof 
       {/* ── secondo livello: i documenti dello scaffale aperto (o la ricerca) ── */}
       {dentro && !ricerca && gruppoAperto && (
         <div className="norma-cat-aperta">
-          <FolderOpen size={16} weight="fill" />
+          {/* la cartella aperta si richiude da dove si è aperta: un secondo
+              tocco sullo scaffale riporta all'indice delle categorie */}
+          <button
+            type="button"
+            className="norma-cat-chiudi"
+            title="Chiudi la categoria e torna a vedere tutte le cartelle"
+            aria-label="Chiudi la categoria"
+            onClick={chiudiCat}
+          >
+            <FolderOpen size={16} weight="fill" />
+          </button>
           {modifica && !gruppoAperto.orfana ? (
             <input
               className="input norma-cat-rinomina"
