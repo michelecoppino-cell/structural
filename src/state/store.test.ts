@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { STATO_INIZIALE, applicaLibreria, estraiLibreria, migra, reducer } from './store';
+import { STATO_INIZIALE, applicaLibreria, estraiLibreria, migra, reducer, type AppState } from './store';
 
 const NORMA = {
   id: 'n1',
@@ -34,6 +34,35 @@ describe('import di un progetto', () => {
       normative: [NORMA, { id: 'n2', sigla: 'X', titolo: '', url: 'javascript:alert(1)', categoria: '', capitoli: [] }],
     });
     expect(stato.normative.map((n) => n.id)).toEqual(['n1']);
+  });
+
+  it('dà un codice di prezzario vuoto alle voci di costo salvate prima che il campo esistesse', () => {
+    const stato = migra({
+      // di proposito senza `codice`: è la forma dei file salvati prima del campo
+      costi: [
+        { id: 'c1', categoria: 'Strutture', descrizione: 'Cls', um: 'm³', quantita: '10', prezzo: '175.00' },
+      ] as unknown as AppState['costi'],
+    });
+    expect(stato.costi).toEqual([
+      { id: 'c1', categoria: 'Strutture', codice: '', descrizione: 'Cls', um: 'm³', quantita: '10', prezzo: '175.00' },
+    ]);
+  });
+
+  it('tiene il codice di prezzario quando il file ce l\'ha', () => {
+    const stato = migra({
+      costi: [
+        {
+          id: 'c1',
+          categoria: 'Scavi',
+          codice: '11.6.CP1.01',
+          descrizione: 'Sbancamento',
+          um: 'm³',
+          quantita: '350',
+          prezzo: '9.50',
+        },
+      ],
+    });
+    expect(stato.costi[0].codice).toBe('11.6.CP1.01');
   });
 });
 

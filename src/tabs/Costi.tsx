@@ -1,6 +1,7 @@
-import { Plus, Trash } from '@phosphor-icons/react';
+import { ArrowSquareOut, Plus, Trash } from '@phosphor-icons/react';
 import { useStore, type VoceCosto } from '../state/store';
 import { num } from '../calc/azioni';
+import { PREZZARI } from '../data/prezzario';
 
 const eur = (v: number) =>
   new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' }).format(
@@ -81,7 +82,8 @@ export default function Costi() {
         ...voci,
         {
           id: `c${Date.now()}`,
-          categoria: voci[voci.length - 1]?.categoria ?? 'Strutture',
+          categoria: voci[voci.length - 1]?.categoria ?? 'Strutture in c.a.',
+          codice: '',
           descrizione: '',
           um: 'm³',
           quantita: '0',
@@ -109,8 +111,9 @@ export default function Costi() {
             <table className="table">
               <thead>
                 <tr>
-                  <th style={{ minWidth: 150 }}>Categoria</th>
-                  <th style={{ minWidth: 220 }}>Descrizione</th>
+                  <th style={{ minWidth: 140 }}>Categoria</th>
+                  <th style={{ width: 110 }}>Cod. prezzario</th>
+                  <th style={{ minWidth: 240 }}>Descrizione</th>
                   <th style={{ width: 70 }}>U.m.</th>
                   <th className="num" style={{ width: 100 }}>
                     Quantità
@@ -133,6 +136,15 @@ export default function Costi() {
                         value={v.categoria}
                         aria-label="Categoria"
                         onChange={(e) => set(v.id, { categoria: e.target.value })}
+                      />
+                    </td>
+                    <td>
+                      <input
+                        className="input"
+                        value={v.codice}
+                        placeholder="—"
+                        aria-label="Codice prezzario"
+                        onChange={(e) => set(v.id, { codice: e.target.value })}
                       />
                     </td>
                     <td>
@@ -185,7 +197,7 @@ export default function Costi() {
               </tbody>
               <tfoot>
                 <tr>
-                  <td colSpan={5}>Totale generale</td>
+                  <td colSpan={6}>Totale generale</td>
                   <td className="num">{eur(generale)}</td>
                   <td />
                 </tr>
@@ -196,6 +208,41 @@ export default function Costi() {
           <button type="button" className="btn btn-secondary" style={{ marginTop: 10 }} onClick={aggiungi}>
             <Plus size={14} /> Aggiungi voce
           </button>
+
+          <p className="note" style={{ marginTop: 12 }}>
+            Prezzi e codici delle voci di partenza vengono dal{' '}
+            <strong>prezzario FVG 2026/1</strong>; le quantità no, quelle vanno riscritte tutte. Il
+            getto di c.a. è la voce «con esclusione del cassero», perché casseri e armature hanno una
+            riga loro: usare la voce tutto compreso li farebbe pagare due volte. Se si cambia un
+            prezzo a mano, si cambia anche il codice — o la riga racconta una bugia.
+          </p>
+        </div>
+      </section>
+
+      <section className="panel">
+        <div className="panel-body" style={{ paddingTop: 12 }}>
+          <div className="section-title">Prezzari di riferimento</div>
+          <div className="stack" style={{ gap: 8 }}>
+            {PREZZARI.map((p) => (
+              <div key={p.id} className="row-wrap" style={{ gap: 8, alignItems: 'baseline' }}>
+                <a
+                  className="btn btn-secondary"
+                  href={p.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ flex: 'none' }}
+                >
+                  <ArrowSquareOut size={14} /> {p.sigla}
+                </a>
+                <div style={{ flex: 1, minWidth: 240 }}>
+                  <div style={{ fontSize: 12 }}>{p.titolo}</div>
+                  <div className="note" style={{ marginTop: 2 }}>
+                    {p.nota}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       </section>
 
