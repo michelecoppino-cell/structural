@@ -4,6 +4,8 @@ import {
   SELEZIONI_DEFAULT,
   VOCI_DEFAULT,
   formatta,
+  formattaIn,
+  formattaRisultato,
   haOperazioni,
   nomeAmmesso,
   nomiMancanti,
@@ -395,5 +397,28 @@ describe('definizione o formula', () => {
     ]);
     expect(testoVoce(voci[0])).toBe('b = 0.3 m');
     expect(testoVoce(voci[2])).toBe('A = b*h = 0.15 mq');
+  });
+});
+
+describe('il risultato di una formula si legge con una cifra dopo la virgola', () => {
+  it('arrotonda alla prima cifra e non lascia lo zero in coda', () => {
+    expect(formattaRisultato(0.0855)).toBe('0.1');
+    expect(formattaRisultato(12.3456)).toBe('12.3');
+    expect(formattaRisultato(12)).toBe('12');
+    expect(formattaRisultato(-3.28)).toBe('-3.3');
+  });
+
+  it('un numero che diventerebbe zero tiene le sue cifre significative', () => {
+    expect(formattaRisultato(0.00042)).toBe('0.00042');
+    expect(formattaRisultato(0)).toBe('0');
+  });
+
+  it('i numeri enormi restano in notazione scientifica', () => {
+    expect(formattaRisultato(2.5e10)).toBe('2.5000·10^+10');
+  });
+
+  it('le percentuali non cambiano: restano il semaforo di prima', () => {
+    expect(formattaIn(66.68238, '%')).toBe('66.7');
+    expect(formattaIn(0.0855, 'mq')).toBe('0.1');
   });
 });

@@ -149,7 +149,7 @@ export interface StatoQuaderno {
   quadretti: boolean;
 }
 
-export const SCHEMA_VERSION = 7;
+export const SCHEMA_VERSION = 8;
 
 export const STATO_INIZIALE: AppState = {
   schemaVersion: SCHEMA_VERSION,
@@ -204,13 +204,15 @@ export const STATO_INIZIALE: AppState = {
       vari: true,
       'soll-risultati': true,
       'soll-inerzia': true,
-      // le sezioni del pannello del quaderno: aperte di serie, si chiudono a mano
-      'q-compilare': true,
-      'q-fisse': true,
-      'q-libreria': true,
-      'q-formule': true,
-      'q-import': true,
-      'q-capitoli': true,
+      // le sezioni del pannello del quaderno: chiuse di serie — il foglio è
+      // quello che si guarda, il pannello si apre quando serve prendere
+      // qualcosa da lì
+      'q-compilare': false,
+      'q-fisse': false,
+      'q-libreria': false,
+      'q-formule': false,
+      'q-import': false,
+      'q-capitoli': false,
       'q-tastierino': false,
     },
     exp: {},

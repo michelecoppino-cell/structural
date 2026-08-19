@@ -2164,6 +2164,23 @@ button.field-origin:hover {
   max-width: 260px;
 }
 
+/* lo scaffale aperto si richiude toccando la cartella: stesso gesto
+   dell'apertura, al contrario */
+.norma-cat-chiudi {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+}
+
+.norma-cat-chiudi:hover {
+  background: var(--hover);
+}
+
 /* da che scaffale viene un documento: si scrive solo nella ricerca */
 .norma-categoria-segno {
   display: inline-flex;
@@ -2931,17 +2948,28 @@ button.field-origin:hover {
 }
 
 /* un rapporto di verifica letto in percento si legge dal colore prima che dal
-   numero: verde sotto l'80 %, giallo fino al 100, rosso oltre */
+   numero: verde sotto l'80 %, giallo fino al 100, rosso oltre. È una pastiglia
+   piena — il colore si vede da lontano e di sbieco, come il bollino messo a
+   fianco della verifica, mentre il numero scritto in colore si perde fra gli
+   altri numeri della riga */
+.quad-esito.is-ok strong,
+.quad-esito.is-limite strong,
+.quad-esito.is-fuori strong {
+  padding: 1px 6px;
+  border-radius: 999px;
+  color: #fff;
+}
+
 .quad-esito.is-ok strong {
-  color: var(--esito-ok);
+  background: var(--esito-ok);
 }
 
 .quad-esito.is-limite strong {
-  color: var(--esito-limite);
+  background: var(--esito-limite);
 }
 
 .quad-esito.is-fuori strong {
-  color: var(--esito-fuori);
+  background: var(--esito-fuori);
 }
 
 .quad-esito strong {
