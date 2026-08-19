@@ -300,6 +300,14 @@ vuota. Se la riga ha una nota, quella va **sotto, in grigetto piccolo**. Note, s
 capitoli restano a riga intera, con il loro comando 1-2-3. Il corpo del testo è quello di un
 foglio scritto in Arial Narrow 11.
 
+**Definizione o formula, lo capisce da sé.** Una riga in cui non c'è nessuna operazione — un
+numero e basta (`0,30`, `-3`, `1e3`, `50%`) — è la **definizione di una grandezza**, e si legge
+`b = 0,30 m`: il secondo uguale ripeterebbe lo stesso numero due volte. Appena compare
+un'operazione — un segno, una funzione, il richiamo di un'altra grandezza — la riga diventa una
+**formula** e il risultato torna a destra: `A = b*h = 0,09 mq`. Vale sul foglio, nel testo
+copiato e nell'HTML esportato, e lo decide `senzaOperazioni()` leggendo davvero l'espressione,
+non a occhio con una regex (`src/calc/calcolatrice.ts`).
+
 Una formula nuova si propone nel **primo posto libero** — in coda, o subito dopo il blocco da
 cui si è partiti — e nasce con il cursore dentro. Se il posto non va bene la si **porta più in
 basso** con le due frecce del blocco (o `Ctrl+↓` e `Ctrl+↑`): le caselle saltate restano lì,
@@ -385,7 +393,13 @@ Tre uscite, tutte leggibili **senza questa app**, tutte dallo stesso foglio:
 |---|---|
 | *Stampa / PDF* | la pagina A4 dalla finestra di stampa del browser — da lì «Salva in PDF»; quadretti, pannello e interfaccia non vengono stampati, e i campi rimasti vuoti non lasciano righe di segnaposto |
 | *Copia testo* | il foglio come testo semplice, da incollare in OneNote, in una mail o in Word |
-| *Scarica HTML* | un file `.html` **autonomo**, stile e schemi compresi e nessuna risorsa esterna: si apre con qualunque browser, offline, e si ristampa in PDF |
+| *Salva HTML* | un file `.html` **autonomo**, stile e schemi compresi e nessuna risorsa esterna: si apre con qualunque browser, offline, e si ristampa in PDF |
+
+Il salvataggio è un **«Salva con nome»**: prima si sceglie la cartella e il nome, poi si
+scrive. Dove il browser lo consente (Chrome, Edge) si apre la finestra di sistema — e la
+seconda volta si riapre dov'era; dove non c'è (Firefox, Safari) si chiede almeno il nome e la
+cartella la decide il browser. Chiudere la finestra non salva niente. Sta tutto in
+`src/calc/salvataggio.ts`.
 
 L'**Esporta JSON** resta quello che era: serve a *riaprire* il lavoro in questa app, non a
 leggerlo. Il foglio a schermo, il *Copia* e l'HTML nascono dalla stessa sorgente
@@ -406,17 +420,26 @@ La **libreria personale** dei documenti che si aprono tutti i giorni: NTC, Circo
 Eurocodici, capitolati, qualunque link. Non c'è nessun indice di serie — ci sta quello che ci
 si mette, con «Edita».
 
-- **Un documento** è sigla (la riga ocra), titolo e **indirizzo** — di preferenza il link
-  OneDrive del PDF. «Testo completo» con un indirizzo di OneDrive prova prima l'app desktop e,
-  se non risponde, apre il documento sul web.
+- **Categorie**: aprendo il foglio si vedono gli **scaffali** — «Norme nazionali»,
+  «Eurocodici», «Capitolati», quelli che si vogliono — con quanti documenti hanno dentro e le
+  prime sigle; si entra in uno e si vedono i suoi documenti, «Categorie» torna indietro. Una
+  categoria non è un elenco a parte: nasce scrivendone il nome nel campo *Categoria* di un
+  documento e sparisce da sé quando resta vuota. Chi non ne ha una sta in «Senza categoria».
+  Con una categoria sola non c'è niente da smistare e il foglio si apre già sui documenti.
+- **Un documento** è categoria, sigla (la riga ocra), titolo e **indirizzo** — di preferenza il
+  link OneDrive del PDF. «Testo completo» con un indirizzo di OneDrive prova prima l'app
+  desktop e, se non risponde, apre il documento sul web.
 - **Indice dei capitoli** scritto a mano: numero, titolo e pagina. Non porta a nessun link —
   serve a ricordare a colpo d'occhio a che pagina sta un capitolo, per trovarla in fretta una
   volta aperto il documento. I punti nel numero danno il **rientro** (`2.1` sotto `2`).
 - **Ordine a piacere, anche dopo**: in «Edita» ogni documento ha le frecce **su** e **giù** e
-  si porta dove serve — quello che si apre tutti i giorni sta in cima. (Con una ricerca in
-  corso le frecce si spengono: l'elenco che si vede non è quello vero.)
-- **Ricerca** su sigla, titolo e capitoli (`taglio`, `neve`, `VRd`, `C8.5`…): resta il
-  documento che corrisponde, o i soli capitoli che corrispondono.
+  si porta dove serve **dentro la sua categoria** — quello che si apre tutti i giorni sta in
+  cima. (Con una ricerca in corso le frecce si spengono: l'elenco che si vede non è quello
+  vero.) Le categorie seguono l'ordine dei documenti che contengono, non l'alfabeto.
+- **Ricerca** su sigla, titolo e capitoli (`taglio`, `neve`, `VRd`, `C8.5`…): pesca in **tutta**
+  la libreria, categorie comprese — quando si cerca «taglio» non importa su che scaffale sta —
+  e resta il documento che corrisponde, o i soli capitoli che corrispondono, con scritto da
+  dove viene.
 
 Sono **dati di chi usa l'app, non della commessa**: sopravvivono a «Svuota tutto» e, con
 OneDrive collegato, si ritrovano su tutti i dispositivi (vedi `src/cloud/libreria.ts`).
@@ -455,7 +478,9 @@ Quaderno: un valore si corregge in un posto solo.
 - **Copia**: copia negli appunti un blocco di testo con valori, formule e riferimenti
   normativi, pronto da incollare in Word.
 - **Esporta / Importa JSON**: l'intero stato del progetto, con numero di versione dello
-  schema e migrazione dei file salvati da versioni precedenti. Lo stato si salva in
+  schema e migrazione dei file salvati da versioni precedenti. L'esportazione è un «Salva con
+  nome» (cartella e nome si scelgono, proposto `commessa-rev0.json`), non un file che cade
+  nei download. Lo stato si salva in
   `localStorage` con un ritardo di 300 ms, così scrivere in un campo non costa una
   serializzazione per carattere.
 - **Svuota tutto**: cancella il salvataggio automatico — quello che alla riapertura ripropone
@@ -607,8 +632,9 @@ src/
     quaderno.ts    blocchi del foglio e loro ricalcolo dalle fonti collegate
     relazione.ts   capitoli e blocchi delle schede, e il testo per la relazione
     esportazione.ts  foglio A4: documento in testo semplice e in HTML autonomo
+    salvataggio.ts   «Salva con nome»: dove il file va e come si chiama
   data/            tabelle normative e di materiali (ntc2018.ts, materiali.ts)
-    normative.ts   indice dei documenti e dei capitoli del foglio Norme
+    normative.ts   documenti, categorie e capitoli del foglio Norme
     armature.ts    diametri, pesi, mandrini di piega e raggi di curvatura
     bulloni.ts     profilario metrico e classi di resistenza delle viti
     profili-acciaio.ts  sagomario IPE/HEA/HEB/UPN, angolari e tubi

@@ -33,7 +33,51 @@ export interface LinkUtente {
   sigla: string;
   titolo: string;
   url: string;
+  /**
+   * Scaffale su cui sta il documento: «Norme nazionali», «Eurocodici»,
+   * «Capitolati», quello che si vuole. Vuota = documento non ancora
+   * sistemato, che finisce nello scaffale `SENZA_CATEGORIA`.
+   *
+   * Le categorie non sono un elenco a parte: esistono perché ci sta dentro
+   * qualcosa, come le cartelle di un archivio che si creano scrivendone il
+   * nome sull'etichetta. Svuotarne una la fa sparire da sé.
+   */
+  categoria: string;
   capitoli: CapitoloIndice[];
+}
+
+/** Scaffale dei documenti che non hanno (ancora) una categoria propria. */
+export const SENZA_CATEGORIA = 'Senza categoria';
+
+/** Una categoria della libreria, con i documenti che ci stanno dentro. */
+export interface Categoria {
+  /** Nome scritto dall'utente, o `SENZA_CATEGORIA` per quelli senza. */
+  nome: string;
+  /** `true` per lo scaffale di servizio: non è un nome scritto da nessuno. */
+  orfana: boolean;
+  voci: LinkUtente[];
+}
+
+/** Nome della categoria di un documento, con lo scaffale di servizio al posto del vuoto. */
+export function nomeCategoria(v: LinkUtente): string {
+  return v.categoria.trim() || SENZA_CATEGORIA;
+}
+
+/**
+ * Raggruppa i documenti per categoria, **nell'ordine in cui compaiono**: la
+ * libreria si riordina con le frecce, e le categorie seguono l'ordine dei
+ * documenti che contengono, non l'alfabeto — quello che si apre tutti i giorni
+ * resta in cima.
+ */
+export function categorie(voci: LinkUtente[]): Categoria[] {
+  const out: Categoria[] = [];
+  for (const v of voci) {
+    const nome = nomeCategoria(v);
+    const gia = out.find((c) => c.nome === nome);
+    if (gia) gia.voci.push(v);
+    else out.push({ nome, orfana: !v.categoria.trim(), voci: [v] });
+  }
+  return out;
 }
 
 /**
@@ -52,7 +96,16 @@ export function leggiNormative(raw: unknown): LinkUtente[] {
       if (typeof cc.numero !== 'string' && typeof cc.titolo !== 'string') return [];
       return [{ id: cc.id || `cap-${i}-${j}`, numero: cc.numero ?? '', titolo: cc.titolo ?? '', pagina: cc.pagina ?? '' }];
     });
-    return [{ id: n.id || `norma-${i}`, sigla: n.sigla ?? '', titolo: n.titolo ?? '', url, capitoli }];
+    return [
+      {
+        id: n.id || `norma-${i}`,
+        sigla: n.sigla ?? '',
+        titolo: n.titolo ?? '',
+        url,
+        categoria: typeof n.categoria === 'string' ? n.categoria : '',
+        capitoli,
+      },
+    ];
   });
 }
 

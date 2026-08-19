@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { STATO_INIZIALE, applicaLibreria, estraiLibreria, migra, reducer } from './store';
 
-const NORMA = { id: 'n1', sigla: 'CNR-DT 207', titolo: 'Azioni del vento', url: 'https://esempio.it/207', capitoli: [] };
+const NORMA = {
+  id: 'n1',
+  sigla: 'CNR-DT 207',
+  titolo: 'Azioni del vento',
+  url: 'https://esempio.it/207',
+  categoria: 'Vento',
+  capitoli: [],
+};
 
 describe('«Svuota tutto»', () => {
   it('azzera la commessa ma lascia stare la libreria personale', () => {
@@ -24,7 +31,7 @@ describe('«Svuota tutto»', () => {
 describe('import di un progetto', () => {
   it('scarta gli indirizzi che non sono http(s)', () => {
     const stato = migra({
-      normative: [NORMA, { id: 'n2', sigla: 'X', titolo: '', url: 'javascript:alert(1)', capitoli: [] }],
+      normative: [NORMA, { id: 'n2', sigla: 'X', titolo: '', url: 'javascript:alert(1)', categoria: '', capitoli: [] }],
     });
     expect(stato.normative.map((n) => n.id)).toEqual(['n1']);
   });

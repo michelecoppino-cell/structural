@@ -2091,6 +2091,102 @@ button.field-origin:hover {
   min-width: 0;
 }
 
+/* ── le categorie: gli scaffali che si vedono aprendo la libreria ── */
+.norma-categorie {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 10px;
+}
+
+.norma-cat {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px;
+  text-align: left;
+  cursor: pointer;
+  border: 1px solid var(--border-panel);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  color: inherit;
+}
+
+.norma-cat:hover {
+  border-color: var(--accent-30);
+  background: var(--hover-soft);
+}
+
+.norma-cat.is-orfana {
+  border-style: dashed;
+}
+
+.norma-cat-testa {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--color-accent-400);
+}
+
+.norma-cat-nome {
+  font-size: 14px;
+  color: var(--text);
+  flex: 1;
+  min-width: 0;
+}
+
+.norma-cat-conta,
+.norma-cat-sigle {
+  font-size: 11.5px;
+  color: var(--text-faint);
+}
+
+.norma-cat-sigle {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* testata dello scaffale aperto: dice dove si è, e in modifica si rinomina */
+.norma-cat-aperta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--color-accent-400);
+}
+
+.norma-cat-aperta h2 {
+  font-size: 14px;
+  margin: 0;
+  color: var(--text);
+}
+
+.norma-cat-rinomina {
+  max-width: 260px;
+}
+
+/* da che scaffale viene un documento: si scrive solo nella ricerca */
+.norma-categoria-segno {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 3px;
+  font-size: 11px;
+  color: var(--text-faint);
+}
+
+.norma-aggiunte {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.norma-aggiunte .norma-campo-categoria {
+  flex: 1 1 200px;
+  min-width: 160px;
+  max-width: 280px;
+}
+
 .norma-testa {
   display: flex;
   align-items: flex-start;

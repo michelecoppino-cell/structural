@@ -802,6 +802,60 @@ export function nomiMancanti(espressione: string, vars: Record<string, number>):
   return nomiRichiesti(espressione).filter((n) => !risolviNome(n, vars));
 }
 
+/* ─────────────────── definizione o formula: lo dice il testo ─────────────── */
+
+/**
+ * `true` se l'espressione **non contiene operazioni**: è un numero e basta,
+ * scritto come lo si scriverebbe su un foglio — `0,25`, `-3`, `1e3`, `(80)`,
+ * `50%`.
+ *
+ * È la differenza fra le due cose che si scrivono su una riga del quaderno:
+ *
+ *  - `b = 0,30 m` è la **definizione di una grandezza**: il numero è il dato,
+ *    e ripeterlo dopo un secondo uguale (`b = 0,30 = 0,30 m`) è rumore;
+ *  - `A = b·h = 0,09 mq` è una **formula**: il come e il quanto sono due cose
+ *    diverse, e servono tutte e due.
+ *
+ * Appena compare un'operazione — un segno, una parentesi con dentro un conto,
+ * una funzione, il richiamo di un'altra grandezza — la riga diventa una
+ * formula e il secondo uguale torna a servire. Un'espressione che non si
+ * riesce nemmeno a leggere non è un numero: è una formula, sbagliata.
+ */
+export function senzaOperazioni(espressione: string): boolean {
+  let tk: Token[];
+  try {
+    tk = tokenizza(espressione);
+  } catch {
+    return false;
+  }
+
+  // le parentesi attorno a un numero non sono un'operazione: (80) è 80
+  let da = 0;
+  let a = tk.length;
+  while (
+    a - da >= 2 &&
+    tk[da].t === 'par' &&
+    (tk[da] as { v: string }).v === '(' &&
+    tk[a - 1].t === 'par' &&
+    (tk[a - 1] as { v: string }).v === ')'
+  ) {
+    da += 1;
+    a -= 1;
+  }
+
+  // il segno davanti fa parte del numero, non è un'operazione fra due valori
+  while (da < a && tk[da].t === 'op' && '+-'.includes((tk[da] as { v: string }).v)) da += 1;
+  // e nemmeno il «per cento» in coda: 50% è un numero scritto in percento
+  if (a - da >= 2 && tk[a - 1].t === 'op' && (tk[a - 1] as { v: string }).v === '%') a -= 1;
+
+  return a - da === 1 && tk[da].t === 'num';
+}
+
+/** L'espressione porta un conto dentro: allora la riga è una formula. */
+export function haOperazioni(espressione: string): boolean {
+  return !!espressione.trim() && !senzaOperazioni(espressione);
+}
+
 /* ─────────────────── da valore in base a numero da leggere ─────────────── */
 
 /** Un risultato pronto da mostrare: il numero, l'unità e come ci si è arrivati. */
@@ -961,9 +1015,6 @@ export function unitaVariabili(voci: VoceCalcolata[]): Record<string, Dim> {
   return out;
 }
 
-/** Un valore scritto come numero e basta: non è un'operazione, è un dato. */
-const SOLO_NUMERO = /^[+-]?[\d\s.,]+$/;
-
 /**
  * Riporta in ordine l'elenco delle voci che arriva da un salvataggio: applica
  * i nomi nuovi (anche dentro le formule), butta i doppioni dei γ scritti con
@@ -1008,7 +1059,7 @@ export function normalizzaVoci(raw: Partial<VoceCalcolo>[]): VoceCalcolo[] {
 /** Ruolo di una voce salvata prima che i ruoli esistessero. */
 function tipoDedotto(nome: string, espressione: string): TipoVoce {
   if (nome.trim().startsWith('γ')) return 'fissa';
-  if (!espressione.trim() || SOLO_NUMERO.test(espressione.trim())) return 'compilabile';
+  if (!espressione.trim() || senzaOperazioni(espressione)) return 'compilabile';
   return 'operazione';
 }
 
@@ -1060,5 +1111,8 @@ export function testoVoce(v: VoceCalcolata): string {
   const nota = v.nota.trim() ? `   — ${v.nota.trim()}` : '';
   if (!v.espressione.trim()) return `${testa}(da compilare)${nota}`;
   const valore = v.errore ? `errore: ${v.errore}` : `${formatta(v.valore)}${um}`;
-  return `${testa}${v.espressione} = ${valore}${nota}`;
+  // una grandezza scritta come numero è una definizione: il secondo uguale
+  // ripeterebbe lo stesso numero due volte
+  const formula = haOperazioni(v.espressione) ? `${v.espressione} = ` : '';
+  return `${testa}${formula}${valore}${nota}`;
 }
