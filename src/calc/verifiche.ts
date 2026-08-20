@@ -438,3 +438,104 @@ export function verificaAcciaioSezione(inp: InputAcciaioSezione): RisultatiAccia
     esitoTaglio: esito(VEd, VRd),
   };
 }
+
+/* ────────────────────────────────────────────────────────────────────────────
+   §4.2.4.2.1 — deformabilità delle travi in acciaio (SLE)
+   Freccia elastica in forma chiusa, per il predimensionamento: si sceglie lo
+   schema, si dà il carico di esercizio e si confronta con il limite di
+   tabella 4.2.X.
+   ──────────────────────────────────────────────────────────────────────── */
+
+/** Schema statico per il calcolo della freccia, con il suo coefficiente. */
+export interface SchemaFreccia {
+  id: string;
+  label: string;
+  /** Il carico è distribuito (kN/m) o concentrato (kN). */
+  concentrato: boolean;
+  /** f = k · q · L⁴ / (E·I) per i distribuiti, k · P · L³ / (E·I) per i concentrati. */
+  k: number;
+}
+
+export const SCHEMI_FRECCIA: SchemaFreccia[] = [
+  { id: 'app-dist', label: 'Appoggiata — carico distribuito', concentrato: false, k: 5 / 384 },
+  { id: 'app-conc', label: 'Appoggiata — forza in mezzeria', concentrato: true, k: 1 / 48 },
+  { id: 'inc-dist', label: 'Incastrata ai due estremi — carico distribuito', concentrato: false, k: 1 / 384 },
+  { id: 'inc-app-dist', label: 'Incastro–appoggio — carico distribuito', concentrato: false, k: 1 / 185 },
+  { id: 'mens-dist', label: 'Mensola — carico distribuito', concentrato: false, k: 1 / 8 },
+  { id: 'mens-conc', label: 'Mensola — forza all’estremo', concentrato: true, k: 1 / 3 },
+];
+
+/**
+ * Limiti di deformabilità della tab. 4.2.X: il denominatore di L/… per la
+ * freccia totale δmax. Sono quelli «raccomandati», che la norma lascia
+ * ridiscutere caso per caso.
+ */
+export const LIMITI_FRECCIA: { id: string; label: string; limite: number }[] = [
+  { id: 'coperture', label: 'Coperture in generale', limite: 200 },
+  { id: 'coperture-prat', label: 'Coperture praticabili', limite: 250 },
+  { id: 'solai', label: 'Solai in generale', limite: 250 },
+  { id: 'solai-intonaco', label: 'Solai o coperture che reggono intonaco', limite: 250 },
+  { id: 'solai-colonne', label: 'Solai che sopportano colonne', limite: 400 },
+];
+
+export interface InputDeformazione {
+  schema: string;
+  /** Luce o sbalzo (m). */
+  L: string;
+  /** Carico di esercizio: kN/m se distribuito, kN se concentrato. */
+  q: string;
+  /** Denominatore del limite L/…, scelto o scritto a mano. */
+  limite: string;
+}
+
+export const DEFORMAZIONE_DEFAULT: InputDeformazione = {
+  schema: 'app-dist',
+  L: '5',
+  q: '8',
+  limite: '250',
+};
+
+export interface RisultatiDeformazione {
+  proprieta?: ProprietaProfilo;
+  schema?: SchemaFreccia;
+  /** Freccia in mezzeria o all'estremo (mm). */
+  f: number;
+  /** Freccia ammessa, L/limite (mm). */
+  fAmmessa: number;
+  /** Rapporto luce/freccia, il numero con cui si ragiona in cantiere. */
+  LsuF: number;
+  esito: Esito;
+}
+
+/**
+ * Freccia elastica della trave, con l'inerzia dell'asse forte del profilo.
+ *
+ *   distribuiti:  f = k · q · L⁴ / (E·Ix)
+ *   concentrati:  f = k · P · L³ / (E·Ix)
+ *
+ * Con q in kN/m (che è N/mm), L in m e Ix in cm⁴ la freccia esce in mm.
+ */
+export function verificaDeformazione(
+  sez: InputAcciaioSezione,
+  inp: InputDeformazione,
+): RisultatiDeformazione {
+  const proprieta = proprietaProfilo(sez.tipoProfilo, sez.profilo);
+  const schema = SCHEMI_FRECCIA.find((s) => s.id === inp.schema) ?? SCHEMI_FRECCIA[0];
+  const E = 210000; // N/mm²
+  const I = (proprieta?.Ix ?? 0) * 1e4; // mm⁴
+  const L = num(inp.L) * 1000; // mm
+  const q = num(inp.q); // kN/m = N/mm, oppure kN
+  const limite = num(inp.limite);
+
+  const f = I > 0 ? (schema.k * (schema.concentrato ? q * 1000 : q) * L ** (schema.concentrato ? 3 : 4)) / (E * I) : 0;
+  const fAmmessa = limite > 0 ? L / limite : Infinity;
+
+  return {
+    proprieta,
+    schema,
+    f,
+    fAmmessa,
+    LsuF: f > 0 ? L / f : Infinity,
+    esito: esito(f, fAmmessa),
+  };
+}

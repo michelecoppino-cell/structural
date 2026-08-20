@@ -220,12 +220,15 @@ export function Accordion({
   title,
   hint,
   icon,
+  badge,
   children,
 }: {
   id: string;
   title: string;
   hint?: string;
   icon?: ReactNode;
+  /** Riepilogo che resta visibile anche a pannello aperto (esito, sfruttamento). */
+  badge?: ReactNode;
   children: ReactNode;
 }) {
   const { state, dispatch } = useStore();
@@ -245,6 +248,7 @@ export function Accordion({
         {/* a pannello aperto il riepilogo è ridondante: si toglie invece di
             comparire troncato accanto a un titolo lungo */}
         <span className="hint">{aperto ? '' : hint}</span>
+        {badge && <span className="badge-testa">{badge}</span>}
         <span className="caret">{aperto ? <CaretUp size={15} /> : <CaretDown size={15} />}</span>
       </button>
       {aperto && (

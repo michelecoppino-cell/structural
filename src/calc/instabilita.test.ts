@@ -11,6 +11,7 @@ import {
 } from './instabilita';
 import { ACCIAIO_SEZIONE_DEFAULT, type InputAcciaioSezione } from './verifiche';
 import { proprietaProfilo } from '../data/profili-acciaio';
+import { betaTelaio } from './libera-inflessione';
 
 /**
  * Il caso di riferimento è quello che il foglio
@@ -256,10 +257,33 @@ describe('instabilità di punta — comportamento', () => {
 
   it('accorciare l’asta o trattenerla alza la resistenza', () => {
     const corta = verificaInstabilitaPunta(SEZ, { ...base, Lz: '1000' });
-    const vincolata = verificaInstabilitaPunta(SEZ, { ...base, betaZ: '0.5' });
+    const vincolata = verificaInstabilitaPunta(SEZ, {
+      ...base,
+      modoZ: 'manuale',
+      betaZ: '0.5',
+    });
     const lunga = verificaInstabilitaPunta(SEZ, base);
     expect(corta.NbRd).toBeGreaterThan(lunga.NbRd);
     expect(vincolata.NbRd).toBeCloseTo(corta.NbRd, 6); // β = 0.5 su 2000 = 1000
+  });
+
+  it('β viene dallo schema di vincolo scelto, non da un numero sciolto', () => {
+    // cerniera-cerniera è il riferimento, β = 1
+    expect(verificaInstabilitaPunta(SEZ, base).z.beta).toBe(1);
+    // la mensola vale 2.1 (consigliato, non il 2.0 teorico)
+    const mensola = verificaInstabilitaPunta(SEZ, { ...base, modoZ: 'mensola' });
+    expect(mensola.z.beta).toBe(2.1);
+    expect(mensola.z.Lcr).toBeCloseTo(2.1 * 2000, 6);
+    expect(mensola.NbRd).toBeLessThan(verificaInstabilitaPunta(SEZ, base).NbRd);
+    // e il telaio lo calcola dalle formule di Wood
+    const telaio = verificaInstabilitaPunta(SEZ, {
+      ...base,
+      modoZ: 'telaio-mobili',
+      eta1Z: '0.5',
+      eta2Z: '0.5',
+    });
+    expect(telaio.z.beta).toBeCloseTo(betaTelaio(0.5, 0.5, 'mobili'), 9);
+    expect(telaio.z.beta).toBeGreaterThan(1);
   });
 
   it('segnala la snellezza oltre 200', () => {

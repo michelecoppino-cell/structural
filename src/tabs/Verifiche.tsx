@@ -3,7 +3,18 @@ import { useCalcoli, useStore, inputVerifiche, type MaterialeId } from '../state
 import { num } from '../calc/azioni';
 import { validaTaglioArmato, validaTaglioNonArmato, valido } from '../calc/validazione';
 import { ACCIAIO_ARMATURA, ACCIAIO_STRUTTURALE, CLS, DIAMETRI } from '../data/materiali';
-import { TIPI_PROFILO, taglieDisponibili, type TipoProfilo } from '../data/profili-acciaio';
+import { LIMITI_FRECCIA, SCHEMI_FRECCIA } from '../calc/verifiche';
+import {
+  TIPI_PROFILO,
+  pesoProfilo,
+  taglieDisponibili,
+  type TipoProfilo,
+} from '../data/profili-acciaio';
+import {
+  SCHEMI_VINCOLI,
+  modoTelaio,
+  schemaVincoli,
+} from '../calc/libera-inflessione';
 import {
   CONDIZIONI_CARICO,
   PSI_TABELLATI,
@@ -11,17 +22,14 @@ import {
   type PuntoCarico,
 } from '../calc/instabilita';
 import type { RisultatiClasse } from '../calc/classificazione';
-import { Bar, Field, NumInput, Origine, Output, Select, Seg, Verdict } from '../components/ui';
+import { Accordion, Bar, Field, NumInput, Origine, Output, Select, Seg, Verdict } from '../components/ui';
 import { ComandiScheda } from '../components/ComandiScheda';
-import { SezioneArmata, SezioneTaglio } from '../components/Disegni';
+import { SchemaVincoli, SezioneArmata, SezioneTaglio } from '../components/Disegni';
 
 const fx = (v: number, d = 2) => (Number.isFinite(v) ? v.toFixed(d) : '—');
 
 /** I profili cavi, gli unici per cui la formatura cambia la curva. */
 const TUBI: TipoProfilo[] = ['TUBO_QUADRO', 'TUBO_RETT', 'TUBO_TONDO'];
-
-/** Le tre verifiche di sezione, che condividono un pannello solo. */
-const SCHEDE_ELASTICHE = ['acciaio-flessione', 'acciaio-compressione', 'acciaio-taglio'];
 
 const MATERIALI: { id: MaterialeId; label: string; icon: React.ReactNode }[] = [
   { id: 'cls', label: 'Calcestruzzo', icon: <Cube size={14} /> },
@@ -41,14 +49,9 @@ const VERIFICHE: Record<MaterialeId, { id: string; label: string }[]> = {
     { id: 'taglio-armato', label: 'Taglio armato' },
     { id: 'flessione-ca', label: 'Flessione (SLU)' },
   ],
-  acciaio: [
-    { id: 'acciaio-flessione', label: 'Flessione elastica' },
-    { id: 'acciaio-compressione', label: 'Compressione elastica' },
-    { id: 'acciaio-taglio', label: 'Taglio elastico' },
-    { id: 'acciaio-flesso-torsionale', label: 'Instabilità flesso-torsionale' },
-    { id: 'acciaio-punta', label: 'Instabilità di punta' },
-    { id: 'acciaio-combinata', label: 'Presso-flessione' },
-  ],
+  // l'acciaio non passa dalla barra: le sue verifiche stanno in due gruppi di
+  // tendine, che si aprono una per volta senza perdere di vista le altre
+  acciaio: [],
   legno: [],
   muratura: [],
 };
@@ -63,6 +66,7 @@ export default function Verifiche() {
     instabilitaLT: lt,
     instabilitaPunta: pu,
     pressoflessione: pf,
+    deformazione: df,
     VEdSollecitazioni,
   } = useCalcoli();
   const v = state.verifiche;
@@ -82,6 +86,7 @@ export default function Verifiche() {
   const setFL = (patch: Partial<typeof v.flessioneCA>) => dispatch({ type: 'flessioneCA', patch });
   const setAC = (patch: Partial<typeof v.acciaio>) => dispatch({ type: 'acciaioSezione', patch });
   const setST = (patch: Partial<typeof v.stabilita>) => dispatch({ type: 'stabilita', patch });
+  const setDF = (patch: Partial<typeof v.deformazione>) => dispatch({ type: 'deformazione', patch });
   const scollega = () => dispatch({ type: 'verifiche', patch: { collegaSollecitazioni: false } });
 
   const condizione = CONDIZIONI_CARICO.find((c) => c.id === v.stabilita.carico);
@@ -195,6 +200,126 @@ export default function Verifiche() {
       </p>
     ) : null;
 
+  /** Esito + sfruttamento accanto al titolo di una tendina. */
+  const rigaEsito = (es: { ok: boolean; margine: number; sfruttamento: number }) => (
+    <>
+      <span className="quota-sfr">
+        {Number.isFinite(es.sfruttamento) ? `${fx(es.sfruttamento * 100, 0)}%` : '∞'}
+      </span>
+      <Verdict ok={es.ok} margine={es.margine} />
+    </>
+  );
+
+  /**
+   * I campi che decidono β per un asse: lo schema di vincolo, e — solo dove
+   * servono — i due fattori di distribuzione del telaio o il numero a mano.
+   */
+  const campiBeta = (asse: 'y' | 'z') => {
+    const modo = asse === 'y' ? v.stabilita.modoY : v.stabilita.modoZ;
+    const beta = asse === 'y' ? pu.y.beta : pu.z.beta;
+    const schema = schemaVincoli(modo);
+    const set = (patch: Record<string, string>) => setST(patch as Partial<typeof v.stabilita>);
+    const campo = (suffisso: string) => `${asse === 'y' ? 'Y' : 'Z'}${suffisso}`;
+    const id = (nome: string) => `pu_${nome}${asse}`;
+    return (
+      <>
+        <Field
+          id={id('modo')}
+          tab="verifiche"
+          label={`Vincoli e β nel piano ${asse}-${asse}`}
+          dettaglio={{
+            formula: schema
+              ? `β teorico ${schema.teorico.toFixed(2)}, consigliato ${schema.consigliato.toFixed(2)} — ${schema.nota}`
+              : modoTelaio(modo)
+                ? 'β dalle formule di Wood sui fattori di distribuzione η1 e η2'
+                : 'β scritto a mano',
+            ref: 'Vedi la tendina «Come si sceglie β»',
+            coeffs: [{ k: `β${asse}`, v: Number.isFinite(beta) ? beta.toFixed(3) : '∞' }],
+          }}
+        >
+          <select
+            id={id('modo')}
+            className="input"
+            value={modo}
+            onChange={(e) => set({ [`modo${campo('')}`]: e.target.value })}
+          >
+            {SCHEMI_VINCOLI.map((sv) => (
+              <option key={sv.id} value={sv.id}>
+                {sv.label} — β {sv.consigliato.toFixed(2)}
+              </option>
+            ))}
+            <option value="telaio-fissi">Colonna di telaio a nodi fissi (calcolato)</option>
+            <option value="telaio-mobili">Colonna di telaio a nodi spostabili (calcolato)</option>
+            <option value="manuale">β scritto a mano</option>
+          </select>
+        </Field>
+
+        {modoTelaio(modo) && (
+          <>
+            <Field
+              id={id('eta1')}
+              tab="verifiche"
+              label="Fattore di distribuzione η1 (nodo inferiore)"
+              unit="—"
+              dettaglio={{
+                formula: 'η = Kc / (Kc + ΣKtravi), con K = I/L — 0 incastro, 1 cerniera',
+                ref: 'UNI EN 1993-1-1, appendice E (Wood)',
+              }}
+            >
+              <NumInput
+                id={id('eta1')}
+                value={asse === 'y' ? v.stabilita.eta1Y : v.stabilita.eta1Z}
+                onChange={(x) => set({ [`eta1${campo('')}`]: x })}
+              />
+            </Field>
+            <Field
+              id={id('eta2')}
+              tab="verifiche"
+              label="Fattore di distribuzione η2 (nodo superiore)"
+              unit="—"
+            >
+              <NumInput
+                id={id('eta2')}
+                value={asse === 'y' ? v.stabilita.eta2Y : v.stabilita.eta2Z}
+                onChange={(x) => set({ [`eta2${campo('')}`]: x })}
+              />
+            </Field>
+          </>
+        )}
+
+        {modo === 'manuale' && (
+          <Field id={id('beta')} tab="verifiche" label={`Coefficiente β${asse}`} unit="—">
+            <NumInput
+              id={id('beta')}
+              value={asse === 'y' ? v.stabilita.betaY : v.stabilita.betaZ}
+              onChange={(x) => set({ [`beta${campo('')}`]: x })}
+            />
+          </Field>
+        )}
+      </>
+    );
+  };
+
+  /** Il disegno dello schema scelto per un asse, o due righe se è un telaio. */
+  const disegnoBeta = (asse: 'y' | 'z') => {
+    const modo = asse === 'y' ? v.stabilita.modoY : v.stabilita.modoZ;
+    const beta = asse === 'y' ? pu.y.beta : pu.z.beta;
+    const titolo = `Piano ${asse}-${asse}`;
+    if (schemaVincoli(modo)) return <SchemaVincoli schema={modo} beta={beta} titolo={titolo} />;
+    return (
+      <div className="disegno">
+        <div className="titolo">{titolo}</div>
+        <p className="note" style={{ margin: '6px 2px' }}>
+          {modoTelaio(modo)
+            ? `Colonna di telaio a nodi ${modo === 'telaio-fissi' ? 'fissi' : 'spostabili'}: β = ${
+                Number.isFinite(beta) ? beta.toFixed(3) : '∞'
+              } dalle formule di Wood.`
+            : `β = ${Number.isFinite(beta) ? beta.toFixed(3) : '∞'}, scritto a mano.`}
+        </p>
+      </div>
+    );
+  };
+
   const lista = VERIFICHE[v.materiale];
   const attiva = lista.find((x) => x.id === state.ui.verifica) ?? lista[0];
 
@@ -218,18 +343,6 @@ export default function Verifiche() {
         return bloccoAR ? '—' : `${fx(ar.esito.sfruttamento * 100, 0)}%`;
       case 'flessione-ca':
         return `${fx(fl.esito.sfruttamento * 100, 0)}%`;
-      case 'acciaio-flessione':
-        return `${fx(ac.esitoFlessione.sfruttamento * 100, 0)}%`;
-      case 'acciaio-compressione':
-        return `${fx(ac.esitoCompressione.sfruttamento * 100, 0)}%`;
-      case 'acciaio-taglio':
-        return `${fx(ac.esitoTaglio.sfruttamento * 100, 0)}%`;
-      case 'acciaio-flesso-torsionale':
-        return `${fx(lt.esito.sfruttamento * 100, 0)}%`;
-      case 'acciaio-punta':
-        return `${fx(pu.esito.sfruttamento * 100, 0)}%`;
-      case 'acciaio-combinata':
-        return Number.isFinite(pf.sfruttamento) ? `${fx(pf.sfruttamento * 100, 0)}%` : '∞';
       default:
         return '—';
     }
@@ -925,49 +1038,154 @@ export default function Verifiche() {
         </section>
       )}
 
-      {v.materiale === 'acciaio' && attiva && SCHEDE_ELASTICHE.includes(attiva.id) && (
-        <section className="panel" id="pannello-verifica" role="tabpanel" aria-labelledby={`tab-${attiva.id}`}>
-          <div className="panel-body" style={{ paddingTop: 14 }}>
-            {(() => {
-              const es =
-                attiva.id === 'acciaio-flessione'
-                  ? ac.esitoFlessione
-                  : attiva.id === 'acciaio-compressione'
-                    ? ac.esitoCompressione
-                    : ac.esitoTaglio;
-              const nota =
-                attiva.id === 'acciaio-flessione'
-                  ? 'Flessione elastica — MRd = Wel,x · fyd · NTC2018 §4.2.4.1.2'
-                  : attiva.id === 'acciaio-compressione'
-                    ? 'Compressione semplice elastica — NRd = A · fyd (instabilità non verificata) · NTC2018 §4.2.4.1.2'
-                    : 'Taglio elastico — VRd = Avz · fyd/√3 · NTC2018 §4.2.4.1.3';
-              return (
-                <div className="esito-testa">
-                  <Verdict ok={es.ok} margine={es.margine} />
-                  <Bar sfruttamento={es.sfruttamento} />
-                  <span className="note">{nota}</span>
-                </div>
-              );
-            })()}
+      {v.materiale === 'acciaio' && (
+        <>
+          {/* ── la sezione, scelta una volta per tutte le verifiche ───────── */}
+          <section className="panel">
+            <div className="panel-body" style={{ paddingTop: 14 }}>
+              <div className="kicker">Sezione</div>
+              <div className="panel-split" style={{ marginTop: 10 }}>
+                <div className="fields">
+                  {scegliProfilo('ac')}
 
+                  <Field
+                    id="ac_gm0"
+                    tab="verifiche"
+                    label="Coefficiente parziale γM0 (resistenza)"
+                    unit="—"
+                    dettaglio={{ formula: `fyd = fyk / γM0 = ${fx(ac.fyd, 0)} N/mm²`, ref: 'NTC2018 §4.2.4.1.1' }}
+                  >
+                    <NumInput id="ac_gm0" value={v.acciaio.gammaM0} onChange={(x) => setAC({ gammaM0: x })} />
+                  </Field>
+
+                  <Field
+                    id="ac_gm1"
+                    tab="verifiche"
+                    label="Coefficiente parziale γM1 (stabilità)"
+                    unit="—"
+                    dettaglio={{
+                      formula: 'Vale per tutte e tre le verifiche di stabilità',
+                      ref: 'NTC2018 §4.2.4.1.1',
+                    }}
+                  >
+                    <NumInput id="ac_gm1" value={v.stabilita.gammaM1} onChange={(x) => setST({ gammaM1: x })} />
+                  </Field>
+                </div>
+
+                <div className="col-aside">
+                  {!ac.proprieta && profiloIgnoto()}
+                  <Output
+                    titolo="Proprietà della sezione"
+                    voci={[
+                      { k: 'A', v: fx(ac.proprieta?.A ?? 0, 1), u: 'cm²' },
+                      { k: 'h × b', v: `${fx(ac.proprieta?.h ?? 0, 0)} × ${fx(ac.proprieta?.b ?? 0, 0)}`, u: 'mm' },
+                      { k: 'peso', v: fx(ac.proprieta ? pesoProfilo(ac.proprieta) : 0, 1), u: 'kg/m' },
+                      { k: 'Ix', v: fx(ac.proprieta?.Ix ?? 0, 0), u: 'cm⁴' },
+                      { k: 'Imin', v: fx(ac.proprieta?.Imin ?? 0, 1), u: 'cm⁴' },
+                      { k: 'Wx,el', v: fx(ac.proprieta?.Wx ?? 0, 1), u: 'cm³' },
+                      { k: 'Wx,pl', v: fx(ac.proprieta?.Wplx ?? 0, 1), u: 'cm³' },
+                      { k: 'Avz', v: fx(ac.proprieta?.Avz ?? 0, 2), u: 'cm²' },
+                      { k: 'fyd', v: fx(ac.fyd, 0), u: 'N/mm²' },
+                      {
+                        k: 'classe',
+                        v: `${lt.classe.classe} in flessione, ${pu.classe.classe} in compressione`,
+                      },
+                    ]}
+                  />
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* ── gruppo 1: le verifiche elastiche di predimensionamento ────── */}
+          <div className="section-title">Verifiche elastiche — predimensionamento</div>
+
+          <Accordion
+            id="ver-ac-flessione"
+            title="Flessione elastica"
+            hint="MEd ≤ MRd = Wel,x · fyd — §4.2.4.1.2"
+            badge={rigaEsito(ac.esitoFlessione)}
+          >
             <div className="panel-split">
               <div className="fields">
-                {scegliProfilo('ac')}
-
-                <Field id="ac_gm0" tab="verifiche" label="Coefficiente parziale γM0" unit="—">
-                  <NumInput id="ac_gm0" value={v.acciaio.gammaM0} onChange={(x) => setAC({ gammaM0: x })} />
-                </Field>
-
                 <Field
                   id="ac_MEd"
                   tab="verifiche"
                   label="Momento sollecitante MEd"
                   unit="kNm"
-                  dettaglio={{ formula: `σ = MEd/Wx = ${fx(ac.sigmaM)} N/mm²`, ref: 'NTC2018 §4.2.4.1.2' }}
+                  dettaglio={{ formula: `σ = MEd/Wel,x = ${fx(ac.sigmaM)} N/mm²`, ref: 'NTC2018 §4.2.4.1.2' }}
                 >
                   <NumInput id="ac_MEd" value={v.acciaio.MEd} onChange={(x) => setAC({ MEd: x })} />
                 </Field>
+                <p className="note campo-largo">
+                  Verifica di sola sezione, con il modulo elastico: non tiene conto dello
+                  sbandamento laterale, che sta nella scheda «Instabilità flesso-torsionale».
+                </p>
+              </div>
+              <div className="col-aside">
+                <Output
+                  titolo="Flessione"
+                  voci={[
+                    { k: 'MEd', v: fx(num(v.acciaio.MEd), 1), u: 'kNm' },
+                    { k: 'MRd', v: fx(ac.MRd, 1), u: 'kNm' },
+                    { k: 'σ', v: fx(ac.sigmaM, 1), u: 'N/mm²' },
+                    { k: 'MEd/MRd', v: fx(ac.esitoFlessione.sfruttamento, 3) },
+                  ]}
+                />
+              </div>
+            </div>
+          </Accordion>
 
+          <Accordion
+            id="ver-ac-taglio"
+            title="Taglio elastico"
+            hint="VEd ≤ VRd = Avz · fyd/√3 — §4.2.4.1.2.4"
+            badge={rigaEsito(ac.esitoTaglio)}
+          >
+            <div className="panel-split">
+              <div className="fields">
+                <Field
+                  id="ac_VEd"
+                  tab="verifiche"
+                  label="Taglio sollecitante VEd"
+                  unit="kN"
+                  origine={origineVEd}
+                  dettaglio={{ formula: `τ = VEd/Avz = ${fx(ac.tau)} N/mm²`, ref: 'NTC2018 §4.2.4.1.2.4' }}
+                >
+                  <NumInput
+                    id="ac_VEd"
+                    value={inp.acciaio.VEd}
+                    disabled={collegato}
+                    onChange={(x) => setAC({ VEd: x })}
+                  />
+                </Field>
+                <p className="note campo-largo">
+                  L’area resistente è quella dell’anima: il taglio parallelo all’asse forte lo
+                  porta lei, le ali quasi niente.
+                </p>
+              </div>
+              <div className="col-aside">
+                <Output
+                  titolo="Taglio"
+                  voci={[
+                    { k: 'VEd', v: fx(num(inp.acciaio.VEd), 1), u: 'kN' },
+                    { k: 'VRd', v: fx(ac.VRd, 1), u: 'kN' },
+                    { k: 'τ', v: fx(ac.tau, 1), u: 'N/mm²' },
+                    { k: 'VEd/VRd', v: fx(ac.esitoTaglio.sfruttamento, 3) },
+                  ]}
+                />
+              </div>
+            </div>
+          </Accordion>
+
+          <Accordion
+            id="ver-ac-compressione"
+            title="Compressione elastica"
+            hint="NEd ≤ NRd = A · fyd, senza instabilità — §4.2.4.1.2"
+            badge={rigaEsito(ac.esitoCompressione)}
+          >
+            <div className="panel-split">
+              <div className="fields">
                 <Field
                   id="ac_NEd"
                   tab="verifiche"
@@ -977,42 +1195,269 @@ export default function Verifiche() {
                 >
                   <NumInput id="ac_NEd" value={v.acciaio.NEd} onChange={(x) => setAC({ NEd: x })} />
                 </Field>
+                <p
+                  className="note campo-largo"
+                  style={
+                    pu.esito.sfruttamento > ac.esitoCompressione.sfruttamento
+                      ? { color: 'var(--warn)' }
+                      : undefined
+                  }
+                >
+                  È la resistenza della sola sezione. Su un’asta reale comanda quasi sempre
+                  l’instabilità: qui Nb,Rd vale {fx(pu.NbRd, 1)} kN contro NRd = {fx(ac.NRd, 1)} kN.
+                </p>
+              </div>
+              <div className="col-aside">
+                <Output
+                  titolo="Compressione"
+                  voci={[
+                    { k: 'NEd', v: fx(num(v.acciaio.NEd), 1), u: 'kN' },
+                    { k: 'NRd (sezione)', v: fx(ac.NRd, 1), u: 'kN' },
+                    { k: 'Nb,Rd (instabilità)', v: fx(pu.NbRd, 1), u: 'kN' },
+                    { k: 'σ', v: fx(ac.sigmaN, 1), u: 'N/mm²' },
+                    { k: 'NEd/NRd', v: fx(ac.esitoCompressione.sfruttamento, 3) },
+                  ]}
+                />
+              </div>
+            </div>
+          </Accordion>
+
+          <Accordion
+            id="ver-ac-deformazione"
+            title="Deformazione (SLE)"
+            hint="f ≤ L/limite — §4.2.4.2.1, tab. 4.2.X"
+            badge={rigaEsito(df.esito)}
+          >
+            <div className="panel-split">
+              <div className="fields">
+                <Field
+                  id="df_schema"
+                  tab="verifiche"
+                  label="Schema statico"
+                  dettaglio={{
+                    formula: df.schema?.concentrato
+                      ? `f = ${fx((df.schema?.k ?? 0) * 1000, 2)}/1000 · P·L³/(E·Ix)`
+                      : `f = ${fx((df.schema?.k ?? 0) * 1000, 2)}/1000 · q·L⁴/(E·Ix)`,
+                    ref: 'Soluzioni elastiche in forma chiusa',
+                  }}
+                >
+                  <select
+                    id="df_schema"
+                    className="input"
+                    value={v.deformazione.schema}
+                    onChange={(e) => setDF({ schema: e.target.value })}
+                  >
+                    {SCHEMI_FRECCIA.map((sc) => (
+                      <option key={sc.id} value={sc.id}>
+                        {sc.label}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+
+                <Field id="df_L" tab="verifiche" label="Luce o sbalzo L" unit="m">
+                  <NumInput id="df_L" value={v.deformazione.L} onChange={(x) => setDF({ L: x })} />
+                </Field>
 
                 <Field
-                  id="ac_VEd"
+                  id="df_q"
                   tab="verifiche"
-                  label="Taglio sollecitante VEd"
-                  unit="kN"
-                  origine={origineVEd}
-                  dettaglio={{ formula: `τ = VEd/Avz = ${fx(ac.tau)} N/mm²`, ref: 'NTC2018 §4.2.4.1.3' }}
+                  label={df.schema?.concentrato ? 'Forza di esercizio P' : 'Carico di esercizio q'}
+                  unit={df.schema?.concentrato ? 'kN' : 'kN/m'}
+                  dettaglio={{
+                    formula: 'Carico raro o quasi permanente, non quello di progetto agli SLU',
+                    ref: 'NTC2018 §2.5.3',
+                  }}
                 >
-                  <NumInput
-                    id="ac_VEd"
-                    value={inp.acciaio.VEd}
-                    disabled={collegato}
-                    onChange={(x) => setAC({ VEd: x })}
-                  />
+                  <NumInput id="df_q" value={v.deformazione.q} onChange={(x) => setDF({ q: x })} />
+                </Field>
+
+                <Field
+                  id="df_uso"
+                  tab="verifiche"
+                  label="Destinazione (limite di tabella)"
+                  dettaglio={{
+                    formula: `δmax ≤ L/${v.deformazione.limite} = ${fx(df.fAmmessa, 1)} mm`,
+                    ref: 'NTC2018 §4.2.4.2.1, tab. 4.2.X',
+                  }}
+                >
+                  <select
+                    id="df_uso"
+                    className="input"
+                    value={v.deformazione.limite}
+                    onChange={(e) => setDF({ limite: e.target.value })}
+                  >
+                    {LIMITI_FRECCIA.map((l) => (
+                      <option key={l.id} value={String(l.limite)}>
+                        {l.label} — L/{l.limite}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+
+                <Field id="df_lim" tab="verifiche" label="Limite L/…, scritto a mano" unit="—">
+                  <NumInput id="df_lim" value={v.deformazione.limite} onChange={(x) => setDF({ limite: x })} />
                 </Field>
               </div>
 
               <div className="col-aside">
-                {!ac.proprieta && (
-                  <p className="note" style={{ color: 'var(--warn)' }}>
-                    Profilo non riconosciuto: verificare la taglia selezionata.
-                  </p>
-                )}
                 <Output
-                  titolo="Proprietà della sezione"
+                  titolo="Deformazione"
                   voci={[
-                    { k: 'A', v: fx(ac.proprieta?.A ?? 0, 1), u: 'cm²' },
-                    { k: 'h × b', v: `${fx(ac.proprieta?.h ?? 0, 0)} × ${fx(ac.proprieta?.b ?? 0, 0)}`, u: 'mm' },
-                    { k: 'Ix', v: fx(ac.proprieta?.Ix ?? 0, 0), u: 'cm⁴' },
-                    { k: 'Wx,el', v: fx(ac.proprieta?.Wx ?? 0, 1), u: 'cm³' },
-                    { k: 'Avz', v: fx(ac.proprieta?.Avz ?? 0, 2), u: 'cm²' },
-                    { k: 'fyd', v: fx(ac.fyd, 0), u: 'N/mm²' },
-                    { k: 'classe', v: `${lt.classe.classe} fless. / ${pu.classe.classe} compr.` },
+                    { k: 'Ix', v: fx(df.proprieta?.Ix ?? 0, 0), u: 'cm⁴' },
+                    { k: 'f', v: fx(df.f, 1), u: 'mm' },
+                    { k: 'f ammessa', v: fx(df.fAmmessa, 1), u: 'mm' },
+                    { k: 'L/f', v: Number.isFinite(df.LsuF) ? fx(df.LsuF, 0) : '∞' },
+                    { k: 'f/f amm', v: fx(df.esito.sfruttamento, 3) },
                   ]}
                 />
+                <p className="note" style={{ marginTop: 10 }}>
+                  Freccia elastica in forma chiusa sull’inerzia dell’asse forte: serve a
+                  scegliere l’altezza del profilo, non sostituisce il calcolo della struttura
+                  reale con i suoi vincoli.
+                </p>
+              </div>
+            </div>
+          </Accordion>
+
+          {/* ── gruppo 2: la stabilità ────────────────────────────────────── */}
+          <div className="section-title">Verifiche di stabilità</div>
+
+          <Accordion
+            id="ver-ac-punta"
+            title="Instabilità di punta"
+            hint="NEd ≤ Nb,Rd = χ · A · fyk/γM1 — §4.2.4.1.3.1"
+            badge={rigaEsito(pu.esito)}
+          >
+            <div className="esito-testa">
+              <Verdict ok={pu.esito.ok} margine={pu.esito.margine} />
+              <Bar sfruttamento={pu.esito.sfruttamento} />
+              <span className="note">
+                Instabilità flessionale dell’asta compressa — Nb,Rd = χ · A · fyk / γM1 · NTC2018
+                §4.2.4.1.3.1
+              </span>
+            </div>
+
+            <div className="panel-split">
+              <div className="fields">
+                <Field
+                  id="pu_NEd"
+                  tab="verifiche"
+                  label="Compressione NEd (compressione &gt; 0)"
+                  unit="kN"
+                  origine={<Origine testo="condiviso con le altre verifiche in acciaio" />}
+                  dettaglio={{
+                    formula: `NEd / Nb,Rd = ${fx(pu.esito.sfruttamento, 3)}`,
+                    ref: 'NTC2018 §4.2.4.1.3.1',
+                  }}
+                >
+                  <NumInput id="pu_NEd" value={v.acciaio.NEd} onChange={(x) => setAC({ NEd: x })} />
+                </Field>
+
+                <div className="kicker campo-largo" style={{ marginTop: 4 }}>
+                  Sbandamento nel piano y-y (asse forte)
+                </div>
+
+                <Field
+                  id="pu_Ly"
+                  tab="verifiche"
+                  label="Lunghezza dell’asta L"
+                  unit="mm"
+                  dettaglio={{
+                    formula: `Lcr,y = βy · Ly = ${fx(pu.y.beta, 2)} · ${v.stabilita.Ly} = ${fx(pu.y.Lcr, 0)} mm`,
+                    ref: 'NTC2018 §4.2.4.1.3.1',
+                  }}
+                >
+                  <NumInput id="pu_Ly" value={v.stabilita.Ly} onChange={(x) => setST({ Ly: x })} />
+                </Field>
+
+                {campiBeta('y')}
+
+                <div className="kicker campo-largo" style={{ marginTop: 4 }}>
+                  Sbandamento nel piano z-z (asse debole)
+                </div>
+
+                <Field
+                  id="pu_Lz"
+                  tab="verifiche"
+                  label="Lunghezza dell’asta L"
+                  unit="mm"
+                  dettaglio={{
+                    formula: `Lcr,z = βz · Lz = ${fx(pu.z.beta, 2)} · ${v.stabilita.Lz} = ${fx(pu.z.Lcr, 0)} mm`,
+                    ref: 'NTC2018 §4.2.4.1.3.1',
+                  }}
+                >
+                  <NumInput id="pu_Lz" value={v.stabilita.Lz} onChange={(x) => setST({ Lz: x })} />
+                </Field>
+
+                {campiBeta('z')}
+
+                {TUBI.includes(v.acciaio.tipoProfilo) && scegliFormatura('pu')}
+
+              </div>
+
+              <div className="col-aside">
+                <div className="coppia-disegni">
+                  {disegnoBeta('y')}
+                  {disegnoBeta('z')}
+                </div>
+                {!pu.proprieta && profiloIgnoto()}
+                {avvisoClasse(pu.classe, 'compressione')}
+                {(pu.y.troppoSnella || pu.z.troppoSnella) && (
+                  <p className="note" style={{ color: 'var(--warn)' }}>
+                    Snellezza oltre 200 ({fx(Math.max(pu.y.lambda, pu.z.lambda), 0)}): fuori
+                    dalla buona pratica per un’asta portante, va accorciata o trattenuta.
+                  </p>
+                )}
+
+                <div className="table-scroll">
+                  <table className="table">
+                    <thead>
+                      <tr>
+                        <th>Asse</th>
+                        <th className="num sym">Lcr</th>
+                        <th className="num sym">λ</th>
+                        <th className="num sym">λ̄</th>
+                        <th>curva</th>
+                        <th className="num sym">χ</th>
+                        <th className="num sym">Nb,Rd</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {[pu.y, pu.z].map((a) => (
+                        <tr
+                          key={a.asse}
+                          style={pu.governa === a.asse ? { color: 'var(--color-accent-300)' } : undefined}
+                        >
+                          <td>{a.asse === 'y' ? 'y-y (forte)' : 'z-z (debole)'}</td>
+                          <td className="num">{fx(a.Lcr, 0)} mm</td>
+                          <td className="num">{fx(a.lambda, 1)}</td>
+                          <td className="num">{fx(a.lambdaAd, 3)}</td>
+                          <td>
+                            {a.curva} ({fx(a.alfa, 2)})
+                          </td>
+                          <td className="num">{fx(a.chi, 3)}</td>
+                          <td className="num">{fx(a.NbRd, 1)} kN</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div style={{ marginTop: 12 }}>
+                  <Output
+                    titolo="Instabilità di punta"
+                    voci={[
+                      { k: 'λ1', v: fx(pu.lambda1, 2) },
+                      { k: 'Ncr,y', v: fx(pu.y.Ncr, 0), u: 'kN' },
+                      { k: 'Ncr,z', v: fx(pu.z.Ncr, 0), u: 'kN' },
+                      { k: 'governa', v: pu.governa === 'y' ? 'asse y-y' : 'asse z-z' },
+                      { k: 'χmin', v: fx(pu.chiMin, 3) },
+                      { k: 'Nc,Rd', v: fx(pu.NcRd, 1), u: 'kN' },
+                      { k: 'Nb,Rd', v: fx(pu.NbRd, 1), u: 'kN' },
+                    ]}
+                  />
+                </div>
 
                 <div className="table-scroll" style={{ marginTop: 12 }}>
                   <table className="table">
@@ -1025,28 +1470,12 @@ export default function Verifiche() {
                       </tr>
                     </thead>
                     <tbody>
-                      <tr style={attiva.id === 'acciaio-flessione' ? { color: 'var(--color-accent-300)' } : undefined}>
-                        <td>MEd ≤ MRd</td>
-                        <td className="num">{fx(num(v.acciaio.MEd), 1)} kNm</td>
-                        <td className="num">{fx(ac.MRd, 1)} kNm</td>
+                      <tr style={{ color: 'var(--color-accent-300)' }}>
+                        <td>NEd ≤ Nb,Rd</td>
+                        <td className="num">{fx(Math.max(num(v.acciaio.NEd), 0), 1)} kN</td>
+                        <td className="num">{fx(pu.NbRd, 1)} kN</td>
                         <td>
-                          <Verdict ok={ac.esitoFlessione.ok} margine={ac.esitoFlessione.margine} />
-                        </td>
-                      </tr>
-                      <tr style={attiva.id === 'acciaio-compressione' ? { color: 'var(--color-accent-300)' } : undefined}>
-                        <td>NEd ≤ NRd</td>
-                        <td className="num">{fx(num(v.acciaio.NEd), 1)} kN</td>
-                        <td className="num">{fx(ac.NRd, 1)} kN</td>
-                        <td>
-                          <Verdict ok={ac.esitoCompressione.ok} margine={ac.esitoCompressione.margine} />
-                        </td>
-                      </tr>
-                      <tr style={attiva.id === 'acciaio-taglio' ? { color: 'var(--color-accent-300)' } : undefined}>
-                        <td>VEd ≤ VRd</td>
-                        <td className="num">{fx(num(inp.acciaio.VEd), 1)} kN</td>
-                        <td className="num">{fx(ac.VRd, 1)} kN</td>
-                        <td>
-                          <Verdict ok={ac.esitoTaglio.ok} margine={ac.esitoTaglio.margine} />
+                          <Verdict ok={pu.esito.ok} margine={pu.esito.margine} />
                         </td>
                       </tr>
                     </tbody>
@@ -1054,13 +1483,14 @@ export default function Verifiche() {
                 </div>
               </div>
             </div>
-          </div>
-        </section>
-      )}
+          </Accordion>
 
-      {v.materiale === 'acciaio' && attiva?.id === 'acciaio-flesso-torsionale' && (
-        <section className="panel" id="pannello-verifica" role="tabpanel" aria-labelledby="tab-acciaio-flesso-torsionale">
-          <div className="panel-body" style={{ paddingTop: 14 }}>
+          <Accordion
+            id="ver-ac-lt"
+            title="Instabilità flesso-torsionale"
+            hint="MEd ≤ Mb,Rd = χLT · Wy · fyk/γM1 — §4.2.4.1.3.2"
+            badge={rigaEsito(lt.esito)}
+          >
             <div className="esito-testa">
               <Verdict ok={lt.esito.ok} margine={lt.esito.margine} />
               <Bar sfruttamento={lt.esito.sfruttamento} />
@@ -1073,8 +1503,6 @@ export default function Verifiche() {
 
             <div className="panel-split">
               <div className="fields">
-                {scegliProfilo('lt')}
-
                 <Field
                   id="lt_MEd"
                   tab="verifiche"
@@ -1226,13 +1654,6 @@ export default function Verifiche() {
                   {scegliModulo('lt_modulo')}
                 </Field>
 
-                <Field id="lt_gm1" tab="verifiche" label="Coefficiente parziale γM1" unit="—">
-                  <NumInput
-                    id="lt_gm1"
-                    value={v.stabilita.gammaM1}
-                    onChange={(x) => setST({ gammaM1: x })}
-                  />
-                </Field>
 
                 <Field
                   id="lt_modoMcr"
@@ -1352,193 +1773,14 @@ export default function Verifiche() {
                 </div>
               </div>
             </div>
-          </div>
-        </section>
-      )}
+          </Accordion>
 
-      {v.materiale === 'acciaio' && attiva?.id === 'acciaio-punta' && (
-        <section className="panel" id="pannello-verifica" role="tabpanel" aria-labelledby="tab-acciaio-punta">
-          <div className="panel-body" style={{ paddingTop: 14 }}>
-            <div className="esito-testa">
-              <Verdict ok={pu.esito.ok} margine={pu.esito.margine} />
-              <Bar sfruttamento={pu.esito.sfruttamento} />
-              <span className="note">
-                Instabilità flessionale dell’asta compressa — Nb,Rd = χ · A · fyk / γM1 · NTC2018
-                §4.2.4.1.3.1
-              </span>
-            </div>
-
-            <div className="panel-split">
-              <div className="fields">
-                {scegliProfilo('pu')}
-
-                <Field
-                  id="pu_NEd"
-                  tab="verifiche"
-                  label="Compressione NEd (compressione &gt; 0)"
-                  unit="kN"
-                  origine={<Origine testo="condiviso con le altre verifiche in acciaio" />}
-                  dettaglio={{
-                    formula: `NEd / Nb,Rd = ${fx(pu.esito.sfruttamento, 3)}`,
-                    ref: 'NTC2018 §4.2.4.1.3.1',
-                  }}
-                >
-                  <NumInput id="pu_NEd" value={v.acciaio.NEd} onChange={(x) => setAC({ NEd: x })} />
-                </Field>
-
-                <Field
-                  id="pu_Ly"
-                  tab="verifiche"
-                  label="Lunghezza dell’asta nel piano y-y"
-                  unit="mm"
-                  dettaglio={{
-                    formula: `Lcr,y = βy · Ly = ${fx(pu.y.Lcr, 0)} mm`,
-                    ref: 'NTC2018 §4.2.4.1.3.1',
-                  }}
-                >
-                  <NumInput id="pu_Ly" value={v.stabilita.Ly} onChange={(x) => setST({ Ly: x })} />
-                </Field>
-
-                <Field
-                  id="pu_by"
-                  tab="verifiche"
-                  label="Coefficiente di libera inflessione βy"
-                  unit="—"
-                  dettaglio={{
-                    formula: '1 = cerniera-cerniera; 0.7 = incastro-cerniera; 0.5 = incastro-incastro; 2 = mensola',
-                    ref: 'NTC2018 §4.2.4.1.3.1',
-                  }}
-                >
-                  <NumInput id="pu_by" value={v.stabilita.betaY} onChange={(x) => setST({ betaY: x })} />
-                </Field>
-
-                <Field
-                  id="pu_Lz"
-                  tab="verifiche"
-                  label="Lunghezza dell’asta nel piano z-z"
-                  unit="mm"
-                  dettaglio={{
-                    formula: `Lcr,z = βz · Lz = ${fx(pu.z.Lcr, 0)} mm`,
-                    ref: 'NTC2018 §4.2.4.1.3.1',
-                  }}
-                >
-                  <NumInput id="pu_Lz" value={v.stabilita.Lz} onChange={(x) => setST({ Lz: x })} />
-                </Field>
-
-                <Field
-                  id="pu_bz"
-                  tab="verifiche"
-                  label="Coefficiente di libera inflessione βz"
-                  unit="—"
-                  dettaglio={{
-                    formula: 'Spesso più basso di βy: i controventi trattengono l’asse debole più spesso',
-                    ref: 'NTC2018 §4.2.4.1.3.1',
-                  }}
-                >
-                  <NumInput id="pu_bz" value={v.stabilita.betaZ} onChange={(x) => setST({ betaZ: x })} />
-                </Field>
-
-                {TUBI.includes(v.acciaio.tipoProfilo) && scegliFormatura('pu')}
-
-                <Field id="pu_gm1" tab="verifiche" label="Coefficiente parziale γM1" unit="—">
-                  <NumInput
-                    id="pu_gm1"
-                    value={v.stabilita.gammaM1}
-                    onChange={(x) => setST({ gammaM1: x })}
-                  />
-                </Field>
-              </div>
-
-              <div className="col-aside">
-                {!pu.proprieta && profiloIgnoto()}
-                {avvisoClasse(pu.classe, 'compressione')}
-                {(pu.y.troppoSnella || pu.z.troppoSnella) && (
-                  <p className="note" style={{ color: 'var(--warn)' }}>
-                    Snellezza oltre 200 ({fx(Math.max(pu.y.lambda, pu.z.lambda), 0)}): fuori
-                    dalla buona pratica per un’asta portante, va accorciata o trattenuta.
-                  </p>
-                )}
-
-                <div className="table-scroll">
-                  <table className="table">
-                    <thead>
-                      <tr>
-                        <th>Asse</th>
-                        <th className="num sym">Lcr</th>
-                        <th className="num sym">λ</th>
-                        <th className="num sym">λ̄</th>
-                        <th>curva</th>
-                        <th className="num sym">χ</th>
-                        <th className="num sym">Nb,Rd</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {[pu.y, pu.z].map((a) => (
-                        <tr
-                          key={a.asse}
-                          style={pu.governa === a.asse ? { color: 'var(--color-accent-300)' } : undefined}
-                        >
-                          <td>{a.asse === 'y' ? 'y-y (forte)' : 'z-z (debole)'}</td>
-                          <td className="num">{fx(a.Lcr, 0)} mm</td>
-                          <td className="num">{fx(a.lambda, 1)}</td>
-                          <td className="num">{fx(a.lambdaAd, 3)}</td>
-                          <td>
-                            {a.curva} ({fx(a.alfa, 2)})
-                          </td>
-                          <td className="num">{fx(a.chi, 3)}</td>
-                          <td className="num">{fx(a.NbRd, 1)} kN</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-
-                <div style={{ marginTop: 12 }}>
-                  <Output
-                    titolo="Instabilità di punta"
-                    voci={[
-                      { k: 'λ1', v: fx(pu.lambda1, 2) },
-                      { k: 'Ncr,y', v: fx(pu.y.Ncr, 0), u: 'kN' },
-                      { k: 'Ncr,z', v: fx(pu.z.Ncr, 0), u: 'kN' },
-                      { k: 'governa', v: pu.governa === 'y' ? 'asse y-y' : 'asse z-z' },
-                      { k: 'χmin', v: fx(pu.chiMin, 3) },
-                      { k: 'Nc,Rd', v: fx(pu.NcRd, 1), u: 'kN' },
-                      { k: 'Nb,Rd', v: fx(pu.NbRd, 1), u: 'kN' },
-                    ]}
-                  />
-                </div>
-
-                <div className="table-scroll" style={{ marginTop: 12 }}>
-                  <table className="table">
-                    <thead>
-                      <tr>
-                        <th>Verifica</th>
-                        <th className="num">Domanda</th>
-                        <th className="num">Capacità</th>
-                        <th>Esito</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr style={{ color: 'var(--color-accent-300)' }}>
-                        <td>NEd ≤ Nb,Rd</td>
-                        <td className="num">{fx(Math.max(num(v.acciaio.NEd), 0), 1)} kN</td>
-                        <td className="num">{fx(pu.NbRd, 1)} kN</td>
-                        <td>
-                          <Verdict ok={pu.esito.ok} margine={pu.esito.margine} />
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
-      )}
-
-      {v.materiale === 'acciaio' && attiva?.id === 'acciaio-combinata' && (
-        <section className="panel" id="pannello-verifica" role="tabpanel" aria-labelledby="tab-acciaio-combinata">
-          <div className="panel-body" style={{ paddingTop: 14 }}>
+          <Accordion
+            id="ver-ac-combinata"
+            title="Presso-flessione combinata"
+            hint="Somma dei tre termini ≤ 1 — Circolare §C4.2.4.1.3.3"
+            badge={rigaEsito(pf.esito)}
+          >
             <div className="esito-testa">
               <Verdict ok={pf.esito.ok} margine={pf.esito.margine} />
               <Bar sfruttamento={pf.sfruttamento} />
@@ -1549,8 +1791,6 @@ export default function Verifiche() {
 
             <div className="panel-split">
               <div className="fields">
-                {scegliProfilo('pf')}
-
                 <Field
                   id="pf_NEd"
                   tab="verifiche"
@@ -1607,7 +1847,7 @@ export default function Verifiche() {
                   {scegliModulo('pf_modulo')}
                 </Field>
 
-                <p className="note">
+                <p className="note campo-largo">
                   Le lunghezze di libera inflessione e il tratto non trattenuto sono quelli delle
                   schede «Instabilità di punta» e «Instabilità flesso-torsionale»: questa verifica
                   ne mette insieme i risultati.
@@ -1683,9 +1923,82 @@ export default function Verifiche() {
                 </div>
               </div>
             </div>
-          </div>
-        </section>
+          </Accordion>
+
+          <Accordion
+            id="ver-ac-guida-beta"
+            title="Come si sceglie β"
+            hint="Schemi di vincolo, valori consigliati e colonne di telaio"
+          >
+            <p className="note" style={{ marginBottom: 12 }}>
+              β dice quanto è lunga l’asta <em>ai fini dell’instabilità</em>: Lcr = β·L è la
+              distanza fra due punti di flesso della deformata di sbandamento, cioè il pezzo di
+              asta che si comporta come un’asta di Eulero incernierata agli estremi. Conta più di
+              ogni altro dato, perché il carico critico va con 1/(β·L)²: fra β = 0.7 e β = 2 il
+              carico critico si divide per otto.
+            </p>
+            <p className="note" style={{ marginBottom: 12 }}>
+              La domanda da farsi è sempre la stessa, e sono due: <strong>gli estremi ruotano?</strong>{' '}
+              e <strong>possono spostarsi l’uno rispetto all’altro?</strong> La seconda pesa più
+              della prima — un telaio non controventato non scende mai sotto β = 1, per quanto
+              rigidi siano i nodi.
+            </p>
+
+            <div className="griglia-schemi">
+              {SCHEMI_VINCOLI.map((sv) => (
+                <div key={sv.id} className="scheda-schema">
+                  <SchemaVincoli schema={sv.id} beta={sv.consigliato} />
+                  <div className="titolo">{sv.label}</div>
+                  <div className="valori">
+                    β teorico {sv.teorico.toFixed(2)} · <strong>consigliato {sv.consigliato.toFixed(2)}</strong>
+                  </div>
+                  <div className="nota">{sv.nota}</div>
+                </div>
+              ))}
+            </div>
+
+            <p className="note" style={{ marginTop: 14 }}>
+              I valori <strong>consigliati</strong> sono più alti dei teorici perché un incastro
+              vero non è quello del disegno: una base di colonna ruota, un nodo bullonato cede. Il
+              prospetto è quello classico di CNR-UNI 10011, lo stesso della tabella C-A-7.1 del
+              commentario AISC, riportato da Ballio e Mazzolani in «Strutture in acciaio». In
+              progetto si usano i consigliati; i teorici valgono solo se il vincolo è davvero
+              quello ideale.
+            </p>
+
+            <div className="kicker" style={{ marginTop: 16 }}>Colonne di telaio</div>
+            <p className="note" style={{ marginTop: 8 }}>
+              Per una colonna di telaio i vincoli non sono né cerniere né incastri: sono le travi
+              che le arrivano ai nodi, e la loro rigidezza. La UNI EN 1993-1-1 (appendice E della
+              ENV, formule di Wood) le riassume in due <strong>fattori di distribuzione</strong>:
+            </p>
+            <pre className="formula-blocco">{`η = Kc / (Kc + ΣKtravi)      con K = I / L
+
+η = 0   travi infinitamente rigide → incastro perfetto
+η = 1   nessuna trave → cerniera
+
+nodi fissi (telaio controventato):
+  β = [1 + 0.145·(η1+η2) − 0.265·η1·η2] / [2 − 0.364·(η1+η2) − 0.247·η1·η2]
+
+nodi spostabili (telaio non controventato):
+  β = √{ [1 − 0.2·(η1+η2) − 0.12·η1·η2] / [1 − 0.8·(η1+η2) + 0.6·η1·η2] }`}</pre>
+            <p className="note" style={{ marginTop: 8 }}>
+              Agli estremi del campo tornano i casi elementari: η1 = η2 = 0 dà 0.5 a nodi fissi e
+              1.0 a nodi spostabili, η1 = η2 = 1 dà 1.0 a nodi fissi e infinito a nodi spostabili
+              — un telaio spostabile su due cerniere è un cinematismo, e la formula lo dice.
+            </p>
+            <p className="note" style={{ marginTop: 8 }}>
+              Un’ultima cosa che si dimentica spesso: <strong>βy e βz sono due numeri diversi</strong>.
+              Una colonna di capannone è un telaio nel piano dell’orditura (β &gt; 1) ed è
+              controventata fuori piano, dove i correnti la trattengono ogni pochi metri: lì Lz è
+              corta e β vale 1. Le due colonne di dati qui sopra vanno compilate separatamente.
+            </p>
+          </Accordion>
+        </>
       )}
+
+
+
 
       {(v.materiale === 'legno' || v.materiale === 'muratura') && (
         <div className="placeholder">

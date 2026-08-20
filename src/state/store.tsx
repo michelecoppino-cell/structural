@@ -16,18 +16,22 @@ import {
 } from '../calc/sollecitazioni';
 import {
   ACCIAIO_SEZIONE_DEFAULT,
+  DEFORMAZIONE_DEFAULT,
   FLESSIONE_CA_DEFAULT,
   TAGLIO_ARMATO_DEFAULT,
   TAGLIO_NON_ARMATO_DEFAULT,
   verificaAcciaioSezione,
+  verificaDeformazione,
   verificaFlessioneCA,
   verificaTaglioArmato,
   verificaTaglioNonArmato,
   type InputAcciaioSezione,
+  type InputDeformazione,
   type InputFlessioneCA,
   type InputTaglioArmato,
   type InputTaglioNonArmato,
   type RisultatiAcciaioSezione,
+  type RisultatiDeformazione,
   type RisultatiFlessioneCA,
   type RisultatiTaglioArmato,
   type RisultatiTaglioNonArmato,
@@ -103,6 +107,8 @@ export interface AppState {
     acciaio: InputAcciaioSezione;
     /** Dati delle verifiche di stabilità della membratura in acciaio. */
     stabilita: InputStabilita;
+    /** Controllo di deformabilità della trave in acciaio (SLE). */
+    deformazione: InputDeformazione;
     /** VEd delle verifiche allineato al taglio calcolato in Sollecitazioni. */
     collegaSollecitazioni: boolean;
   };
@@ -189,6 +195,7 @@ export const STATO_INIZIALE: AppState = {
     flessioneCA: FLESSIONE_CA_DEFAULT,
     acciaio: ACCIAIO_SEZIONE_DEFAULT,
     stabilita: STABILITA_DEFAULT,
+    deformazione: DEFORMAZIONE_DEFAULT,
     collegaSollecitazioni: true,
   },
   costi: VOCI_COSTO_DEFAULT.map((v) => ({ ...v })),
@@ -254,6 +261,7 @@ export type Action =
   | { type: 'flessioneCA'; patch: Partial<InputFlessioneCA> }
   | { type: 'acciaioSezione'; patch: Partial<InputAcciaioSezione> }
   | { type: 'stabilita'; patch: Partial<InputStabilita> }
+  | { type: 'deformazione'; patch: Partial<InputDeformazione> }
   | { type: 'costi'; voci: VoceCosto[] }
   | { type: 'calcolatrice'; patch: Partial<StatoCalcolatrice> }
   | { type: 'quaderno'; patch: Partial<StatoQuaderno> }
@@ -316,6 +324,14 @@ export function reducer(state: AppState, action: Action): AppState {
         verifiche: {
           ...state.verifiche,
           stabilita: { ...state.verifiche.stabilita, ...action.patch },
+        },
+      };
+    case 'deformazione':
+      return {
+        ...state,
+        verifiche: {
+          ...state.verifiche,
+          deformazione: { ...state.verifiche.deformazione, ...action.patch },
         },
       };
     case 'costi':
@@ -453,6 +469,7 @@ export function migra(raw: Partial<AppState>): AppState {
       flessioneCA: { ...base.verifiche.flessioneCA, ...raw.verifiche?.flessioneCA },
       acciaio: { ...base.verifiche.acciaio, ...raw.verifiche?.acciaio },
       stabilita: { ...base.verifiche.stabilita, ...raw.verifiche?.stabilita },
+      deformazione: { ...base.verifiche.deformazione, ...raw.verifiche?.deformazione },
     },
     // i file salvati prima del campo `codice` non ce l'hanno: si riempie vuoto,
     // che è esattamente quello che vuol dire («prezzo senza voce di prezzario»)
@@ -622,6 +639,7 @@ export interface Calcoli {
   instabilitaLT: RisultatiInstabilitaLT;
   instabilitaPunta: RisultatiInstabilitaPunta;
   pressoflessione: RisultatiPressoflessione;
+  deformazione: RisultatiDeformazione;
   /** Taglio massimo in valore assoluto dalle Sollecitazioni (kN). */
   VEdSollecitazioni: number;
 }
@@ -705,6 +723,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [state.verifiche.acciaio, state.verifiche.stabilita, instabilitaLT, instabilitaPunta],
   );
 
+  const deformazione = useMemo(
+    () => verificaDeformazione(state.verifiche.acciaio, state.verifiche.deformazione),
+    [state.verifiche.acciaio, state.verifiche.deformazione],
+  );
+
   const calcoli = useMemo<Calcoli>(
     () => ({
       azioni,
@@ -716,6 +739,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       instabilitaLT,
       instabilitaPunta,
       pressoflessione,
+      deformazione,
       VEdSollecitazioni,
     }),
     [
@@ -728,6 +752,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       instabilitaLT,
       instabilitaPunta,
       pressoflessione,
+      deformazione,
       VEdSollecitazioni,
     ],
   );

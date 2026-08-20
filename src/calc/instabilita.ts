@@ -22,6 +22,7 @@ import { ACCIAIO_STRUTTURALE } from '../data/materiali';
 import { proprietaProfilo, type ProprietaProfilo, type TipoProfilo } from '../data/profili-acciaio';
 import { num } from './azioni';
 import { classificaProfilo, moduloDaClasse, type RisultatiClasse } from './classificazione';
+import { betaDaModo, type ModoBeta } from './libera-inflessione';
 import { esito, type Esito, type InputAcciaioSezione } from './verifiche';
 
 /** Modulo di Young dell'acciaio da carpenteria (N/mm²) — NTC2018 §11.3.4.1. */
@@ -139,12 +140,24 @@ export type Formatura = 'caldo' | 'freddo';
  * trattenuto e la condizione di carico alla flesso-torsionale, γM1 a tutte.
  */
 export interface InputStabilita {
-  /** Lunghezza dell'asta e coefficiente di vincolo nel piano y-y (mm). */
+  /** Lunghezza dell'asta nel piano y-y (mm). */
   Ly: string;
+  /**
+   * Come si sceglie β attorno a y-y: l'id di uno schema elementare, uno dei
+   * due modi «telaio» (che usano η1 e η2), o 'manuale'.
+   */
+  modoY: ModoBeta;
+  /** β scritto a mano, usato solo quando il modo è 'manuale'. */
   betaY: string;
-  /** Lunghezza dell'asta e coefficiente di vincolo nel piano z-z (mm). */
+  /** Fattori di distribuzione ai due nodi, per i modi «telaio». */
+  eta1Y: string;
+  eta2Y: string;
+  /** Lunghezza dell'asta nel piano z-z (mm). */
   Lz: string;
+  modoZ: ModoBeta;
   betaZ: string;
+  eta1Z: string;
+  eta2Z: string;
   /** Formatura dei profili cavi: a caldo o a freddo (tab. 4.2.VIII). */
   formatura: Formatura;
   /** Lunghezza del tratto non trattenuto lateralmente (mm). */
@@ -173,9 +186,15 @@ export interface InputStabilita {
 
 export const STABILITA_DEFAULT: InputStabilita = {
   Ly: '4000',
+  modoY: 'cerniera-cerniera',
   betaY: '1',
+  eta1Y: '0.5',
+  eta2Y: '0.5',
   Lz: '2000',
+  modoZ: 'cerniera-cerniera',
   betaZ: '1',
+  eta1Z: '0.5',
+  eta2Z: '0.5',
   formatura: 'freddo',
   L: '2000',
   kz: '1',
@@ -240,6 +259,8 @@ function chiDaCurva(alfa: number, lambdaAd: number): { phi: number; chi: number 
 export interface AsseCompresso {
   /** 'y' = asse forte, 'z' = asse debole (per gli angolari, il principale minimo). */
   asse: 'y' | 'z';
+  /** Coefficiente di libera inflessione effettivamente usato. */
+  beta: number;
   /** Inerzia e raggio d'inerzia usati (cm⁴, mm). */
   I: number;
   i: number;
@@ -279,6 +300,7 @@ export interface RisultatiInstabilitaPunta {
 
 const ASSE_VUOTO = (asse: 'y' | 'z'): AsseCompresso => ({
   asse,
+  beta: 1,
   I: 0,
   i: 0,
   Lcr: 0,
@@ -320,11 +342,15 @@ export function verificaInstabilitaPunta(
   const NcRd = (A * fyk) / gammaM1 / 1000; // kN
 
   const perAsse = (asse: 'y' | 'z'): AsseCompresso => {
-    if (!proprieta) return ASSE_VUOTO(asse);
+    const beta =
+      asse === 'y'
+        ? betaDaModo(inp.modoY, num(inp.betaY), num(inp.eta1Y), num(inp.eta2Y))
+        : betaDaModo(inp.modoZ, num(inp.betaZ), num(inp.eta1Z), num(inp.eta2Z));
+    if (!proprieta) return { ...ASSE_VUOTO(asse), beta };
     const Icm = asse === 'y' ? proprieta.Ix : proprieta.Imin;
     const I = Icm * 1e4; // mm⁴
     const i = A > 0 ? Math.sqrt(I / A) : 0; // mm
-    const Lcr = (asse === 'y' ? num(inp.Ly) * (num(inp.betaY) || 1) : num(inp.Lz) * (num(inp.betaZ) || 1));
+    const Lcr = (asse === 'y' ? num(inp.Ly) : num(inp.Lz)) * beta;
     const lambda = i > 0 ? Lcr / i : 0;
     const lambda1 = Math.PI * Math.sqrt(E_ACCIAIO / fyk);
     const lambdaAd = lambda1 > 0 ? lambda / lambda1 : 0;
@@ -341,6 +367,7 @@ export function verificaInstabilitaPunta(
     const { phi, chi } = chiDaCurva(alfa, lambdaAd);
     return {
       asse,
+      beta,
       I: Icm,
       i,
       Lcr,
