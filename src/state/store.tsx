@@ -353,9 +353,11 @@ export function reducer(state: AppState, action: Action): AppState {
       return migra(action.stato);
     case 'reset':
       // «Svuota tutto» azzera la commessa, non la libreria personale: le norme
-      // aggiunte a mano, le unità e le formule preimpostate sono di chi usa
-      // l'app, non del progetto, e ributtarle via a ogni foglio bianco
-      // significherebbe riscriverle ogni volta.
+      // aggiunte a mano, le unità, le formule preimpostate e le grandezze con
+      // cui sono scritte sono di chi usa l'app, non del progetto, e ributtarle
+      // via a ogni foglio bianco significherebbe riscriverle ogni volta. Delle
+      // grandezze da compilare torna l'elenco, non i numeri: quelli erano del
+      // calcolo che si è appena chiuso.
       return {
         ...applicaLibreria(STATO_INIZIALE, estraiLibreria(state)),
         libreriaBase: state.libreriaBase,
@@ -366,11 +368,11 @@ export function reducer(state: AppState, action: Action): AppState {
 /* ───────────────────────────── libreria personale ───────────────────────────── */
 
 /**
- * Le tre cose che nell'app appartengono a chi la usa e non alla commessa: le
- * norme aggiunte a mano, le unità di misura proposte e le formule
- * preimpostate. Vivono dentro `AppState` come tutto il resto — nell'uso
- * quotidiano sono campi come gli altri — ma escono di qui per due strade che il
- * resto dello stato non ha: sopravvivono a «Svuota tutto» e vanno nel file su
+ * Le cose che nell'app appartengono a chi la usa e non alla commessa: le
+ * norme aggiunte a mano, le unità di misura proposte, le formule preimpostate
+ * e le grandezze con cui si scrivono. Vivono dentro `AppState` come tutto il
+ * resto — nell'uso quotidiano sono campi come gli altri — ma escono di qui per
+ * due strade che il resto dello stato non ha: sopravvivono a «Svuota tutto» e vanno nel file su
  * OneDrive, che è quello che le fa ritrovare sul telefono in cantiere.
  */
 export function estraiLibreria(state: AppState): Libreria {
@@ -380,11 +382,30 @@ export function estraiLibreria(state: AppState): Libreria {
     normative: state.normative,
     unita: state.calcolatrice.unita,
     preimpostate: state.calcolatrice.preimpostate,
+    // Delle grandezze da compilare la libreria porta l'**intestazione** — come
+    // si chiamano, in che unità si scrivono, cosa sono — non il numero: `b`
+    // esiste su tutti i dispositivi, ma quanto vale è di questa trave e di
+    // questa commessa. Le costanti invece il numero se lo tengono: un peso di
+    // volume è lo stesso ovunque, ed è proprio per non riscriverlo che sta lì.
+    grandezze: svuotaCompilabili(state.calcolatrice.voci),
   };
 }
 
-/** Rimette una libreria dentro lo stato, senza toccare nient'altro. */
+/**
+ * Rimette una libreria dentro lo stato, senza toccare nient'altro.
+ *
+ * Le grandezze sono l'unico punto in cui l'operazione non è una copia secca:
+ * l'elenco (quali grandezze esistono, come si chiamano, in che unità) arriva
+ * dalla libreria, ma il **valore già scritto qui** resta dov'è. Sostituirlo
+ * con il vuoto della libreria vorrebbe dire vedersi svuotare la base della
+ * trave a metà calcolo, appena l'altro dispositivo si fa vivo.
+ *
+ * Una libreria senza grandezze — un file scritto da una versione precedente —
+ * lascia semplicemente quelle che ci sono: non è un elenco vuoto, è un elenco
+ * che non è stato detto.
+ */
 export function applicaLibreria(state: AppState, lib: Libreria): AppState {
+  const valori = new Map(state.calcolatrice.voci.map((v) => [v.id, v.espressione]));
   return {
     ...state,
     normative: lib.normative,
@@ -392,6 +413,11 @@ export function applicaLibreria(state: AppState, lib: Libreria): AppState {
       ...state.calcolatrice,
       unita: normalizzaElenco(lib.unita.length ? lib.unita : state.calcolatrice.unita),
       preimpostate: lib.preimpostate,
+      voci: lib.grandezze.length
+        ? lib.grandezze.map((g) =>
+            g.tipo === 'compilabile' ? { ...g, espressione: valori.get(g.id) ?? g.espressione } : g,
+          )
+        : state.calcolatrice.voci,
     },
   };
 }

@@ -34,6 +34,7 @@ import {
   formatta,
   formattaIn,
   haOperazioni,
+  nomiRichiesti,
   ricalcola,
   vociDaSelezioni,
   type Preimpostata,
@@ -45,13 +46,16 @@ import {
 import {
   COLONNE_FOGLIO,
   LARGHEZZA_MIN,
+  bloccoVariabile,
   colonneBlocco,
+  corredoFormula,
   larghezzaValida,
   livelloEsito,
   nuovoBlocco,
   ricalcolaQuaderno,
   saltoValido,
   spanBlocco,
+  type Corredo,
   type BloccoCalcolato,
   type BloccoQuaderno,
   type TipoBlocco,
@@ -75,6 +79,17 @@ const SEMAFORO = {
 
 /** Larghezza massima di uno schema incollato: oltre, il file diventa enorme. */
 const LATO_MAX = 1400;
+
+/**
+ * Le grandezze che l'app sa proporre: quelle di partenza più il catalogo. È
+ * l'elenco da cui una formula preimpostata pesca le variabili che le servono e
+ * che non ci sono ancora — con la loro unità di misura, che è la parte che
+ * conta: una `q` senza unità fa tornare un numero che non vuol dire niente.
+ */
+const CATALOGO: Omit<VoceCalcolo, 'id'>[] = [
+  ...VOCI_DEFAULT.map(({ id: _id, ...g }) => g),
+  ...GRANDEZZE_CATALOGO,
+];
 
 /** La γ dei pesi di volume si scrive con il pedice: γC, non gC. */
 function Nome({ nome }: { nome: string }) {
@@ -466,6 +481,23 @@ function ScelteLibreria({
   );
 }
 
+/**
+ * Che cosa è successo quando una formula preimpostata è entrata nel foglio:
+ * quante grandezze si è portata dietro, quali nomi restano da spiegare. Serve
+ * a non far sembrare magia una riga che è comparsa da sola.
+ */
+function messaggioCorredo(c: Corredo): string {
+  const pezzi: string[] = [];
+  const nuove = c.grandezze.map((g) => g.nome);
+  if (nuove.length) pezzi.push(`aggiunt${nuove.length === 1 ? 'a' : 'e'} ${nuove.join(', ')} alle grandezze da compilare`);
+  const righe = c.blocchi.length;
+  if (righe) pezzi.push(`${righe} ${righe === 1 ? 'riga messa' : 'righe messe'} sul foglio`);
+  if (c.senzaUnita.length) pezzi.push(`${c.senzaUnita.join(', ')} ${c.senzaUnita.length === 1 ? 'è senza unità' : 'sono senza unità'}`);
+  if (c.daInventare.length) pezzi.push(`manca ancora ${c.daInventare.join(', ')}: dimmi cos’è`);
+  if (!pezzi.length) return 'Formula aggiunta: le grandezze che le servono ci sono già';
+  return `Formula aggiunta — ${pezzi.join('; ')}`;
+}
+
 /* ─────────────────────────── la scheda ─────────────────────────── */
 
 export default function Quaderno() {
@@ -483,6 +515,13 @@ export default function Quaderno() {
   const ultimoCampo = useRef<HTMLInputElement | null>(null);
   /** Blocco appena aggiunto: nasce con il cursore già dentro, si scrive e via. */
   const [daScrivere, setDaScrivere] = useState('');
+  /**
+   * I nomi che l'ultima formula richiamava e che non si sanno da nessuna
+   * parte: si mostrano sotto la barra dei comandi, con l'unità da scrivere.
+   * Non è un errore da chiudere, è la domanda «questa cos'è?» — resta lì
+   * finché non le si dà una risposta o non la si scaccia.
+   */
+  const [daInventare, setDaInventare] = useState<{ nome: string; um: string }[]>([]);
 
   const setQ = (patch: Partial<typeof q>) => dispatch({ type: 'quaderno', patch });
   const setCalc = (patch: Partial<typeof calc>) => dispatch({ type: 'calcolatrice', patch });
@@ -536,6 +575,49 @@ export default function Quaderno() {
     setDaScrivere(b.id);
   };
 
+  /**
+   * Una formula preimpostata entra **con il suo corredo**: le grandezze che
+   * nomina e che il foglio non ha ancora arrivano prima di lei, e quelle che
+   * mancano anche dal pannello si aggiungono da sé — con l'unità di misura del
+   * catalogo, perché è quella che fa tornare i conti quando si mescolano kN/m,
+   * metri e MPa.
+   *
+   * Quello che il catalogo non conosce non si inventa: il nome finisce nella
+   * riga dei suggerimenti, dove si scrive cos'è e in che unità si misura.
+   */
+  const aggiungiOperazione = (fonte: string, dove?: number) => {
+    const blocco = nuovoBlocco('operazione', { fonte });
+    const pre = calc.preimpostate.find((p) => p.id === fonte);
+    if (!pre) return aggiungi(blocco, dove);
+
+    const c = corredoFormula(pre.espressione, {
+      voci: [...daLibreria, ...calc.voci],
+      blocchi: calcolati,
+      catalogo: CATALOGO,
+    });
+
+    if (c.grandezze.length) setCalc({ voci: [...calc.voci, ...c.grandezze] });
+    const i = dove == null ? q.blocchi.length : Math.max(0, Math.min(q.blocchi.length, dove));
+    setQ({ blocchi: [...q.blocchi.slice(0, i), ...c.blocchi, blocco, ...q.blocchi.slice(i)] });
+    setDaInventare(c.daInventare.map((nome) => ({ nome, um: '' })));
+    flash(messaggioCorredo(c));
+  };
+
+  /**
+   * Una grandezza che il catalogo non aveva: la si battezza qui, con la sua
+   * unità, ed entra fra quelle da compilare. La riga si posa sul foglio subito
+   * prima del primo passaggio che la nomina — è lì che serve leggerla.
+   */
+  const inventaGrandezza = (nome: string, um: string) => {
+    const id = `calc-${Date.now()}-${nome}`;
+    setCalc({
+      voci: [...calc.voci, { id, nome, espressione: '', nota: '', um: um.trim(), tipo: 'compilabile' }],
+    });
+    const dove = calcolati.findIndex((b) => !b.pieno && nomiRichiesti(b.espressione).includes(nome));
+    aggiungi(nuovoBlocco('valore', { fonte: id }), dove < 0 ? undefined : dove);
+    setDaInventare((v) => v.filter((x) => x.nome !== nome));
+  };
+
   const aggiornaBlocco = (id: string, patch: Partial<BloccoQuaderno>) =>
     setQ({ blocchi: q.blocchi.map((b) => (b.id === id ? { ...b, ...patch } : b)) });
   const eliminaBlocco = (id: string) => setQ({ blocchi: q.blocchi.filter((b) => b.id !== id) });
@@ -587,6 +669,7 @@ export default function Quaderno() {
       e.preventDefault();
       e.stopPropagation();
       if (d.sposta) spostaBlocco(d.sposta, dove ?? q.blocchi.length);
+      else if (d.tipo === 'operazione') aggiungiOperazione(d.fonte, dove);
       else aggiungi(nuovoBlocco(d.tipo, { fonte: d.fonte }), dove);
       return;
     }
@@ -619,9 +702,7 @@ export default function Quaderno() {
   };
 
   const nomiUsati = new Set(generate.map((v) => v.nome.trim()));
-  const proposte = [...VOCI_DEFAULT.map(({ id: _id, ...g }) => g), ...GRANDEZZE_CATALOGO].filter(
-    (g) => !nomiUsati.has(g.nome),
-  );
+  const proposte = CATALOGO.filter((g) => !nomiUsati.has(g.nome));
 
   /* ── formule preimpostate ── */
 
@@ -851,6 +932,61 @@ export default function Quaderno() {
               </button>
             </div>
 
+            {daInventare.length > 0 && (
+              <div className="quad-suggerimenti" role="status">
+                <p>
+                  La formula richiama <strong>{daInventare.map((v) => v.nome).join(', ')}</strong>, che non
+                  {daInventare.length === 1 ? ' è' : ' sono'} fra le grandezze da compilare e non
+                  {daInventare.length === 1 ? ' sta' : ' stanno'} nel catalogo. Scrivi l’unità di misura e
+                  {daInventare.length === 1 ? ' la aggiungo' : ' le aggiungo'}: senza, il numero esce senza scala.
+                </p>
+                <div className="quad-suggerimenti-righe">
+                  {daInventare.map((v) => (
+                    <div className="quad-suggerimento" key={v.nome}>
+                      <span className="n">
+                        <Nome nome={v.nome} />
+                      </span>
+                      <input
+                        className="input"
+                        value={v.um}
+                        list="quad-elenco-unita"
+                        placeholder="unità (kN/m, m, MPa…)"
+                        aria-label={`Unità di misura di ${v.nome}`}
+                        autoComplete="off"
+                        spellCheck={false}
+                        onChange={(e) =>
+                          setDaInventare((prima) =>
+                            prima.map((x) => (x.nome === v.nome ? { ...x, um: e.target.value } : x)),
+                          )
+                        }
+                        onKeyDown={(e) => {
+                          if (e.key !== 'Enter') return;
+                          e.preventDefault();
+                          inventaGrandezza(v.nome, v.um);
+                        }}
+                      />
+                      <button
+                        type="button"
+                        className="btn btn-primary btn-icon"
+                        title={`Aggiungi ${v.nome} alle grandezze da compilare`}
+                        onClick={() => inventaGrandezza(v.nome, v.um)}
+                      >
+                        <Plus size={13} weight="bold" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  className="quad-suggerimenti-chiudi"
+                  title="Lascia perdere: la formula resta com’è"
+                  onClick={() => setDaInventare([])}
+                >
+                  <X size={12} weight="bold" />
+                </button>
+              </div>
+            )}
+
             {calcolati.length > 0 && (
               <div className="quad-blocchi">
                 {calcolati.map((b, i) => (
@@ -1034,8 +1170,8 @@ export default function Quaderno() {
                     className="quad-formula-usa"
                     draggable
                     onDragStart={(e) => iniziaTrascinamento(e, { tipo: 'operazione', fonte: f.id })}
-                    title={`${f.nota || 'formula'} — trascina nel quaderno o tocca per aggiungerla`}
-                    onClick={() => aggiungi(nuovoBlocco('operazione', { fonte: f.id }))}
+                    title={`${f.nota || 'formula'} — trascina nel quaderno o tocca per aggiungerla, con le grandezze che le servono`}
+                    onClick={() => aggiungiOperazione(f.id)}
                   >
                     <span className="t">
                       <Nome nome={f.nome || '—'} />
@@ -1360,6 +1496,12 @@ function BloccoCard({
    * torna una formula e il risultato ricompare a destra.
    */
   const definizione = !b.pieno && !haOperazioni(bl.tipo === 'formula' ? bl.espressione : b.espressione);
+  /**
+   * La riga porta un dato scritto, non un risultato: prende la velatura ocra
+   * delle celle editabili. È l'unico colore di fondo del foglio, e dice una
+   * cosa sola — «qui il numero lo metti tu».
+   */
+  const variabile = bloccoVariabile(b);
   const rendiModificabile = () =>
     onAggiorna({
       tipo: 'formula',
@@ -1377,8 +1519,8 @@ function BloccoCard({
   return (
     <div
       className={`quad-blocco${b.pieno ? ' is-pieno' : ''}${b.errore ? ' is-errore' : ''}${
-        bersaglio ? ' is-bersaglio' : ''
-      }`}
+        variabile ? ' is-variabile' : ''
+      }${bersaglio ? ' is-bersaglio' : ''}`}
       style={{ '--span': colonne } as CSSProperties}
       tabIndex={-1}
       onKeyDown={tasti}

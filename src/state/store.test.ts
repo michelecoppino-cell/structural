@@ -22,7 +22,14 @@ describe('«Svuota tutto»', () => {
   it('azzera la commessa ma lascia stare la libreria personale', () => {
     const con = applicaLibreria(
       { ...STATO_INIZIALE, progetto: { ...STATO_INIZIALE.progetto, nome: 'Capannone' } },
-      { schemaVersion: 1, aggiornato: '', normative: [NORMA], unita: ['kN', 'kNm'], preimpostate: [{ id: 'p1', nome: 'peso', espressione: 'b*h', nota: '', um: 'kN' }] },
+      {
+        schemaVersion: 4,
+        aggiornato: '',
+        normative: [NORMA],
+        unita: ['kN', 'kNm'],
+        preimpostate: [{ id: 'p1', nome: 'peso', espressione: 'b*h', nota: '', um: 'kN' }],
+        grandezze: [{ id: 'g1', nome: 'q', espressione: '', nota: 'carico', um: 'kN/m', tipo: 'compilabile' }],
+      },
     );
 
     const dopo = reducer(con, { type: 'reset' });
@@ -33,6 +40,7 @@ describe('«Svuota tutto»', () => {
     expect(dopo.normative).toEqual([NORMA]);
     expect(dopo.calcolatrice.unita).toEqual(['kN', 'kNm']);
     expect(dopo.calcolatrice.preimpostate.map((p) => p.id)).toEqual(['p1']);
+    expect(dopo.calcolatrice.voci.map((v) => v.nome)).toEqual(['q']);
   });
 });
 
@@ -75,7 +83,7 @@ describe('import di un progetto', () => {
 });
 
 describe('la fotografia di sincronizzazione vive con la libreria', () => {
-  const LIB = { schemaVersion: 1, aggiornato: '', normative: [NORMA], unita: ['kN'], preimpostate: [] };
+  const LIB = { schemaVersion: 4, aggiornato: '', normative: [NORMA], unita: ['kN'], preimpostate: [], grandezze: [] };
 
   it('si aggiornano nello stesso passaggio', () => {
     const dopo = reducer(STATO_INIZIALE, { type: 'libreria', lib: LIB, base: LIB });
@@ -103,9 +111,61 @@ describe('la fotografia di sincronizzazione vive con la libreria', () => {
   });
 });
 
+describe('le grandezze nella libreria', () => {
+  const lib = (grandezze: AppState['calcolatrice']['voci']) => ({
+    schemaVersion: 4,
+    aggiornato: '',
+    normative: [],
+    unita: ['kN'],
+    preimpostate: [],
+    grandezze,
+  });
+
+  it('la libreria porta l’elenco, non i numeri della commessa', () => {
+    const stato: AppState = {
+      ...STATO_INIZIALE,
+      calcolatrice: {
+        ...STATO_INIZIALE.calcolatrice,
+        voci: [
+          { id: 'v-b', nome: 'b', espressione: '0,30', nota: 'base', um: 'm', tipo: 'compilabile' },
+          { id: 'v-gc', nome: 'γC', espressione: '25', nota: 'cls', um: 'kN/mc', tipo: 'fissa' },
+        ],
+      },
+    };
+    const fuori = estraiLibreria(stato).grandezze;
+    // la base della trave è di questa trave: sul file va il nome, non il numero
+    expect(fuori[0]).toMatchObject({ nome: 'b', um: 'm', espressione: '' });
+    // il peso di volume invece il numero se lo tiene: è lo stesso ovunque
+    expect(fuori[1]).toMatchObject({ nome: 'γC', espressione: '25' });
+  });
+
+  it('applicarla non svuota quello che si sta scrivendo', () => {
+    const stato: AppState = {
+      ...STATO_INIZIALE,
+      calcolatrice: {
+        ...STATO_INIZIALE.calcolatrice,
+        voci: [{ id: 'v-b', nome: 'b', espressione: '0,30', nota: 'base', um: 'm', tipo: 'compilabile' }],
+      },
+    };
+    const dopo = applicaLibreria(
+      stato,
+      lib([{ id: 'v-b', nome: 'b', espressione: '', nota: 'base', um: 'cm', tipo: 'compilabile' }]),
+    );
+    // l'unità arriva da OneDrive, il valore resta quello scritto qui
+    expect(dopo.calcolatrice.voci).toEqual([
+      { id: 'v-b', nome: 'b', espressione: '0,30', nota: 'base', um: 'cm', tipo: 'compilabile' },
+    ]);
+  });
+
+  it('un file vecchio, senza grandezze, lascia stare quelle che ci sono', () => {
+    const dopo = applicaLibreria(STATO_INIZIALE, lib([]));
+    expect(dopo.calcolatrice.voci).toEqual(STATO_INIZIALE.calcolatrice.voci);
+  });
+});
+
 describe('estrai e applica', () => {
   it('fanno il giro completo senza perdere niente', () => {
-    const lib = { schemaVersion: 1, aggiornato: '', normative: [NORMA], unita: ['kN'], preimpostate: [] };
+    const lib = { schemaVersion: 4, aggiornato: '', normative: [NORMA], unita: ['kN'], preimpostate: [], grandezze: [] };
     expect(estraiLibreria(applicaLibreria(STATO_INIZIALE, lib))).toMatchObject({
       normative: [NORMA],
       unita: ['kN'],

@@ -2684,6 +2684,25 @@ button.field-origin:hover {
   outline: none;
 }
 
+/* Le celle editabili contro quelle da calcolare.
+   Una riga che porta un numero **scritto da qualcuno** — una grandezza tirata
+   dal pannello, una definizione scritta qui — prende una velatura ocra; una
+   riga che il foglio calcola resta sulla carta bianca. È la stessa distinzione
+   che su un foglio a mano si fa cerchiando i dati di partenza, e serve a
+   rileggere il calcolo sapendo subito dove si può mettere le mani.
+   La velatura è volutamente sottile: si nota, non si guarda. */
+.quad-blocco.is-variabile {
+  background: color-mix(in srgb, var(--color-accent) 9%, transparent);
+  border-color: color-mix(in srgb, var(--color-accent) 30%, var(--segno));
+}
+
+/* anche il campo in cui si scrive il valore, dentro una riga così: è
+   letteralmente la cella in cui si batte il numero */
+.quad-blocco.is-variabile .quad-in-espr.input,
+.quad-blocco.is-variabile .quad-um-libera.input {
+  background: color-mix(in srgb, var(--color-accent) 7%, var(--carta));
+}
+
 .quad-blocco.is-pieno {
   grid-column: span var(--span, 3);
   gap: 3px;
@@ -2714,6 +2733,12 @@ button.field-origin:hover {
   .quad-vuoto {
     border-color: transparent;
     background: transparent;
+  }
+
+  /* i suggerimenti sono una domanda fatta a chi sta scrivendo il calcolo, non
+     una parte del documento: sulla carta non ci vanno */
+  .quad-suggerimenti {
+    display: none;
   }
 }
 
@@ -3352,6 +3377,9 @@ button.field-origin:hover {
   font-size: 8.5px;
 }
 
+/* il valore di una grandezza nel pannello è la cella editabile per
+   eccellenza: stessa velatura ocra delle righe scritte sul foglio, così le due
+   metà della scheda si leggono con la stessa regola */
 .quad-gr-valore.input {
   flex: 1 1 auto;
   width: 0;
@@ -3359,6 +3387,12 @@ button.field-origin:hover {
   min-height: 26px;
   padding: 2px 5px;
   font-size: 12px;
+  background: var(--accent-10);
+  border-color: color-mix(in srgb, var(--color-accent) 22%, var(--divider));
+}
+
+.quad-gr-valore.input:focus-visible {
+  background: var(--accent-12);
 }
 
 .quad-gr-um {
@@ -3738,4 +3772,70 @@ button.field-origin:hover {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+/* ── le variabili che una formula chiede e che nessuno ha ancora definito ──
+   Non è un errore: è la domanda «questa cos'è?», con accanto il posto per
+   rispondere. Sta sulla carta, sopra i blocchi, e se ne va appena le si
+   risponde (o la si scaccia). */
+.quad-suggerimenti {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 28px 8px 10px;
+  background: color-mix(in srgb, var(--color-accent) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-accent) 38%, transparent);
+  border-radius: var(--radius-md);
+}
+
+.quad-suggerimenti p {
+  margin: 0;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--inchiostro-2);
+}
+
+.quad-suggerimenti-righe {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.quad-suggerimento {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.quad-suggerimento .n {
+  min-width: 22px;
+  font-weight: 600;
+  font-size: 12.5px;
+  color: var(--inchiostro);
+}
+
+.quad-suggerimento .input {
+  width: 150px;
+  min-height: 26px;
+  padding: 2px 6px;
+  font-size: 12px;
+}
+
+.quad-suggerimenti-chiudi {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  display: inline-flex;
+  padding: 3px;
+  color: var(--inchiostro-3);
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.quad-suggerimenti-chiudi:hover {
+  color: var(--inchiostro);
+  background: rgba(20, 24, 31, 0.07);
 }

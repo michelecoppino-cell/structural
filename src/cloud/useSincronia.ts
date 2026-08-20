@@ -25,6 +25,7 @@ export interface Conteggio {
   normative: number;
   unita: number;
   preimpostate: number;
+  grandezze: number;
 }
 
 export type StatoSincronia =
@@ -127,8 +128,9 @@ export function useSincronia() {
         normative: fusa.normative.length,
         unita: fusa.unita.length,
         preimpostate: fusa.preimpostate.length,
+        grandezze: fusa.grandezze.length,
       });
-      sincronizzata.current = JSON.stringify([fusa.normative, fusa.unita, fusa.preimpostate]);
+      sincronizzata.current = JSON.stringify([fusa.normative, fusa.unita, fusa.preimpostate, fusa.grandezze]);
       setUltimo(new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }));
       setStato('in-pari');
     } catch (e) {
@@ -162,7 +164,16 @@ export function useSincronia() {
   }, [sincronizza]);
 
   // la libreria è cambiata qui: dopo una pausa, la si porta su OneDrive
-  const libreriaOra = JSON.stringify([state.normative, state.calcolatrice.unita, state.calcolatrice.preimpostate]);
+  // le grandezze entrano qui dalla stessa porta da cui escono verso OneDrive:
+  // `estraiLibreria` toglie i valori delle compilabili, così scrivere la base
+  // della trave non fa partire un giro di sincronizzazione per un numero che
+  // sul file non ci va comunque
+  const libreriaOra = JSON.stringify([
+    state.normative,
+    state.calcolatrice.unita,
+    state.calcolatrice.preimpostate,
+    estraiLibreria(state).grandezze,
+  ]);
   useEffect(() => {
     if (!SINCRONIA_CONFIGURATA || !account()) return;
     if (!sincronizzata.current || libreriaOra === sincronizzata.current) return;

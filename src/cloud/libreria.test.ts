@@ -135,3 +135,39 @@ describe('rete di protezione prima di scrivere', () => {
     expect(perditeIngiustificate(remoto, fusa, null)).toEqual([]);
   });
 });
+
+describe('le grandezze viaggiano come le norme', () => {
+  const gr = (id: string, nome: string, um: string, espressione = '') => ({
+    id,
+    nome,
+    espressione,
+    nota: '',
+    um,
+    tipo: 'compilabile' as const,
+  });
+
+  it('si rileggono dal file, e un file senza grandezze non ne inventa', () => {
+    expect(leggiLibreria({ grandezze: [gr('g1', 'q', 'kN/m')] }).grandezze.map((g) => g.nome)).toEqual(['q']);
+    expect(leggiLibreria({ normative: [] }).grandezze).toEqual([]);
+  });
+
+  it('quella aggiunta sul telefono arriva sul PC', () => {
+    const base = lib({ grandezze: [gr('g1', 'q', 'kN/m')] });
+    const locale = lib({ grandezze: [gr('g1', 'q', 'kN/m')] });
+    const remoto = lib({ grandezze: [gr('g1', 'q', 'kN/m'), gr('g2', 'i', 'm')] });
+    expect(fondiLibrerie(locale, remoto, base).grandezze.map((g) => g.nome)).toEqual(['q', 'i']);
+  });
+
+  it('l’unità corretta altrove vince su chi non ha toccato niente', () => {
+    const base = lib({ grandezze: [gr('g1', 'q', 'kN/mq')] });
+    const locale = lib({ grandezze: [gr('g1', 'q', 'kN/mq')] });
+    const remoto = lib({ grandezze: [gr('g1', 'q', 'kN/m')] });
+    expect(fondiLibrerie(locale, remoto, base).grandezze[0].um).toBe('kN/m');
+  });
+
+  it('una grandezza che sparirebbe senza che nessuno l’abbia cancellata ferma il giro', () => {
+    const remoto = lib({ grandezze: [gr('g1', 'q', 'kN/m')] });
+    const fusa = lib({ grandezze: [] });
+    expect(perditeIngiustificate(remoto, fusa, null)).toEqual(['q']);
+  });
+});
