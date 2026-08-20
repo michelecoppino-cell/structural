@@ -1052,6 +1052,30 @@ button.field-origin:hover {
    partono dallo stesso bordo: niente pastiglie spinte a destra dalla barra
    o centrate nelle celle */
 
+/* ───────────────────────────── scheda Verifiche ─────────────────────────── */
+
+/*
+ * Nella scheda Verifiche i numeri si leggono da sinistra, come le tendine e le
+ * etichette che stanno loro accanto: con i campi numerici allineati a destra la
+ * colonna aveva due margini di lettura diversi, uno per i menù e uno per i
+ * numeri, e l'occhio doveva saltare avanti e indietro. Vale per i campi e per
+ * le colonne numeriche delle tabelle di esito, cioè per tutta la scheda.
+ */
+.scheda-verifiche .input.num,
+.scheda-verifiche .table .num {
+  text-align: left;
+}
+
+/*
+ * Le intestazioni di tabella vanno in maiuscoletto, ma una λ maiuscola è una
+ * Λ e una χ è una X: i simboli greci si dichiarano `sym` e restano come sono.
+ */
+.table th.sym {
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 11.5px;
+}
+
 .ver-comandi {
   display: flex;
   flex-wrap: wrap;

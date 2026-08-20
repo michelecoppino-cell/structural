@@ -33,10 +33,14 @@ import {
   type RisultatiTaglioNonArmato,
 } from '../calc/verifiche';
 import {
-  INSTABILITA_LT_DEFAULT,
+  STABILITA_DEFAULT,
   verificaInstabilitaLT,
-  type InputInstabilitaLT,
+  verificaInstabilitaPunta,
+  verificaPressoflessione,
+  type InputStabilita,
   type RisultatiInstabilitaLT,
+  type RisultatiInstabilitaPunta,
+  type RisultatiPressoflessione,
 } from '../calc/instabilita';
 import {
   PREIMPOSTATE_DEFAULT,
@@ -97,8 +101,8 @@ export interface AppState {
     taglioArmato: InputTaglioArmato;
     flessioneCA: InputFlessioneCA;
     acciaio: InputAcciaioSezione;
-    /** Dati del solo controllo di stabilità flesso-torsionale della trave. */
-    instabilitaLT: InputInstabilitaLT;
+    /** Dati delle verifiche di stabilità della membratura in acciaio. */
+    stabilita: InputStabilita;
     /** VEd delle verifiche allineato al taglio calcolato in Sollecitazioni. */
     collegaSollecitazioni: boolean;
   };
@@ -184,7 +188,7 @@ export const STATO_INIZIALE: AppState = {
     taglioArmato: TAGLIO_ARMATO_DEFAULT,
     flessioneCA: FLESSIONE_CA_DEFAULT,
     acciaio: ACCIAIO_SEZIONE_DEFAULT,
-    instabilitaLT: INSTABILITA_LT_DEFAULT,
+    stabilita: STABILITA_DEFAULT,
     collegaSollecitazioni: true,
   },
   costi: VOCI_COSTO_DEFAULT.map((v) => ({ ...v })),
@@ -249,7 +253,7 @@ export type Action =
   | { type: 'taglioArmato'; patch: Partial<InputTaglioArmato> }
   | { type: 'flessioneCA'; patch: Partial<InputFlessioneCA> }
   | { type: 'acciaioSezione'; patch: Partial<InputAcciaioSezione> }
-  | { type: 'instabilitaLT'; patch: Partial<InputInstabilitaLT> }
+  | { type: 'stabilita'; patch: Partial<InputStabilita> }
   | { type: 'costi'; voci: VoceCosto[] }
   | { type: 'calcolatrice'; patch: Partial<StatoCalcolatrice> }
   | { type: 'quaderno'; patch: Partial<StatoQuaderno> }
@@ -306,12 +310,12 @@ export function reducer(state: AppState, action: Action): AppState {
           acciaio: { ...state.verifiche.acciaio, ...action.patch },
         },
       };
-    case 'instabilitaLT':
+    case 'stabilita':
       return {
         ...state,
         verifiche: {
           ...state.verifiche,
-          instabilitaLT: { ...state.verifiche.instabilitaLT, ...action.patch },
+          stabilita: { ...state.verifiche.stabilita, ...action.patch },
         },
       };
     case 'costi':
@@ -448,7 +452,7 @@ export function migra(raw: Partial<AppState>): AppState {
       taglioArmato: { ...base.verifiche.taglioArmato, ...raw.verifiche?.taglioArmato },
       flessioneCA: { ...base.verifiche.flessioneCA, ...raw.verifiche?.flessioneCA },
       acciaio: { ...base.verifiche.acciaio, ...raw.verifiche?.acciaio },
-      instabilitaLT: { ...base.verifiche.instabilitaLT, ...raw.verifiche?.instabilitaLT },
+      stabilita: { ...base.verifiche.stabilita, ...raw.verifiche?.stabilita },
     },
     // i file salvati prima del campo `codice` non ce l'hanno: si riempie vuoto,
     // che è esattamente quello che vuol dire («prezzo senza voce di prezzario»)
@@ -616,6 +620,8 @@ export interface Calcoli {
   flessioneCA: RisultatiFlessioneCA;
   acciaio: RisultatiAcciaioSezione;
   instabilitaLT: RisultatiInstabilitaLT;
+  instabilitaPunta: RisultatiInstabilitaPunta;
+  pressoflessione: RisultatiPressoflessione;
   /** Taglio massimo in valore assoluto dalle Sollecitazioni (kN). */
   VEdSollecitazioni: number;
 }
@@ -680,8 +686,23 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [state.verifiche.acciaio, collega, VEd],
   );
   const instabilitaLT = useMemo(
-    () => verificaInstabilitaLT(state.verifiche.acciaio, state.verifiche.instabilitaLT),
-    [state.verifiche.acciaio, state.verifiche.instabilitaLT],
+    () => verificaInstabilitaLT(state.verifiche.acciaio, state.verifiche.stabilita),
+    [state.verifiche.acciaio, state.verifiche.stabilita],
+  );
+  const instabilitaPunta = useMemo(
+    () => verificaInstabilitaPunta(state.verifiche.acciaio, state.verifiche.stabilita),
+    [state.verifiche.acciaio, state.verifiche.stabilita],
+  );
+  // la verifica combinata riusa i due risultati di sopra invece di rifarli
+  const pressoflessione = useMemo(
+    () =>
+      verificaPressoflessione(
+        state.verifiche.acciaio,
+        state.verifiche.stabilita,
+        instabilitaLT,
+        instabilitaPunta,
+      ),
+    [state.verifiche.acciaio, state.verifiche.stabilita, instabilitaLT, instabilitaPunta],
   );
 
   const calcoli = useMemo<Calcoli>(
@@ -693,6 +714,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       flessioneCA,
       acciaio,
       instabilitaLT,
+      instabilitaPunta,
+      pressoflessione,
       VEdSollecitazioni,
     }),
     [
@@ -703,6 +726,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       flessioneCA,
       acciaio,
       instabilitaLT,
+      instabilitaPunta,
+      pressoflessione,
       VEdSollecitazioni,
     ],
   );
