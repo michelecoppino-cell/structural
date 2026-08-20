@@ -16,6 +16,7 @@ import {
   Image as ImageIcon,
   Info,
   Link as LinkIcon,
+  Minus,
   NotePencil,
   PencilSimple,
   Plus,
@@ -219,6 +220,112 @@ function Sezione({
 }
 
 /**
+ * I campi con cui si sistema una grandezza: nome, unità, nota, colonna. Sono
+ * gli stessi sotto la riga di una costante e nell'elenco che apre la matita
+ * delle variabili — l'anagrafica di una grandezza è una sola.
+ */
+function CampiGrandezza({
+  v,
+  elenco,
+  onAggiorna,
+  onElimina,
+}: {
+  v: VoceCalcolata;
+  elenco: string[];
+  onAggiorna: (patch: Partial<VoceCalcolo>) => void;
+  onElimina: () => void;
+}) {
+  const fuori = !!v.um.trim() && !unitaInElenco(v.um, elenco);
+  return (
+    <div className="quad-gr-modifica">
+      <div className="mini-campo">
+        <label htmlFor={`qn-${v.id}`}>Nome</label>
+        <input
+          id={`qn-${v.id}`}
+          className={`input${v.nome.trim() && !v.nomeValido ? ' is-error' : ''}`}
+          value={v.nome}
+          autoComplete="off"
+          spellCheck={false}
+          onChange={(e) => onAggiorna({ nome: e.target.value })}
+        />
+      </div>
+      <div className="mini-campo">
+        <label htmlFor={`qu-${v.id}`}>Unità</label>
+        <input
+          id={`qu-${v.id}`}
+          className={`input${fuori ? ' is-error' : ''}`}
+          value={v.um}
+          list="quad-elenco-unita"
+          placeholder={v.umCalcolata || 'kN/mq'}
+          autoComplete="off"
+          spellCheck={false}
+          title={fuori ? 'Unità non in elenco' : undefined}
+          onChange={(e) => onAggiorna({ um: e.target.value })}
+        />
+      </div>
+      <div className="mini-campo quad-campo-largo">
+        <label htmlFor={`qt-${v.id}`}>Nota</label>
+        <input
+          id={`qt-${v.id}`}
+          className="input"
+          value={v.nota}
+          autoComplete="off"
+          onChange={(e) => onAggiorna({ nota: e.target.value })}
+        />
+      </div>
+      <div className="mini-campo">
+        <label htmlFor={`qc-${v.id}`}>Colonna</label>
+        <select
+          id={`qc-${v.id}`}
+          className="input"
+          value={v.tipo ?? 'operazione'}
+          onChange={(e) => onAggiorna({ tipo: e.target.value as TipoVoce })}
+        >
+          <option value="compilabile">Da compilare</option>
+          <option value="fissa">Fissa</option>
+          <option value="operazione">Operazione</option>
+        </select>
+      </div>
+      <button type="button" className="btn btn-secondary btn-icon" title="Elimina la grandezza" onClick={onElimina}>
+        <Trash size={13} />
+      </button>
+    </div>
+  );
+}
+
+/**
+ * Una variabile nell'elenco del pannello: una pastiglia con il nome e l'unità
+ * di misura, niente numero. Toccandola finisce sul foglio, ed è **lì** che si
+ * scrive il valore — il pannello dice che cosa esiste, il foglio quanto vale.
+ */
+function PastigliaVariabile({
+  v,
+  dentro,
+  onAggiungi,
+}: {
+  v: VoceCalcolata;
+  /** true = una riga che la richiama è già sul foglio. */
+  dentro: boolean;
+  onAggiungi: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      className={`quad-chip is-variabile${dentro ? ' is-dentro' : ''}`}
+      draggable
+      onDragStart={(e) => iniziaTrascinamento(e, { tipo: 'valore', fonte: v.id })}
+      title={`${v.nota || v.nome} — tocca per metterla sul foglio: il valore si scrive lì`}
+      onClick={onAggiungi}
+    >
+      <span className="n">
+        <Nome nome={v.nome || '—'} />
+      </span>
+      {v.umEffettiva && <span className="um">{v.umEffettiva}</span>}
+    </button>
+  );
+}
+
+/**
  * Una grandezza nel pannello: il valore si scrive dentro la pastiglia, il nome
  * la trascina nel quaderno e il «+» ce la mette senza trascinare. Toccando il
  * nome si aprono unità, nota e colonna.
@@ -240,7 +347,6 @@ function RigaGrandezza({
   onElimina: () => void;
   onAggiungi: () => void;
 }) {
-  const fuori = !!v.um.trim() && !unitaInElenco(v.um, elenco);
   return (
     <div className={`quad-gr${v.errore ? ' is-errore' : ''}${aperta ? ' is-aperta' : ''}`}>
       <div
@@ -279,61 +385,7 @@ function RigaGrandezza({
         </button>
       </div>
 
-      {aperta && (
-        <div className="quad-gr-modifica">
-          <div className="mini-campo">
-            <label htmlFor={`qn-${v.id}`}>Nome</label>
-            <input
-              id={`qn-${v.id}`}
-              className={`input${v.nome.trim() && !v.nomeValido ? ' is-error' : ''}`}
-              value={v.nome}
-              autoComplete="off"
-              spellCheck={false}
-              onChange={(e) => onAggiorna({ nome: e.target.value })}
-            />
-          </div>
-          <div className="mini-campo">
-            <label htmlFor={`qu-${v.id}`}>Unità</label>
-            <input
-              id={`qu-${v.id}`}
-              className={`input${fuori ? ' is-error' : ''}`}
-              value={v.um}
-              list="quad-elenco-unita"
-              placeholder={v.umCalcolata || 'kN/mq'}
-              autoComplete="off"
-              spellCheck={false}
-              title={fuori ? 'Unità non in elenco' : undefined}
-              onChange={(e) => onAggiorna({ um: e.target.value })}
-            />
-          </div>
-          <div className="mini-campo quad-campo-largo">
-            <label htmlFor={`qt-${v.id}`}>Nota</label>
-            <input
-              id={`qt-${v.id}`}
-              className="input"
-              value={v.nota}
-              autoComplete="off"
-              onChange={(e) => onAggiorna({ nota: e.target.value })}
-            />
-          </div>
-          <div className="mini-campo">
-            <label htmlFor={`qc-${v.id}`}>Colonna</label>
-            <select
-              id={`qc-${v.id}`}
-              className="input"
-              value={v.tipo ?? 'operazione'}
-              onChange={(e) => onAggiorna({ tipo: e.target.value as TipoVoce })}
-            >
-              <option value="compilabile">Da compilare</option>
-              <option value="fissa">Fissa</option>
-              <option value="operazione">Operazione</option>
-            </select>
-          </div>
-          <button type="button" className="btn btn-secondary btn-icon" title="Elimina la grandezza" onClick={onElimina}>
-            <Trash size={13} />
-          </button>
-        </div>
-      )}
+      {aperta && <CampiGrandezza v={v} elenco={elenco} onAggiorna={onAggiorna} onElimina={onElimina} />}
     </div>
   );
 }
@@ -489,12 +541,12 @@ function ScelteLibreria({
 function messaggioCorredo(c: Corredo): string {
   const pezzi: string[] = [];
   const nuove = c.grandezze.map((g) => g.nome);
-  if (nuove.length) pezzi.push(`aggiunt${nuove.length === 1 ? 'a' : 'e'} ${nuove.join(', ')} alle grandezze da compilare`);
+  if (nuove.length) pezzi.push(`aggiunt${nuove.length === 1 ? 'a' : 'e'} ${nuove.join(', ')} alle variabili`);
   const righe = c.blocchi.length;
   if (righe) pezzi.push(`${righe} ${righe === 1 ? 'riga messa' : 'righe messe'} sul foglio`);
   if (c.senzaUnita.length) pezzi.push(`${c.senzaUnita.join(', ')} ${c.senzaUnita.length === 1 ? 'è senza unità' : 'sono senza unità'}`);
   if (c.daInventare.length) pezzi.push(`manca ancora ${c.daInventare.join(', ')}: dimmi cos’è`);
-  if (!pezzi.length) return 'Formula aggiunta: le grandezze che le servono ci sono già';
+  if (!pezzi.length) return 'Formula aggiunta: le variabili che le servono ci sono già';
   return `Formula aggiunta — ${pezzi.join('; ')}`;
 }
 
@@ -510,6 +562,8 @@ export default function Quaderno() {
   const [apriUnita, setApriUnita] = useState(false);
   const [nuovaUnita, setNuovaUnita] = useState('');
   const [modificaFormule, setModificaFormule] = useState(false);
+  /** La matita in fondo alle variabili: aperta, mostra l'anagrafica di tutte. */
+  const [modificaVariabili, setModificaVariabili] = useState(false);
   const [nuovaPre, setNuovaPre] = useState({ nome: '', espressione: '', um: '', nota: '' });
   /** Ultimo campo di formula toccato: è lì che scrive il tastierino. */
   const ultimoCampo = useRef<HTMLInputElement | null>(null);
@@ -701,6 +755,11 @@ export default function Quaderno() {
     if (!base?.nome) dispatch({ type: 'toggleExp', id: `quad-${id}` });
   };
 
+  /** Le variabili del pannello: l'elenco, non i valori — quelli stanno sul foglio. */
+  const compilabili = voci.filter((v) => (v.tipo ?? 'operazione') === 'compilabile');
+  /** Le fonti che hanno già una riga sul foglio: la pastiglia lo dice con la spunta. */
+  const fontiSulFoglio = new Set(q.blocchi.filter((b) => b.tipo === 'valore').map((b) => b.fonte));
+
   const nomiUsati = new Set(generate.map((v) => v.nome.trim()));
   const proposte = CATALOGO.filter((g) => !nomiUsati.has(g.nome));
 
@@ -741,7 +800,9 @@ export default function Quaderno() {
     const b = el.selectionEnd ?? src.length;
     const nuova = src.slice(0, a) + testo + src.slice(b);
     const id = el.dataset.blocco;
+    const voce = el.dataset.voce;
     if (id) aggiornaBlocco(id, { espressione: nuova });
+    else if (voce) aggiornaVoce(voce, { espressione: nuova });
     requestAnimationFrame(() => {
       el.focus();
       const p = a + testo.length;
@@ -930,13 +991,22 @@ export default function Quaderno() {
                 <ImageIcon size={14} />
                 Screenshot
               </button>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                title="Una riga orizzontale che divide il foglio in capitoli, con il titolo di quello che comincia lì"
+                onClick={() => aggiungi(nuovoBlocco('linea'))}
+              >
+                <Minus size={14} weight="bold" />
+                Linea
+              </button>
             </div>
 
             {daInventare.length > 0 && (
               <div className="quad-suggerimenti" role="status">
                 <p>
                   La formula richiama <strong>{daInventare.map((v) => v.nome).join(', ')}</strong>, che non
-                  {daInventare.length === 1 ? ' è' : ' sono'} fra le grandezze da compilare e non
+                  {daInventare.length === 1 ? ' è' : ' sono'} fra le variabili e non
                   {daInventare.length === 1 ? ' sta' : ' stanno'} nel catalogo. Scrivi l’unità di misura e
                   {daInventare.length === 1 ? ' la aggiungo' : ' le aggiungo'}: senza, il numero esce senza scala.
                 </p>
@@ -968,7 +1038,7 @@ export default function Quaderno() {
                       <button
                         type="button"
                         className="btn btn-primary btn-icon"
-                        title={`Aggiungi ${v.nome} alle grandezze da compilare`}
+                        title={`Aggiungi ${v.nome} alle variabili`}
                         onClick={() => inventaGrandezza(v.nome, v.um)}
                       >
                         <Plus size={13} weight="bold" />
@@ -1014,6 +1084,8 @@ export default function Quaderno() {
                       scrivi={b.blocco.id === daScrivere}
                       onScritto={() => setDaScrivere('')}
                       onAggiorna={(patch) => aggiornaBlocco(b.blocco.id, patch)}
+                      onFonte={(patch) => aggiornaVoce(b.blocco.fonte, patch)}
+                      fonteEditabile={calc.voci.some((v) => v.id === b.blocco.fonte)}
                       onElimina={() => eliminaBlocco(b.blocco.id)}
                       onScorri={(verso) => scorri(b.blocco.id, verso)}
                       onSalta={(verso) => salta(b.blocco.id, verso)}
@@ -1055,31 +1127,37 @@ export default function Quaderno() {
         <aside className="quad-panel" aria-label="Grandezze e operazioni da mettere nel quaderno">
           {aiuto && (
             <p className="note" style={{ margin: '0 0 4px' }}>
-              Tutto quello che sta qui si trascina nel foglio (o si tocca con il «+») e ci resta{' '}
-              <strong>collegato</strong>: se cambi il valore qui, il quaderno si ricalcola da solo.
+              Tutto quello che sta qui si trascina nel foglio (o si tocca) e ci resta{' '}
+              <strong>collegato</strong>: il calcolo si scrive sul foglio, e il foglio si ricalcola
+              da solo.
             </p>
           )}
 
           <Sezione
             id="q-compilare"
-            titolo="Grandezze da compilare"
-            hint={`${voci.filter((v) => (v.tipo ?? 'operazione') === 'compilabile').length}`}
+            titolo="VARIABILI"
+            hint={`${compilabili.length}`}
           >
-            <div className="quad-griglia">
-              {voci
-                .filter((v) => (v.tipo ?? 'operazione') === 'compilabile')
-                .map((v) => (
-                  <RigaGrandezza
-                    key={v.id}
-                    v={v}
-                    elenco={calc.unita}
-                    aperta={!!state.ui.exp[`quad-${v.id}`]}
-                    onApri={() => dispatch({ type: 'toggleExp', id: `quad-${v.id}` })}
-                    onAggiorna={(patch) => aggiornaVoce(v.id, patch)}
-                    onElimina={() => setVoci(calc.voci.filter((x) => x.id !== v.id))}
-                    onAggiungi={() => aggiungi(nuovoBlocco('valore', { fonte: v.id }))}
-                  />
-                ))}
+            {aiuto && (
+              <p className="note" style={{ margin: '0 0 6px' }}>
+                Qui c’è solo l’<strong>elenco</strong>: come si chiama una variabile e in che unità
+                si misura. Il valore si scrive sul foglio — tocca una pastiglia e la riga si posa
+                lì, con la sua cella da riempire. La matita in fondo apre nome, unità e nota di
+                tutte.
+              </p>
+            )}
+            <div className="quad-chips is-variabili">
+              {compilabili.map((v) => (
+                <PastigliaVariabile
+                  key={v.id}
+                  v={v}
+                  dentro={fontiSulFoglio.has(v.id)}
+                  onAggiungi={() => aggiungi(nuovoBlocco('valore', { fonte: v.id }))}
+                />
+              ))}
+              {compilabili.length === 0 && (
+                <span className="note">Nessuna variabile: prendine una qui sotto, o falla tu con «nuova».</span>
+              )}
             </div>
             <div className="quad-chips is-catalogo">
               {proposte
@@ -1099,13 +1177,43 @@ export default function Quaderno() {
               <button
                 type="button"
                 className="quad-chip is-piu"
-                title="Aggiungi una grandezza tua"
+                title="Aggiungi una variabile tua"
                 onClick={() => aggiungiGrandezza({ tipo: 'compilabile' })}
               >
                 <Plus size={10} weight="bold" />
                 nuova
               </button>
             </div>
+
+            {/* una matita sola, in fondo: apre l'anagrafica di tutte le
+                variabili invece di una matita per riga */}
+            <div className="quad-formule-barra">
+              <button
+                type="button"
+                className={`btn ${modificaVariabili ? 'btn-primary' : 'btn-secondary'}`}
+                aria-pressed={modificaVariabili}
+                disabled={compilabili.length === 0}
+                title="Nome, unità di misura e nota di tutte le variabili"
+                onClick={() => setModificaVariabili((v) => !v)}
+              >
+                {modificaVariabili ? <Check size={13} /> : <PencilSimple size={13} />}
+                {modificaVariabili ? 'Fine' : 'Edita'}
+              </button>
+            </div>
+
+            {modificaVariabili && (
+              <div className="quad-modifiche">
+                {compilabili.map((v) => (
+                  <CampiGrandezza
+                    key={v.id}
+                    v={v}
+                    elenco={calc.unita}
+                    onAggiorna={(patch) => aggiornaVoce(v.id, patch)}
+                    onElimina={() => setVoci(calc.voci.filter((x) => x.id !== v.id))}
+                  />
+                ))}
+              </div>
+            )}
           </Sezione>
 
           <Sezione id="q-fisse" titolo="Costanti" hint={`${voci.filter((v) => (v.tipo ?? 'operazione') === 'fissa').length}`}>
@@ -1413,6 +1521,8 @@ function BloccoCard({
   scrivi,
   onScritto,
   onAggiorna,
+  onFonte,
+  fonteEditabile,
   onElimina,
   onScorri,
   onSalta,
@@ -1428,6 +1538,14 @@ function BloccoCard({
   scrivi: boolean;
   onScritto: () => void;
   onAggiorna: (patch: Partial<BloccoQuaderno>) => void;
+  /**
+   * Scrive nella variabile del pannello a cui il blocco è collegato: è così
+   * che una riga `b = …` si compila **sul foglio**, dove la si legge, invece
+   * che nell'elenco a destra.
+   */
+  onFonte: (patch: Partial<VoceCalcolo>) => void;
+  /** true = la fonte è una variabile del pannello, quindi si scrive da qui. */
+  fonteEditabile: boolean;
   onElimina: () => void;
   /** Un passo indietro (−1) o avanti (+1) nella sequenza del foglio. */
   onScorri: (verso: -1 | 1) => void;
@@ -1502,6 +1620,12 @@ function BloccoCard({
    * cosa sola — «qui il numero lo metti tu».
    */
   const variabile = bloccoVariabile(b);
+  /**
+   * La riga è collegata a una variabile del pannello: il valore si scrive
+   * **qui**, nella cella, e va a finire nella variabile — così sul foglio si
+   * compila tutto, e chi la richiama più in basso vede subito il numero.
+   */
+  const compilabile = bl.tipo === 'valore' && fonteEditabile;
   const rendiModificabile = () =>
     onAggiorna({
       tipo: 'formula',
@@ -1518,9 +1642,9 @@ function BloccoCard({
 
   return (
     <div
-      className={`quad-blocco${b.pieno ? ' is-pieno' : ''}${b.errore ? ' is-errore' : ''}${
-        variabile ? ' is-variabile' : ''
-      }${bersaglio ? ' is-bersaglio' : ''}`}
+      className={`quad-blocco${b.pieno ? ' is-pieno' : ''}${bl.tipo === 'linea' ? ' is-linea' : ''}${
+        b.errore ? ' is-errore' : ''
+      }${variabile ? ' is-variabile' : ''}${bersaglio ? ' is-bersaglio' : ''}`}
       style={{ '--span': colonne } as CSSProperties}
       tabIndex={-1}
       onKeyDown={tasti}
@@ -1553,6 +1677,7 @@ function BloccoCard({
         {b.provenienza && bl.tipo === 'import' && <span className="fonte">↩ {b.provenienza}</span>}
         <span className="tasti">
           {b.pieno ? (
+            bl.tipo !== 'linea' && (
             <button
               type="button"
               className={`larghezza${colonne > 1 ? ' is-larga' : ''}`}
@@ -1562,6 +1687,7 @@ function BloccoCard({
               <ArrowsOutLineHorizontal size={11} weight="bold" />
               <span className="n">{colonne}</span>
             </button>
+            )
           ) : (
             <>
               <button
@@ -1625,6 +1751,19 @@ function BloccoCard({
           aria-label="Nota"
           onChange={(e) => onAggiorna({ testo: e.target.value })}
         />
+      )}
+
+      {/* ── la linea che divide il foglio in capitoli ── */}
+      {bl.tipo === 'linea' && (
+        <div className="quad-divisore">
+          <input
+            className="quad-divisore-titolo"
+            value={bl.testo}
+            placeholder="Titolo del capitolo — scrivi qui di che cosa si parla da qui in poi"
+            aria-label="Titolo del capitolo"
+            onChange={(e) => onAggiorna({ testo: e.target.value })}
+          />
+        </div>
       )}
 
       {/* ── screenshot ── */}
@@ -1753,6 +1892,31 @@ function BloccoCard({
                   onChange={(e) => onAggiorna({ espressione: e.target.value })}
                 />
               </>
+            ) : compilabile ? (
+              <>
+                <span className="nome">
+                  <Nome nome={b.nome || '—'} />
+                </span>
+                <span className="uguale">=</span>
+                <input
+                  className={`input quad-in-valore${b.errore ? ' is-error' : ''}`}
+                  value={b.espressione}
+                  placeholder="—"
+                  inputMode="decimal"
+                  aria-label={`Valore di ${b.nome || 'variabile'}`}
+                  autoComplete="off"
+                  spellCheck={false}
+                  data-voce={bl.fonte}
+                  ref={(el) => {
+                    esprRef.current = el;
+                    if (el && document.activeElement === el) campoRef.current = el;
+                  }}
+                  onFocus={(e) => {
+                    campoRef.current = e.currentTarget;
+                  }}
+                  onChange={(e) => onFonte({ espressione: e.target.value })}
+                />
+              </>
             ) : (
               <>
                 {b.nome && (
@@ -1776,6 +1940,11 @@ function BloccoCard({
                 <span className="quad-errore" title={b.errore}>
                   <WarningCircle size={12} /> {b.errore}
                 </span>
+              ) : compilabile && definizione ? (
+                // il numero lo si sta scrivendo nella cella qui accanto — anche
+                // quando è ancora vuota: «manca b» davanti al campo di b era il
+                // modo peggiore di dire «scrivilo»
+                <UnitaBlocco b={b} onAggiorna={(patch) => onFonte({ um: patch.um ?? '' })} />
               ) : b.mancanti.length ? (
                 <span className="quad-manca">manca {b.mancanti.join(', ')}</span>
               ) : b.testo ? (

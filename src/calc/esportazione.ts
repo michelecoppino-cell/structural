@@ -80,6 +80,8 @@ ${b.righe.map((r) => `        <li>${escape(r)}</li>`).join('\n')}
   .join('\n')}
   </section>`;
       }
+      if (el.tipo === 'linea')
+        return `  <div class="divisore">${el.titolo ? `<h2>${escape(el.titolo)}</h2>` : ''}</div>`;
       if (el.tipo === 'nota') return `  <p class="nota">${escape(el.testo)}</p>`;
       if (el.tipo === 'immagine')
         // l'immagine è dentro il file come data URL: il documento resta un
@@ -135,6 +137,10 @@ ${el.didascalia ? `    <figcaption>${escape(el.didascalia)}</figcaption>` : ''}
   .calcolo.is-fuori { color: #b3261e; font-weight: 600; }
   .nota-riga { color: #55606f; font-size: 10.5px; margin-left: 8px; }
   .nota { margin: 8px 0; font-size: 12px; }
+  /* il divisore di capitolo: una riga orizzontale e, sopra, il titolo di
+     quello che comincia lì — è lo stacco che sul foglio si tira a matita */
+  .divisore { margin: 14px 0 8px; border-top: 1px solid #8a8f9a; }
+  .divisore h2 { margin: 6px 0 0; font-size: 13px; }
   .schema { margin: 10px 0; break-inside: avoid; page-break-inside: avoid; }
   .schema img { max-width: 100%; border: 1px solid #c8ced8; }
   figcaption { font-size: 10.5px; color: #55606f; margin-top: 3px; }
