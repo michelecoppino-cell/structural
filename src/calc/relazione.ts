@@ -14,10 +14,12 @@ import { COMBINAZIONI, calcolaSollecitazioni } from './sollecitazioni';
 import { SCHEMI_BY_ID } from './trave';
 import {
   verificaAcciaioSezione,
+  verificaDeformazione,
   verificaFlessioneCA,
   verificaTaglioArmato,
   verificaTaglioNonArmato,
 } from './verifiche';
+import { schemaVincoli } from './libera-inflessione';
 import {
   CONDIZIONI_CARICO,
   verificaInstabilitaLT,
@@ -215,7 +217,18 @@ function blocchiVerifiche(state: AppState): Blocco[] {
   const lt = verificaInstabilitaLT(acIn, ltIn);
   const pu = verificaInstabilitaPunta(acIn, ltIn);
   const pf = verificaPressoflessione(acIn, ltIn, lt, pu);
+  const df = verificaDeformazione(acIn, state.verifiche.deformazione);
+  const dfIn = state.verifiche.deformazione;
   const condizione = CONDIZIONI_CARICO.find((c) => c.id === ltIn.carico);
+  /** Come è stato scelto β su un asse, detto per esteso. */
+  const comeBeta = (modo: string, eta1: string, eta2: string) => {
+    const sv = schemaVincoli(modo);
+    if (sv) return `${sv.label} (β consigliato ${sv.consigliato.toFixed(2)})`;
+    if (modo === 'telaio-fissi') return `colonna di telaio a nodi fissi, η1 = ${eta1}, η2 = ${eta2}`;
+    if (modo === 'telaio-mobili')
+      return `colonna di telaio a nodi spostabili, η1 = ${eta1}, η2 = ${eta2}`;
+    return 'β imposto a mano';
+  };
   const sfr = (v: number) => (Number.isFinite(v) ? fx(v, 3) : '∞');
 
   return [
@@ -263,6 +276,14 @@ function blocchiVerifiche(state: AppState): Blocco[] {
       ],
     },
     {
+      titolo: 'Acciaio — deformazione in esercizio (NTC2018 §4.2.4.2.1)',
+      righe: [
+        `${df.schema?.label}; L = ${dfIn.L} m; ${df.schema?.concentrato ? 'P' : 'q'} = ${dfIn.q} ${df.schema?.concentrato ? 'kN' : 'kN/m'}; Ix = ${fx(df.proprieta?.Ix ?? 0, 0)} cm⁴`,
+        `f = ${fx(df.f, 1)} mm; L/f = ${Number.isFinite(df.LsuF) ? fx(df.LsuF, 0) : '∞'}`,
+        `Limite L/${dfIn.limite} = ${fx(df.fAmmessa, 1)} mm → f/f,amm = ${fx(df.esito.sfruttamento, 3)} — ${df.esito.ok ? 'VERIFICATO' : 'NON VERIFICATO'} (margine ${fx(df.esito.margine, 1)}%)`,
+      ],
+    },
+    {
       titolo: 'Acciaio — instabilità flesso-torsionale (NTC2018 §4.2.4.1.3.2)',
       righe: lt.richiesta
         ? [
@@ -282,9 +303,11 @@ function blocchiVerifiche(state: AppState): Blocco[] {
       titolo: 'Acciaio — instabilità di punta (NTC2018 §4.2.4.1.3.1)',
       righe: [
         `Profilo ${acIn.profilo} in ${acIn.acciaio}; A = ${fx((pu.proprieta?.A ?? 0), 1)} cm²; classe ${pu.classe.classe} in compressione; λ1 = π·√(E/fyk) = ${fx(pu.lambda1, 2)}`,
+        `Asse y-y: L = ${ltIn.Ly} mm; ${comeBeta(ltIn.modoY, ltIn.eta1Y, ltIn.eta2Y)} → βy = ${fx(pu.y.beta, 3)}`,
+        `Asse z-z: L = ${ltIn.Lz} mm; ${comeBeta(ltIn.modoZ, ltIn.eta1Z, ltIn.eta2Z)} → βz = ${fx(pu.z.beta, 3)}`,
         ...[pu.y, pu.z].map(
           (a) =>
-            `Asse ${a.asse}-${a.asse}: Lcr = ${fx(a.Lcr, 0)} mm; i = ${fx(a.i, 1)} mm; λ = ${fx(a.lambda, 1)}${a.troppoSnella ? ' (oltre 200!)' : ''}; λ̄ = ${fx(a.lambdaAd, 3)}; curva ${a.curva} (α = ${fx(a.alfa, 2)}); χ = ${fx(a.chi, 3)}; Ncr = ${fx(a.Ncr, 0)} kN; Nb,Rd = ${fx(a.NbRd, 1)} kN`,
+            `Asse ${a.asse}-${a.asse}: Lcr = β·L = ${fx(a.Lcr, 0)} mm; i = ${fx(a.i, 1)} mm; λ = ${fx(a.lambda, 1)}${a.troppoSnella ? ' (oltre 200!)' : ''}; λ̄ = ${fx(a.lambdaAd, 3)}; curva ${a.curva} (α = ${fx(a.alfa, 2)}); χ = ${fx(a.chi, 3)}; Ncr = ${fx(a.Ncr, 0)} kN; Nb,Rd = ${fx(a.NbRd, 1)} kN`,
         ),
         `Nb,Rd = χmin·A·fyk/γM1 = ${fx(pu.NbRd, 1)} kN — governa l'asse ${pu.governa}-${pu.governa} (Nc,Rd = ${fx(pu.NcRd, 1)} kN)`,
         `NEd = ${acIn.NEd} kN → NEd/Nb,Rd = ${fx(pu.esito.sfruttamento, 3)} — ${pu.esito.ok ? 'VERIFICATO' : 'NON VERIFICATO'} (margine ${fx(pu.esito.margine, 1)}%)`,

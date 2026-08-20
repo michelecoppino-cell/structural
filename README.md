@@ -276,18 +276,35 @@ I dati in ingresso sono **controllati**: passo delle staffe o luce nulli, d magg
 α fuori da 45°÷90°, γc < 1 marcano il campo e **bloccano l'esito** invece di dichiararne uno
 falso. Accanto ai campi c'è la **sezione quotata** con bw, h, d, staffe e armatura.
 
-L'**acciaio** ha sei verifiche, tutte sul profilo scelto dal sagomario (IPE, HEA, HEB,
-UPN, angolari a lati uguali, tubi quadri, rettangolari e tondi): profilo, classe di acciaio
-e sollecitazioni sono condivisi fra tutte, così cambiare taglia le aggiorna insieme.
+L'**acciaio** non passa dalla barra di schede: si sceglie la **sezione una volta sola**, in
+testa alla scheda — profilo, classe di acciaio, γM0 e γM1, con accanto le proprietà e la
+classe — e sotto stanno le verifiche, in due gruppi di tendine che partono tutte chiuse. Ogni
+tendina porta sul titolo il suo sfruttamento e il suo esito, così il quadro si legge senza
+aprire niente, e si apre solo quella su cui si sta lavorando.
+
+**Verifiche elastiche — predimensionamento**
 
 | Verifica | Formula | Riferimento |
 |---|---|---|
 | Flessione elastica | MRd = Wel,x · fyd | §4.2.4.1.2 |
-| Compressione elastica | NRd = A · fyd (senza instabilità) | §4.2.4.1.2 |
 | Taglio elastico | VRd = Avz · fyd / √3 | §4.2.4.1.2.4 |
-| Instabilità flesso-torsionale | Mb,Rd = χLT · Wy · fyk / γM1 | §4.2.4.1.3.2 |
+| Compressione elastica | NRd = A · fyd (senza instabilità) | §4.2.4.1.2 |
+| Deformazione (SLE) | f ≤ L/limite, freccia in forma chiusa | §4.2.4.2.1, tab. 4.2.X |
+
+**Verifiche di stabilità**
+
+| Verifica | Formula | Riferimento |
+|---|---|---|
 | Instabilità di punta | Nb,Rd = χ · A · fyk / γM1 | §4.2.4.1.3.1 |
+| Instabilità flesso-torsionale | Mb,Rd = χLT · Wy · fyk / γM1 | §4.2.4.1.3.2 |
 | Presso-flessione, Metodo A | somma dei tre termini ≤ 1 | Circolare §C4.2.4.1.3.3 |
+
+La **deformazione** è il controllo di predimensionamento che manca sempre quando si sceglie
+un profilo: schema statico fra i sei elementari, carico di esercizio, luce, e il limite di
+tabella 4.2.X scelto per destinazione (copertura, solaio, solaio che regge colonne). La
+freccia esce dalla forma chiusa sull'inerzia dell'asse forte — serve a decidere l'altezza del
+profilo, non sostituisce il calcolo della struttura reale, che sta nella scheda
+Sollecitazioni con i suoi vincoli veri.
 
 La **classe della sezione** è calcolata dalla scheda (§4.2.3): ogni parete si misura sul
 proprio rapporto c/t — larghezze prese *fra i raccordi*, come vuole il prospetto — e la
@@ -332,7 +349,26 @@ resistente della sezione.
 L'**instabilità di punta** guarda i due assi separatamente — lunghezza dell'asta e
 coefficiente di libera inflessione β per ciascuno, perché i controventi trattengono l'asse
 debole più spesso di quello forte — e tiene il χ più basso dei due: si sbanda dove si è più
-deboli. La curva viene dalla tab. 4.2.VIII (h/b e spessore dell'ala per i doppi T, formatura
+deboli.
+
+β non si sceglie a occhio: è il numero da cui dipende tutto il resto (il carico critico va
+con 1/(β·L)², fra β = 0.7 e β = 2 si divide per otto) e la scheda lo fa scegliere invece che
+scrivere. Per ciascun asse si prende **uno schema di vincolo** fra i sei elementari, e il
+disegno accanto mostra la deformata di sbandamento con la sua Lcr — così β si *vede*, come
+distanza fra due punti di flesso. In alternativa si passa dalle **formule di Wood** per le
+colonne di telaio: si danno i due fattori di distribuzione η ai nodi e β lo calcola la
+scheda, distinguendo il telaio controventato da quello che non lo è. Resta la terza strada,
+il numero scritto a mano, per quando arriva da un'analisi fatta altrove.
+
+La tendina «**Come si sceglie β**», in coda al gruppo, è la guida vera e propria: i sei
+schemi disegnati uno accanto all'altro con β teorico e β consigliato, perché i due numeri
+sono diversi (un incastro vero non è quello del disegno: una base di colonna ruota, un nodo
+bullonato cede) e in progetto si usa il secondo. Il prospetto è quello classico di
+CNR-UNI 10011 — lo stesso della tabella C-A-7.1 del commentario AISC, riportato da Ballio e
+Mazzolani in «Strutture in acciaio». Sotto ci sono le formule di Wood per esteso, con la
+definizione di η, e il promemoria che si dimentica più spesso: **βy e βz sono due numeri
+diversi**, e una colonna di capannone è un telaio in un piano e un'asta controventata
+nell'altro. La curva viene dalla tab. 4.2.VIII (h/b e spessore dell'ala per i doppi T, formatura
 per i profili cavi, `b` per gli angolari, `c` per gli U), e la tabella dei risultati mostra
 per ogni asse Lcr, λ, λ̄, curva, χ e Nb,Rd, con evidenziato quello che governa. Una snellezza
 oltre 200 viene segnalata. Per gli angolari la snellezza è quella attorno all'asse principale
@@ -778,6 +814,7 @@ src/
     sollecitazioni.ts  combinazioni di carico e collegamento con il solutore
     verifiche.ts   verifiche a taglio, flessione e sezioni in acciaio (dai fogli Excel)
     instabilita.ts stabilità delle membrature in acciaio: punta, flesso-torsionale, Metodo A
+    libera-inflessione.ts  β: schemi di vincolo, valori consigliati, formule di Wood
     classificazione.ts  classe della sezione dai rapporti c/t (§4.2.3)
     calcolatrice.ts  interprete delle espressioni e sequenza delle grandezze
     unita.ts       forma e scala delle unità di misura, e la loro conversione
@@ -891,6 +928,13 @@ npm test
   secondo ordine invece di amplificarlo. **L'app usa Wz e amplifica nel verso giusto**; è
   la ragione per cui, con un assiale in gioco, i suoi numeri sono più severi di quelli del
   foglio.
+- I β **consigliati** degli schemi elementari (0.65, 0.80, 1.20, 2.10) sono più alti dei
+  teorici (0.5, 0.7, 1.0, 2.0) perché il vincolo reale non è mai quello ideale. L'app propone
+  i consigliati, che è la scelta di progetto; chi ha un incastro davvero rigido può scendere
+  ai teorici scrivendo β a mano.
+- Il **limite di deformabilità** della tab. 4.2.X è quello sulla freccia totale δmax. La norma
+  distingue anche δ2, la parte dovuta ai carichi variabili, che l'app non separa: il controllo
+  qui è di predimensionamento, e usa il carico che gli si dà.
 - La curva di instabilità dei **profili cavi** dipende da come sono stati ottenuti: a caldo
   la `a`, a freddo la `c`, che è molto più penalizzante. Il sagomario non lo registra, così
   la scheda lo chiede, e parte da «formato a freddo» — se il tubo è laminato a caldo lo si

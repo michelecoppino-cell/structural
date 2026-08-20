@@ -588,6 +588,16 @@ select.input {
   display: grid;
 }
 
+/* l'esito di una verifica accanto al suo titolo: si legge a pannello chiuso e
+   resta lì quando lo si apre, perché è il motivo per cui lo si è aperto */
+.panel-head .badge-testa {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
 .panel-head .caret {
   color: var(--text-muted);
   flex: none;
@@ -1076,6 +1086,71 @@ button.field-origin:hover {
   font-size: 11.5px;
 }
 
+/* le due tendine di riepilogo accanto al titolo di una verifica */
+.panel-head .quota-sfr {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* i sei schemi di vincolo della guida a β, in griglia che si adatta */
+.griglia-schemi {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 12px;
+}
+
+.scheda-schema .disegno {
+  max-width: none;
+}
+
+.scheda-schema .titolo {
+  font-size: 12.5px;
+  font-weight: 500;
+  margin-top: 8px;
+}
+
+.scheda-schema .valori {
+  font-size: 11.5px;
+  color: var(--color-accent-300);
+  margin-top: 2px;
+  font-variant-numeric: tabular-nums;
+}
+
+.scheda-schema .nota {
+  font-size: 11.5px;
+  color: var(--text-faint);
+  margin-top: 4px;
+  line-height: 1.45;
+}
+
+/* i due schemi scelti, y-y e z-z, uno accanto all'altro */
+.coppia-disegni {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.coppia-disegni .disegno {
+  max-width: none;
+}
+
+/* una formula riportata per esteso, con l'allineamento che le spetta */
+.formula-blocco {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--text-muted);
+  background: var(--nested);
+  border: 1px solid var(--border-panel);
+  border-radius: var(--radius-lg);
+  padding: 10px 12px;
+  margin: 8px 0 0;
+  overflow-x: auto;
+  white-space: pre;
+}
+
 .ver-comandi {
   display: flex;
   flex-wrap: wrap;
@@ -1205,6 +1280,11 @@ button.field-origin:hover {
 
 .dg-line.is-faint {
   stroke: var(--diagram-faint);
+}
+
+/* la deformata di sbandamento: è il soggetto del disegno, non un contorno */
+.dg-line.is-accent {
+  stroke: var(--color-accent-400);
 }
 
 .dg-area.is-faint {

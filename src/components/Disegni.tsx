@@ -1063,3 +1063,147 @@ export function DisposizioneFori() {
     </Cornice>
   );
 }
+
+/* ──────────────── schemi di vincolo per la libera inflessione ──────────── */
+
+/**
+ * L'asta compressa con i suoi vincoli e la deformata di sbandamento: è il
+ * disegno che rende leggibile β, perché la lunghezza di libera inflessione è
+ * la distanza fra due punti di flesso della deformata — β·L si *vede*.
+ *
+ * Le deformate sono quelle esatte dei casi elementari, tranne l'incastro-
+ * cerniera, dove la soluzione vera è trascendente e qui è approssimata con la
+ * combinazione di seno e retta che le somiglia. Servono a far capire la forma,
+ * non a misurarci sopra.
+ */
+const DEFORMATE: Record<string, (t: number) => number> = {
+  // t va da 0 (base) a 1 (testa); il valore è lo spostamento laterale, 0÷1
+  'cerniera-cerniera': (t) => Math.sin(Math.PI * t),
+  'incastro-incastro': (t) => (1 - Math.cos(2 * Math.PI * t)) / 2,
+  'incastro-cerniera': (t) => (Math.sin(4.4934 * t) - 4.4934 * t * Math.cos(4.4934)) / 1.35,
+  'incastro-incastro-traslante': (t) => (1 - Math.cos(Math.PI * t)) / 2,
+  'incastro-cerniera-traslante': (t) => Math.sin((Math.PI * t) / 2),
+  mensola: (t) => 1 - Math.cos((Math.PI * t) / 2),
+};
+
+/** Vincolo alla base o in testa, disegnato al punto (x, y). */
+function Vincolo({
+  x,
+  y,
+  tipo,
+  verso,
+}: {
+  x: number;
+  y: number;
+  tipo: 'incastro' | 'cerniera' | 'libero';
+  /** +1 = il vincolo sta sotto l'asta, −1 = sopra. */
+  verso: 1 | -1;
+}) {
+  if (tipo === 'libero') return null;
+  const h = 9 * verso;
+  if (tipo === 'cerniera') {
+    return (
+      <g>
+        <path className="dg-line" strokeWidth={1.4} fill="none" d={`M${x - 8},${y + h} L${x},${y} L${x + 8},${y + h}`} />
+        <path className="dg-axis" strokeWidth={1} d={`M${x - 12},${y + h} L${x + 12},${y + h}`} />
+        <circle cx={x} cy={y} r={2} className="dg-nodo" />
+      </g>
+    );
+  }
+  return (
+    <g>
+      <path className="dg-line" strokeWidth={1.6} d={`M${x - 13},${y} L${x + 13},${y}`} />
+      {[-9, -3, 3, 9].map((d) => (
+        <path key={d} className="dg-axis" strokeWidth={1} d={`M${x + d},${y} L${x + d - 4},${y + h}`} />
+      ))}
+    </g>
+  );
+}
+
+export function SchemaVincoli({
+  schema,
+  beta,
+  titolo,
+}: {
+  schema: string;
+  beta: number;
+  titolo?: string;
+}) {
+  const yBase = 152;
+  const yTesta = 24;
+  const H = yBase - yTesta;
+  const x0 = 52;
+  const ampiezza = 26;
+
+  const forma = DEFORMATE[schema] ?? DEFORMATE['cerniera-cerniera'];
+  const punti = Array.from({ length: 41 }, (_, i) => {
+    const t = i / 40;
+    return `${(x0 + ampiezza * forma(t)).toFixed(1)},${(yBase - H * t).toFixed(1)}`;
+  });
+
+  const traslante = schema.includes('traslante') || schema === 'mensola';
+  const base = schema.startsWith('cerniera') ? 'cerniera' : 'incastro';
+  const testa =
+    schema === 'mensola'
+      ? 'libero'
+      : schema.endsWith('-cerniera') || schema.endsWith('cerniera-traslante') || schema === 'cerniera-cerniera'
+        ? 'cerniera'
+        : 'incastro';
+
+  return (
+    <div className="disegno">
+      {titolo && <div className="titolo">{titolo}</div>}
+      <svg viewBox="0 0 150 178" role="img" aria-label={`Schema di vincolo, β = ${beta}`}>
+        {/* l'asta indeformata, come riferimento */}
+        <path className="dg-axis" strokeWidth={1} strokeDasharray="4 3" d={`M${x0},${yBase} L${x0},${yTesta}`} />
+        {/* la deformata di sbandamento */}
+        <polyline className="dg-line is-accent" strokeWidth={2} fill="none" points={punti.join(' ')} />
+
+        <Vincolo x={x0} y={yBase} tipo={base} verso={1} />
+        {testa !== 'libero' && (
+          <Vincolo x={x0 + ampiezza * forma(1)} y={yTesta} tipo={testa as 'incastro' | 'cerniera'} verso={-1} />
+        )}
+
+        {/* il carico in testa, che è la ragione di tutto */}
+        <path
+          className="dg-quota"
+          strokeWidth={1.2}
+          d={`M${x0 + ampiezza * forma(1)},${yTesta - 20} L${x0 + ampiezza * forma(1)},${yTesta - 6}
+             M${x0 + ampiezza * forma(1) - 3},${yTesta - 10} L${x0 + ampiezza * forma(1)},${yTesta - 5}
+             L${x0 + ampiezza * forma(1) + 3},${yTesta - 10}`}
+        />
+        <text x={x0 + ampiezza * forma(1) + 6} y={yTesta - 12} className="dg-testo is-accent">
+          N
+        </text>
+
+        {/* se la testa trasla, lo si dice con una freccia orizzontale */}
+        {traslante && (
+          <>
+            <path
+              className="dg-axis"
+              strokeWidth={1}
+              d={`M${x0},${yTesta} L${x0 + ampiezza * forma(1)},${yTesta}`}
+            />
+            {/* la scritta sta a sinistra della freccia del carico, sopra la
+                linea di traslazione: sotto finirebbe addosso alla deformata */}
+            <text x={x0 - 6} y={yTesta - 5} className="dg-testo" textAnchor="end">
+              trasla
+            </text>
+          </>
+        )}
+
+        {/* la lunghezza vera e quella di libera inflessione, a confronto */}
+        <path className="dg-quota" strokeWidth={1} d={`M132,${yBase} L132,${yTesta}`} />
+        <path className="dg-quota" strokeWidth={1} d={`M128,${yBase} L136,${yBase} M128,${yTesta} L136,${yTesta}`} />
+        <text x={126} y={(yBase + yTesta) / 2} className="dg-testo" textAnchor="end">
+          L
+        </text>
+        {/* centrata sul disegno, non sull'asta: la scritta è più larga di lei
+            e appoggiata all'asta uscirebbe dal riquadro */}
+        <text x={75} y={172} className="dg-testo is-accent" textAnchor="middle">
+          β = {beta.toFixed(2)} → Lcr = {beta.toFixed(2)}·L
+        </text>
+      </svg>
+    </div>
+  );
+}
