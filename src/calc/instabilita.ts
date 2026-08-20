@@ -1,5 +1,8 @@
 /**
- * Instabilità flesso-torsionale delle travi inflesse — NTC2018 §4.2.4.1.3.2.
+ * Verifiche di stabilità delle membrature in acciaio — NTC2018 §4.2.4.1.3:
+ * instabilità flessionale delle aste compresse (§4.2.4.1.3.1), instabilità
+ * flesso-torsionale delle travi inflesse (§4.2.4.1.3.2) e verifica combinata
+ * delle aste presso-inflesse con il Metodo A della Circolare (§C4.2.4.1.3.3).
  *
  * Trascrizione del foglio `Verifica_aste_acciaio_rev01.xlsm` (foglio
  * "Verifica aste", righe 259-281 e funzione VBA `Mom_critico_Mcr`): momento
@@ -16,8 +19,9 @@
  */
 
 import { ACCIAIO_STRUTTURALE } from '../data/materiali';
-import { proprietaProfilo, type ProprietaProfilo } from '../data/profili-acciaio';
+import { proprietaProfilo, type ProprietaProfilo, type TipoProfilo } from '../data/profili-acciaio';
 import { num } from './azioni';
+import { classificaProfilo, moduloDaClasse, type RisultatiClasse } from './classificazione';
 import { esito, type Esito, type InputAcciaioSezione } from './verifiche';
 
 /** Modulo di Young dell'acciaio da carpenteria (N/mm²) — NTC2018 §11.3.4.1. */
@@ -125,7 +129,24 @@ export function curvaLT(tipoProfilo: string, h: number, b: number): string {
 /** Dove è applicato il carico rispetto al baricentro della sezione. */
 export type PuntoCarico = 'superiore' | 'baricentro' | 'inferiore';
 
-export interface InputInstabilitaLT {
+/** Come è stato ottenuto il profilo cavo: cambia la curva di instabilità. */
+export type Formatura = 'caldo' | 'freddo';
+
+/**
+ * Tutti i dati che servono alle verifiche di stabilità della membratura.
+ * Stanno insieme perché parlano dello stesso elemento: le lunghezze di libera
+ * inflessione servono alla punta e alla verifica combinata, il tratto non
+ * trattenuto e la condizione di carico alla flesso-torsionale, γM1 a tutte.
+ */
+export interface InputStabilita {
+  /** Lunghezza dell'asta e coefficiente di vincolo nel piano y-y (mm). */
+  Ly: string;
+  betaY: string;
+  /** Lunghezza dell'asta e coefficiente di vincolo nel piano z-z (mm). */
+  Lz: string;
+  betaZ: string;
+  /** Formatura dei profili cavi: a caldo o a freddo (tab. 4.2.VIII). */
+  formatura: Formatura;
   /** Lunghezza del tratto non trattenuto lateralmente (mm). */
   L: string;
   /** Coefficiente di lunghezza efficace per la rotazione attorno all'asse debole. */
@@ -138,15 +159,24 @@ export interface InputInstabilitaLT {
   psi: string;
   puntoCarico: PuntoCarico;
   gammaM1: string;
-  /** Modulo resistente: plastico per le sezioni compatte, elastico altrimenti. */
-  modulo: 'elastico' | 'plastico';
+  /**
+   * Modulo resistente: 'automatico' lo prende dalla classe della sezione
+   * (plastico in classe 1 e 2, elastico dalla 3 in su), gli altri due lo
+   * impongono.
+   */
+  modulo: 'automatico' | 'elastico' | 'plastico';
   /** Mcr calcolato dal prospetto F.1 o imposto a mano (da un'analisi a parte). */
   modoMcr: 'automatico' | 'manuale';
   /** Momento critico imposto a mano (kNm). */
   McrManuale: string;
 }
 
-export const INSTABILITA_LT_DEFAULT: InputInstabilitaLT = {
+export const STABILITA_DEFAULT: InputStabilita = {
+  Ly: '4000',
+  betaY: '1',
+  Lz: '2000',
+  betaZ: '1',
+  formatura: 'freddo',
   L: '2000',
   kz: '1',
   kw: '1',
@@ -154,10 +184,197 @@ export const INSTABILITA_LT_DEFAULT: InputInstabilitaLT = {
   psi: '1',
   puntoCarico: 'superiore',
   gammaM1: '1.05',
-  modulo: 'elastico',
+  modulo: 'automatico',
   modoMcr: 'automatico',
   McrManuale: '0',
 };
+
+/**
+ * Curva di instabilità per compressione — NTC2018 tab. 4.2.VIII, nella
+ * trascrizione della funzione VBA `curva_instabilità` del foglio.
+ *
+ * Gli acciai da 460 MPa in su hanno una colonna a parte, con curve migliori:
+ * qui vale solo per fyk ≥ 460, e un S450 (fyk = 440) resta sulla colonna
+ * ordinaria, cioè dalla parte severa.
+ */
+export function curvaCompressione(
+  tipo: TipoProfilo,
+  h: number,
+  b: number,
+  tf: number,
+  asse: 'y' | 'z',
+  fyk: number,
+  formatura: Formatura,
+): string {
+  const altoResistenziale = fyk >= 460;
+  if (tipo === 'IPE' || tipo === 'HEA' || tipo === 'HEB') {
+    const snello = b > 0 && h / b > 1.2;
+    if (altoResistenziale) {
+      if (snello) return tf <= 40 ? 'a0' : 'a';
+      return tf <= 100 ? 'a' : 'c';
+    }
+    if (snello) {
+      if (tf <= 40) return asse === 'y' ? 'a' : 'b';
+      return asse === 'y' ? 'b' : 'c';
+    }
+    if (tf <= 100) return asse === 'y' ? 'b' : 'c';
+    return 'd';
+  }
+  if (tipo === 'TUBO_QUADRO' || tipo === 'TUBO_RETT' || tipo === 'TUBO_TONDO') {
+    if (formatura === 'freddo') return 'c';
+    return altoResistenziale ? 'a0' : 'a';
+  }
+  if (tipo === 'ANGOLARE') return 'b';
+  return 'c'; // UPN e sezioni a U
+}
+
+/** Coefficiente χ di una curva, dato il fattore di imperfezione e λ̄. */
+function chiDaCurva(alfa: number, lambdaAd: number): { phi: number; chi: number } {
+  const phi = 0.5 * (1 + alfa * (lambdaAd - 0.2) + lambdaAd ** 2);
+  const sotto = phi ** 2 - lambdaAd ** 2;
+  const chi = sotto > 0 ? Math.min(1, 1 / (phi + Math.sqrt(sotto))) : 1;
+  return { phi, chi };
+}
+
+/** Esito dell'instabilità flessionale attorno a uno dei due assi. */
+export interface AsseCompresso {
+  /** 'y' = asse forte, 'z' = asse debole (per gli angolari, il principale minimo). */
+  asse: 'y' | 'z';
+  /** Inerzia e raggio d'inerzia usati (cm⁴, mm). */
+  I: number;
+  i: number;
+  /** Lunghezza di libera inflessione Lcr = β·L (mm). */
+  Lcr: number;
+  /** Carico critico euleriano (kN). */
+  Ncr: number;
+  lambda: number;
+  lambdaAd: number;
+  /** Vero se la snellezza supera il limite di buona pratica (λ ≤ 200). */
+  troppoSnella: boolean;
+  curva: string;
+  alfa: number;
+  phi: number;
+  chi: number;
+  /** Resistenza all'instabilità attorno a questo asse (kN). */
+  NbRd: number;
+}
+
+export interface RisultatiInstabilitaPunta {
+  proprieta?: ProprietaProfilo;
+  fyk: number;
+  /** Snellezza di riferimento λ1 = π·√(E/fyk). */
+  lambda1: number;
+  y: AsseCompresso;
+  z: AsseCompresso;
+  /** L'asse che governa, cioè quello col χ più basso. */
+  governa: 'y' | 'z';
+  chiMin: number;
+  /** Resistenza a compressione di progetto (kN). */
+  NbRd: number;
+  /** Resistenza della sola sezione, senza instabilità (kN). */
+  NcRd: number;
+  classe: RisultatiClasse;
+  esito: Esito;
+}
+
+const ASSE_VUOTO = (asse: 'y' | 'z'): AsseCompresso => ({
+  asse,
+  I: 0,
+  i: 0,
+  Lcr: 0,
+  Ncr: 0,
+  lambda: 0,
+  lambdaAd: 0,
+  troppoSnella: false,
+  curva: 'c',
+  alfa: 0.49,
+  phi: 0,
+  chi: 1,
+  NbRd: 0,
+});
+
+/**
+ * Instabilità flessionale dell'asta compressa — "instabilità di punta"
+ * (NTC2018 §4.2.4.1.3.1, eq. 4.2.41):
+ *
+ *   λ̄ = (Lcr/i) / λ1,  λ1 = π·√(E/fyk)
+ *   Φ = 0.5·[1 + α·(λ̄ − 0.2) + λ̄²]
+ *   χ = 1/[Φ + √(Φ² − λ̄²)] ≤ 1
+ *   Nb,Rd = χ·A·fyk/γM1
+ *
+ * Si sbanda dove si è più deboli: il χ che vale è il minore fra i due assi.
+ * Per l'asse debole l'inerzia è quella principale minima, che negli angolari
+ * non è quella attorno ai lati.
+ */
+export function verificaInstabilitaPunta(
+  sez: InputAcciaioSezione,
+  inp: InputStabilita,
+): RisultatiInstabilitaPunta {
+  const proprieta = proprietaProfilo(sez.tipoProfilo, sez.profilo);
+  const { fyk } = ACCIAIO_STRUTTURALE[sez.acciaio] ?? ACCIAIO_STRUTTURALE.S275;
+  const gammaM1 = num(inp.gammaM1) || 1.05;
+  const NEd = Math.max(num(sez.NEd), 0); // solo la compressione instabilizza
+  const classe = classificaProfilo(sez.tipoProfilo, proprieta, fyk, 'compressione');
+
+  const A = (proprieta?.A ?? 0) * 100; // mm²
+  const NcRd = (A * fyk) / gammaM1 / 1000; // kN
+
+  const perAsse = (asse: 'y' | 'z'): AsseCompresso => {
+    if (!proprieta) return ASSE_VUOTO(asse);
+    const Icm = asse === 'y' ? proprieta.Ix : proprieta.Imin;
+    const I = Icm * 1e4; // mm⁴
+    const i = A > 0 ? Math.sqrt(I / A) : 0; // mm
+    const Lcr = (asse === 'y' ? num(inp.Ly) * (num(inp.betaY) || 1) : num(inp.Lz) * (num(inp.betaZ) || 1));
+    const lambda = i > 0 ? Lcr / i : 0;
+    const lambda1 = Math.PI * Math.sqrt(E_ACCIAIO / fyk);
+    const lambdaAd = lambda1 > 0 ? lambda / lambda1 : 0;
+    const curva = curvaCompressione(
+      sez.tipoProfilo,
+      proprieta.h,
+      proprieta.b,
+      proprieta.tf,
+      asse,
+      fyk,
+      inp.formatura,
+    );
+    const alfa = ALFA_CURVA[curva] ?? 0.49;
+    const { phi, chi } = chiDaCurva(alfa, lambdaAd);
+    return {
+      asse,
+      I: Icm,
+      i,
+      Lcr,
+      Ncr: Lcr > 0 ? (Math.PI ** 2 * E_ACCIAIO * I) / Lcr ** 2 / 1000 : 0,
+      lambda,
+      lambdaAd,
+      troppoSnella: lambda > 200,
+      curva,
+      alfa,
+      phi,
+      chi,
+      NbRd: chi * NcRd,
+    };
+  };
+
+  const y = perAsse('y');
+  const z = perAsse('z');
+  const governa = y.chi <= z.chi ? 'y' : 'z';
+  const chiMin = Math.min(y.chi, z.chi);
+
+  return {
+    proprieta,
+    fyk,
+    lambda1: Math.PI * Math.sqrt(E_ACCIAIO / fyk),
+    y,
+    z,
+    governa,
+    chiMin,
+    NbRd: chiMin * NcRd,
+    NcRd,
+    classe,
+    esito: esito(NEd, chiMin * NcRd),
+  };
+}
 
 export interface RisultatiInstabilitaLT {
   proprieta?: ProprietaProfilo;
@@ -182,8 +399,11 @@ export interface RisultatiInstabilitaLT {
   McrCalcolato: number;
   /** Momento critico effettivamente usato (kNm). */
   Mcr: number;
-  /** Modulo resistente usato (mm³). */
+  /** Modulo resistente usato (mm³) e classe da cui è stato scelto. */
   Wy: number;
+  classe: RisultatiClasse;
+  /** Modulo effettivamente adottato, anche quando la scelta è automatica. */
+  moduloUsato: 'elastico' | 'plastico';
   curva: string;
   alfaLT: number;
   beta: number;
@@ -213,7 +433,7 @@ export interface RisultatiInstabilitaLT {
  */
 export function verificaInstabilitaLT(
   sez: InputAcciaioSezione,
-  inp: InputInstabilitaLT,
+  inp: InputStabilita,
 ): RisultatiInstabilitaLT {
   const proprieta = proprietaProfilo(sez.tipoProfilo, sez.profilo);
   const { fyk } = ACCIAIO_STRUTTURALE[sez.acciaio] ?? ACCIAIO_STRUTTURALE.S275;
@@ -226,7 +446,10 @@ export function verificaInstabilitaLT(
   const Iw = (proprieta?.Iw ?? 0) * 1e6; // mm⁶
   const h = proprieta?.h ?? 0;
 
-  const Wy = (inp.modulo === 'plastico' ? (proprieta?.Wplx ?? 0) : (proprieta?.Wx ?? 0)) * 1000; // mm³
+  // la sezione di una trave inflessa si classifica in flessione
+  const classe = classificaProfilo(sez.tipoProfilo, proprieta, fyk, 'flessione');
+  const moduloUsato = inp.modulo === 'automatico' ? moduloDaClasse(classe.classe) : inp.modulo;
+  const Wy = (moduloUsato === 'plastico' ? (proprieta?.Wplx ?? 0) : (proprieta?.Wx ?? 0)) * 1000; // mm³
   const McRd = (Wy * fyk) / gammaM1 / 1e6; // kNm
 
   const curva = curvaLT(sez.tipoProfilo, h, proprieta?.b ?? 0);
@@ -289,6 +512,8 @@ export function verificaInstabilitaLT(
     McrCalcolato,
     Mcr,
     Wy,
+    classe,
+    moduloUsato,
     curva,
     alfaLT,
     beta,
@@ -299,5 +524,109 @@ export function verificaInstabilitaLT(
     MbRd,
     McRd,
     esito: esito(MEd, MbRd),
+  };
+}
+
+/* ────────────────────────────────────────────────────────────────────────────
+   §C4.2.4.1.3.3 — aste presso-inflesse, Metodo A della Circolare
+   ──────────────────────────────────────────────────────────────────────── */
+
+export interface RisultatiPressoflessione {
+  /** I tre addendi della formula, nell'ordine in cui la Circolare li scrive. */
+  termineN: number;
+  termineMy: number;
+  termineMz: number;
+  /** Somma dei tre: è il fattore di sfruttamento, deve stare sotto 1. */
+  sfruttamento: number;
+  /** Fattori di amplificazione 1/(1 − NEd/Ncr) nei due piani. */
+  amplificaY: number;
+  amplificaZ: number;
+  /** Moduli resistenti usati nei due piani (mm³). */
+  Wy: number;
+  Wz: number;
+  moduloUsato: 'elastico' | 'plastico';
+  classe: RisultatiClasse;
+  /** Vero quando NEd raggiunge o supera un carico critico: nessuna riserva. */
+  oltreCritico: boolean;
+  esito: Esito;
+}
+
+/**
+ * Verifica combinata di un'asta presso-inflessa — Metodo A della Circolare
+ * NTC2018 §C4.2.4.1.3.3, come nel foglio di calcolo:
+ *
+ *   NEd/(χmin·Npl,Rd) + My,Ed/[χLT·My,Rd·(1 − NEd/Ncr,y)]
+ *                     + Mz,Ed/[Mz,Rd·(1 − NEd/Ncr,z)]  ≤ 1
+ *
+ * Mette insieme quello che le altre schede guardano separatamente: la
+ * compressione con la sua instabilità di punta, la flessione attorno all'asse
+ * forte con l'instabilità flesso-torsionale, quella attorno all'asse debole —
+ * che non sbanda ma viene amplificata dall'assiale come le altre.
+ *
+ * Due scostamenti dal foglio, tutt'e due voluti:
+ *
+ *  - il foglio scrive il terzo termine con il modulo dell'**asse forte** (usa
+ *    `Wy_pl` dove la formula vuole `Wz`), che sovrastima di parecchio la
+ *    resistenza attorno all'asse debole: qui si usa Wz;
+ *  - il foglio tratta la compressione come negativa e scrive (1 − NEd/Ncr),
+ *    che con quel segno **aumenta** il denominatore invece di ridurlo, cioè
+ *    smorza l'effetto del secondo ordine anziché amplificarlo. Qui NEd è
+ *    positivo in compressione e l'amplificazione va nel verso giusto.
+ */
+export function verificaPressoflessione(
+  sez: InputAcciaioSezione,
+  inp: InputStabilita,
+  lt: RisultatiInstabilitaLT,
+  punta: RisultatiInstabilitaPunta,
+): RisultatiPressoflessione {
+  const proprieta = proprietaProfilo(sez.tipoProfilo, sez.profilo);
+  const { fyk } = ACCIAIO_STRUTTURALE[sez.acciaio] ?? ACCIAIO_STRUTTURALE.S275;
+  const gammaM1 = num(inp.gammaM1) || 1.05;
+
+  const NEd = Math.max(num(sez.NEd), 0); // la trazione non instabilizza
+  const MyEd = Math.abs(num(sez.MEd));
+  const MzEd = Math.abs(num(sez.MzEd));
+
+  // presso-flessione: la sezione è compressa, e si classifica come tale
+  const classe = classificaProfilo(sez.tipoProfilo, proprieta, fyk, 'compressione');
+  const moduloUsato = inp.modulo === 'automatico' ? moduloDaClasse(classe.classe) : inp.modulo;
+  const plastico = moduloUsato === 'plastico';
+  const Wy = ((plastico ? proprieta?.Wplx : proprieta?.Wx) ?? 0) * 1000; // mm³
+  const Wz = ((plastico ? proprieta?.Wply : proprieta?.Wy) ?? 0) * 1000; // mm³
+
+  const MyRd = (Wy * fyk) / gammaM1 / 1e6; // kNm
+  const MzRd = (Wz * fyk) / gammaM1 / 1e6; // kNm
+
+  // 1/(1 − NEd/Ncr): oltre il carico critico non c'è più niente da amplificare
+  const amplifica = (Ncr: number) => {
+    if (Ncr <= 0) return NEd > 0 ? Infinity : 1;
+    const resto = 1 - NEd / Ncr;
+    return resto > 0 ? 1 / resto : Infinity;
+  };
+  const amplificaY = amplifica(punta.y.Ncr);
+  const amplificaZ = amplifica(punta.z.Ncr);
+
+  const rapporto = (dom: number, cap: number, k: number) =>
+    dom === 0 ? 0 : cap > 0 ? (dom / cap) * k : Infinity;
+
+  const termineN = rapporto(NEd, punta.NbRd, 1);
+  const termineMy = rapporto(MyEd, lt.chiLT * MyRd, amplificaY);
+  const termineMz = rapporto(MzEd, MzRd, amplificaZ);
+  const sfruttamento = termineN + termineMy + termineMz;
+
+  return {
+    termineN,
+    termineMy,
+    termineMz,
+    sfruttamento,
+    amplificaY,
+    amplificaZ,
+    Wy,
+    Wz,
+    moduloUsato,
+    classe,
+    oltreCritico: !Number.isFinite(amplificaY) || !Number.isFinite(amplificaZ),
+    // la formula è già in forma domanda/capacità: la capacità è l'unità
+    esito: esito(sfruttamento, 1),
   };
 }

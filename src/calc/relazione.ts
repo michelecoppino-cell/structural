@@ -18,7 +18,12 @@ import {
   verificaTaglioArmato,
   verificaTaglioNonArmato,
 } from './verifiche';
-import { CONDIZIONI_CARICO, verificaInstabilitaLT } from './instabilita';
+import {
+  CONDIZIONI_CARICO,
+  verificaInstabilitaLT,
+  verificaInstabilitaPunta,
+  verificaPressoflessione,
+} from './instabilita';
 import { valido, validaTaglioArmato, validaTaglioNonArmato } from './validazione';
 import { ricalcola, testoVoce, vociDaSelezioni, type VoceCalcolata } from './calcolatrice';
 import {
@@ -206,9 +211,12 @@ function blocchiVerifiche(state: AppState): Blocco[] {
   const flIn = state.verifiche.flessioneCA;
   const acIn = state.verifiche.acciaio;
   const ac = verificaAcciaioSezione(acIn);
-  const ltIn = state.verifiche.instabilitaLT;
+  const ltIn = state.verifiche.stabilita;
   const lt = verificaInstabilitaLT(acIn, ltIn);
+  const pu = verificaInstabilitaPunta(acIn, ltIn);
+  const pf = verificaPressoflessione(acIn, ltIn, lt, pu);
   const condizione = CONDIZIONI_CARICO.find((c) => c.id === ltIn.carico);
+  const sfr = (v: number) => (Number.isFinite(v) ? fx(v, 3) : '∞');
 
   return [
     {
@@ -248,6 +256,7 @@ function blocchiVerifiche(state: AppState): Blocco[] {
       righe: [
         `Profilo ${acIn.profilo} in ${acIn.acciaio}; A = ${fx(ac.proprieta?.A ?? 0, 1)} cm²; Wel,x = ${fx(ac.proprieta?.Wx ?? 0, 1)} cm³; Avz = ${fx(ac.proprieta?.Avz ?? 0, 2)} cm²`,
         `fyd = fyk / γM0 = ${fx(ac.fyk, 0)} / ${acIn.gammaM0} = ${fx(ac.fyd, 0)} N/mm²`,
+        `Classificazione (NTC2018 §4.2.3, ε = ${fx(lt.classe.epsilon, 3)}): classe ${lt.classe.classe} in flessione, classe ${pu.classe.classe} in compressione`,
         `MEd = ${acIn.MEd} kNm ≤ MRd = Wel,x·fyd = ${fx(ac.MRd, 1)} kNm → ${fx(ac.esitoFlessione.sfruttamento, 3)} — ${ac.esitoFlessione.ok ? 'VERIFICATO' : 'NON VERIFICATO'}`,
         `NEd = ${acIn.NEd} kN ≤ NRd = A·fyd = ${fx(ac.NRd, 1)} kN → ${fx(ac.esitoCompressione.sfruttamento, 3)} — ${ac.esitoCompressione.ok ? 'VERIFICATO' : 'NON VERIFICATO'}`,
         `VEd = ${inp.acciaio.VEd} kN ≤ VRd = Avz·fyd/√3 = ${fx(ac.VRd, 1)} kN → ${fx(ac.esitoTaglio.sfruttamento, 3)} — ${ac.esitoTaglio.ok ? 'VERIFICATO' : 'NON VERIFICATO'}`,
@@ -257,7 +266,7 @@ function blocchiVerifiche(state: AppState): Blocco[] {
       titolo: 'Acciaio — instabilità flesso-torsionale (NTC2018 §4.2.4.1.3.2)',
       righe: lt.richiesta
         ? [
-            `Profilo ${acIn.profilo} in ${acIn.acciaio}; Imin = ${fx(lt.Iz / 1e4, 1)} cm⁴; It = ${fx(lt.It / 1e4, 2)} cm⁴; Iw = ${fx(lt.Iw / 1e6, 0)} cm⁶; Wy = ${fx(lt.Wy / 1000, 1)} cm³ (modulo ${ltIn.modulo})`,
+            `Profilo ${acIn.profilo} in ${acIn.acciaio}; Imin = ${fx(lt.Iz / 1e4, 1)} cm⁴; It = ${fx(lt.It / 1e4, 2)} cm⁴; Iw = ${fx(lt.Iw / 1e6, 0)} cm⁶; Wy = ${fx(lt.Wy / 1000, 1)} cm³ (modulo ${lt.moduloUsato}${ltIn.modulo === 'automatico' ? `, da classe ${lt.classe.classe}` : ' imposto'})`,
             `Tratto libero L = ${ltIn.L} mm; k = ${fx(lt.kUsato, 2)}; kw = ${ltIn.kw}; carico ${condizione?.id ?? ltIn.carico} — ${condizione?.label ?? ''}${condizione?.psi ? `; ψ = ${fx(lt.psiUsato, 2)}` : ''}; zg = ${fx(lt.zg, 0)} mm`,
             `C1 = ${fx(lt.C1, 3)}; C2 = ${fx(lt.C2, 3)}; C3 = ${fx(lt.C3, 3)} (ENV 1993-1-1, prospetto F.1)`,
             `Mcr = ${fx(lt.Mcr, 2)} kNm${ltIn.modoMcr === 'manuale' ? ' (imposto a mano)' : ''}; λLT = ${fx(lt.lambdaLT, 3)}; curva ${lt.curva} (αLT = ${fx(lt.alfaLT, 2)}); ΦLT = ${fx(lt.phiLT, 3)}; χLT = ${fx(lt.chiLT, 3)}`,
@@ -268,6 +277,28 @@ function blocchiVerifiche(state: AppState): Blocco[] {
             `Profilo ${acIn.profilo}: inerzia laterale pari a quella nel piano di flessione, sbandamento laterale impossibile — verifica non richiesta (χLT = 1)`,
             `Mb,Rd = Mc,Rd = ${fx(lt.MbRd, 1)} kNm; MEd = ${acIn.MEd} kNm → ${fx(lt.esito.sfruttamento, 3)} — ${lt.esito.ok ? 'VERIFICATO' : 'NON VERIFICATO'}`,
           ],
+    },
+    {
+      titolo: 'Acciaio — instabilità di punta (NTC2018 §4.2.4.1.3.1)',
+      righe: [
+        `Profilo ${acIn.profilo} in ${acIn.acciaio}; A = ${fx((pu.proprieta?.A ?? 0), 1)} cm²; classe ${pu.classe.classe} in compressione; λ1 = π·√(E/fyk) = ${fx(pu.lambda1, 2)}`,
+        ...[pu.y, pu.z].map(
+          (a) =>
+            `Asse ${a.asse}-${a.asse}: Lcr = ${fx(a.Lcr, 0)} mm; i = ${fx(a.i, 1)} mm; λ = ${fx(a.lambda, 1)}${a.troppoSnella ? ' (oltre 200!)' : ''}; λ̄ = ${fx(a.lambdaAd, 3)}; curva ${a.curva} (α = ${fx(a.alfa, 2)}); χ = ${fx(a.chi, 3)}; Ncr = ${fx(a.Ncr, 0)} kN; Nb,Rd = ${fx(a.NbRd, 1)} kN`,
+        ),
+        `Nb,Rd = χmin·A·fyk/γM1 = ${fx(pu.NbRd, 1)} kN — governa l'asse ${pu.governa}-${pu.governa} (Nc,Rd = ${fx(pu.NcRd, 1)} kN)`,
+        `NEd = ${acIn.NEd} kN → NEd/Nb,Rd = ${fx(pu.esito.sfruttamento, 3)} — ${pu.esito.ok ? 'VERIFICATO' : 'NON VERIFICATO'} (margine ${fx(pu.esito.margine, 1)}%)`,
+      ],
+    },
+    {
+      titolo: 'Acciaio — asta presso-inflessa, Metodo A (Circolare NTC2018 §C4.2.4.1.3.3)',
+      righe: [
+        `Wy = ${fx(pf.Wy / 1000, 1)} cm³; Wz = ${fx(pf.Wz / 1000, 1)} cm³ (modulo ${pf.moduloUsato}, da classe ${pf.classe.classe})`,
+        `1° termine — NEd/(χmin·Npl,Rd) = ${sfr(pf.termineN)}`,
+        `2° termine — My,Ed/[χLT·My,Rd·(1 − NEd/Ncr,y)] = ${sfr(pf.termineMy)} (amplificazione ${sfr(pf.amplificaY)})`,
+        `3° termine — Mz,Ed/[Mz,Rd·(1 − NEd/Ncr,z)] = ${sfr(pf.termineMz)} (amplificazione ${sfr(pf.amplificaZ)})`,
+        `Somma = ${sfr(pf.sfruttamento)} ≤ 1 — ${pf.esito.ok ? 'VERIFICATO' : 'NON VERIFICATO'}${pf.oltreCritico ? ' (NEd oltre il carico critico euleriano)' : ''}`,
+      ],
     },
   ];
 }

@@ -371,7 +371,10 @@ export interface InputAcciaioSezione {
   profilo: string;
   acciaio: string;
   gammaM0: string;
+  /** Momento attorno all'asse forte (kNm). */
   MEd: string;
+  /** Momento attorno all'asse debole (kNm) — serve alla verifica combinata. */
+  MzEd: string;
   NEd: string;
   VEd: string;
 }
@@ -382,6 +385,7 @@ export const ACCIAIO_SEZIONE_DEFAULT: InputAcciaioSezione = {
   acciaio: 'S275',
   gammaM0: '1.05',
   MEd: '20',
+  MzEd: '0',
   NEd: '0',
   VEd: '30',
 };

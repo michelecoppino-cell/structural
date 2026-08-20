@@ -24,6 +24,11 @@
  * arriva (UPN 50 e 65) si torna alle formule di parete sottile, che stanno
  * sotto al valore vero e quindi sono a favore di sicurezza.
  *
+ * Spessori e raccordo (tw, tf, r) stanno nelle proprietà perché servono alla
+ * classificazione della sezione: le larghezze da confrontare con i limiti c/t
+ * sono quelle **fra i raccordi**, e ignorarli farebbe scendere di classe
+ * profili che sono compatti davvero.
+ *
  * Imin è l'inerzia principale **minima**: per i doppi T, gli U e i tubi
  * coincide con la minore fra Ix e Iy, per gli angolari a lati uguali no —
  * i loro assi principali sono ruotati di 45°, e la rigidezza laterale vera è
@@ -54,6 +59,12 @@ export interface ProprietaProfilo {
   Wply: number;
   /** Inerzia principale minima (cm⁴) — la rigidezza laterale vera. */
   Imin: number;
+  /** Spessore dell'anima, o della parete per tubi e angolari (mm). */
+  tw: number;
+  /** Spessore dell'ala, o della parete per tubi e angolari (mm). */
+  tf: number;
+  /** Raggio di raccordo fra anima e ala (mm); 0 dove non c'è. */
+  r: number;
 }
 
 /** Asse di flessione del profilo: come è ruotato rispetto al carico. */
@@ -65,7 +76,8 @@ export type AsseProfilo = 'forte' | 'debole';
  */
 export function propretaSecondoAsse(p: ProprietaProfilo, asse: AsseProfilo): ProprietaProfilo {
   if (asse === 'forte') return p;
-  // It, Iw e Imin non dipendono da come si guarda il profilo: restano dove sono
+  // It, Iw, Imin e gli spessori non dipendono da come si guarda il profilo:
+  // restano dove sono
   return {
     ...p,
     h: p.b,
@@ -121,94 +133,94 @@ function debolePerDoppioT(h: number, b: number, tw: number, tf: number) {
 }
 
 /**
- * Torsione e moduli plastici dei profili a tabella: [It (cm⁴), Iw (cm⁶),
- * Wpl,x (cm³), Wpl,y (cm³)], dal sagomario del foglio
+ * Quello che la geometria a spessore costante non sa dare: [It (cm⁴),
+ * Iw (cm⁶), Wpl,x (cm³), Wpl,y (cm³), r (mm)], dal sagomario del foglio
  * `Verifica_aste_acciaio_rev01.xlsm`. Chi manca (UPN 50 e 65, che il
  * sagomario non riporta) ricade sulle formule di parete sottile qui sotto.
  */
-const TORSIONE_IHU: Record<string, [number, number, number, number]> = {
-  'IPE 80': [0.7, 120, 23.22, 5.82],
-  'IPE 100': [1.2, 350, 39.41, 9.15],
-  'IPE 120': [1.74, 890, 60.73, 13.58],
-  'IPE 140': [2.45, 1980, 88.34, 19.25],
-  'IPE 160': [3.6, 3960, 123.9, 26.1],
-  'IPE 180': [4.79, 7430, 166.4, 34.6],
-  'IPE 200': [6.98, 12990, 220.6, 44.61],
-  'IPE 220': [9.07, 22670, 285.4, 58.11],
-  'IPE 240': [12.88, 37390, 366.6, 73.92],
-  'IPE 270': [15.94, 70580, 484, 96.95],
-  'IPE 300': [20.12, 125900, 628.4, 125.2],
-  'IPE 330': [28.15, 199100, 804.3, 153.7],
-  'IPE 360': [37.32, 313600, 1019, 191.1],
-  'IPE 400': [51.08, 490000, 1307, 229],
-  'IPE 450': [66.87, 791000, 1702, 276.4],
-  'IPE 500': [89.29, 1249000, 2194, 335.9],
-  'IPE 550': [123.2, 1884000, 2787, 400.5],
-  'IPE 600': [165.4, 2846000, 3512, 485.6],
-  'HEA 100': [5.24, 2580, 83.01, 41.14],
-  'HEA 120': [5.99, 6470, 119.5, 58.85],
-  'HEA 140': [8.13, 15060, 173.5, 84.85],
-  'HEA 160': [12.19, 31410, 245.1, 117.6],
-  'HEA 180': [14.8, 60210, 324.9, 156.5],
-  'HEA 200': [20.98, 108000, 429.5, 203.8],
-  'HEA 220': [28.46, 193300, 568.5, 270.6],
-  'HEA 240': [41.55, 328500, 744.6, 351.7],
-  'HEA 260': [52.37, 516400, 919.8, 430.2],
-  'HEA 280': [62.1, 785400, 1112, 518.1],
-  'HEA 300': [85.17, 1200000, 1383, 641.2],
-  'HEA 320': [108, 1512000, 1628, 709.7],
-  'HEA 340': [127.2, 1824000, 1850, 755.9],
-  'HEA 360': [148.8, 2177000, 2088, 802.3],
-  'HEA 400': [189, 2942000, 2562, 872.9],
-  'HEA 450': [243.8, 4148000, 3216, 965.5],
-  'HEA 500': [309.3, 5643000, 3949, 1059],
-  'HEA 550': [351.5, 7189000, 4622, 1107],
-  'HEA 600': [397.8, 8978000, 5350, 1156],
-  'HEA 650': [448.3, 11030000, 6136, 1205],
-  'HEA 700': [513.9, 13350000, 7032, 1257],
-  'HEA 800': [596.9, 18290000, 8699, 1312],
-  'HEA 900': [736.8, 24960000, 10810, 1414],
-  'HEA 1000': [822.4, 32070000, 12820, 1470],
-  'HEB 100': [9.25, 3380, 104.2, 51.42],
-  'HEB 120': [13.84, 9410, 165.2, 80.97],
-  'HEB 140': [20.06, 22480, 245.4, 119.8],
-  'HEB 160': [31.24, 47940, 354, 170],
-  'HEB 180': [42.16, 93750, 481.4, 231],
-  'HEB 200': [59.28, 171100, 642.5, 305.8],
-  'HEB 220': [76.57, 295400, 827, 393.9],
-  'HEB 240': [102.7, 486900, 1053, 498.4],
-  'HEB 260': [123.8, 753700, 1283, 602.2],
-  'HEB 280': [143.7, 1130000, 1534, 717.6],
-  'HEB 300': [185, 1688000, 1869, 870.1],
-  'HEB 320': [225.1, 2069000, 2149, 939.1],
-  'HEB 340': [257.2, 2454000, 2408, 985.7],
-  'HEB 360': [292.5, 2883000, 2683, 1032],
-  'HEB 400': [355.7, 3817000, 3232, 1104],
-  'HEB 450': [440.5, 5258000, 3982, 1198],
-  'HEB 500': [538.4, 7018000, 4815, 1292],
-  'HEB 550': [600.3, 8856000, 5591, 1341],
-  'HEB 600': [667.2, 10970000, 6425, 1391],
-  'HEB 650': [739.2, 13360000, 7320, 1441],
-  'HEB 700': [830.9, 16060000, 8327, 1495],
-  'HEB 800': [946, 21840000, 10230, 1553],
-  'HEB 900': [1137, 29460000, 12580, 1658],
-  'HEB 1000': [1254, 37640000, 14860, 1716],
-  'UPN 80': [2.16, 170, 31.8, 12.1],
-  'UPN 100': [2.81, 410, 49, 16.2],
-  'UPN 120': [4.15, 900, 72.6, 21.2],
-  'UPN 140': [5.68, 1800, 103, 28.3],
-  'UPN 160': [7.39, 3260, 138, 35.2],
-  'UPN 180': [9.55, 5570, 179, 42.9],
-  'UPN 200': [11.9, 9070, 228, 51.8],
-  'UPN 220': [16, 14600, 292, 64.1],
-  'UPN 240': [19.7, 22100, 358, 75.7],
-  'UPN 260': [25.5, 33300, 442, 91.6],
-  'UPN 280': [31, 48500, 532, 109],
-  'UPN 300': [37.4, 69100, 632, 130],
-  'UPN 320': [66.7, 96100, 826, 152],
-  'UPN 350': [61.2, 114000, 918, 143],
-  'UPN 380': [59.1, 146000, 1014, 148],
-  'UPN 400': [81.6, 221000, 1240, 190],
+const TABELLA_IHU: Record<string, [number, number, number, number, number]> = {
+  'IPE 80': [0.7, 120, 23.22, 5.82, 5],
+  'IPE 100': [1.2, 350, 39.41, 9.15, 7],
+  'IPE 120': [1.74, 890, 60.73, 13.58, 7],
+  'IPE 140': [2.45, 1980, 88.34, 19.25, 7],
+  'IPE 160': [3.6, 3960, 123.9, 26.1, 9],
+  'IPE 180': [4.79, 7430, 166.4, 34.6, 9],
+  'IPE 200': [6.98, 12990, 220.6, 44.61, 12],
+  'IPE 220': [9.07, 22670, 285.4, 58.11, 12],
+  'IPE 240': [12.88, 37390, 366.6, 73.92, 15],
+  'IPE 270': [15.94, 70580, 484, 96.95, 15],
+  'IPE 300': [20.12, 125900, 628.4, 125.2, 15],
+  'IPE 330': [28.15, 199100, 804.3, 153.7, 18],
+  'IPE 360': [37.32, 313600, 1019, 191.1, 18],
+  'IPE 400': [51.08, 490000, 1307, 229, 21],
+  'IPE 450': [66.87, 791000, 1702, 276.4, 21],
+  'IPE 500': [89.29, 1249000, 2194, 335.9, 21],
+  'IPE 550': [123.2, 1884000, 2787, 400.5, 24],
+  'IPE 600': [165.4, 2846000, 3512, 485.6, 24],
+  'HEA 100': [5.24, 2580, 83.01, 41.14, 12],
+  'HEA 120': [5.99, 6470, 119.5, 58.85, 12],
+  'HEA 140': [8.13, 15060, 173.5, 84.85, 12],
+  'HEA 160': [12.19, 31410, 245.1, 117.6, 15],
+  'HEA 180': [14.8, 60210, 324.9, 156.5, 15],
+  'HEA 200': [20.98, 108000, 429.5, 203.8, 18],
+  'HEA 220': [28.46, 193300, 568.5, 270.6, 18],
+  'HEA 240': [41.55, 328500, 744.6, 351.7, 21],
+  'HEA 260': [52.37, 516400, 919.8, 430.2, 24],
+  'HEA 280': [62.1, 785400, 1112, 518.1, 24],
+  'HEA 300': [85.17, 1200000, 1383, 641.2, 27],
+  'HEA 320': [108, 1512000, 1628, 709.7, 27],
+  'HEA 340': [127.2, 1824000, 1850, 755.9, 27],
+  'HEA 360': [148.8, 2177000, 2088, 802.3, 27],
+  'HEA 400': [189, 2942000, 2562, 872.9, 27],
+  'HEA 450': [243.8, 4148000, 3216, 965.5, 27],
+  'HEA 500': [309.3, 5643000, 3949, 1059, 27],
+  'HEA 550': [351.5, 7189000, 4622, 1107, 27],
+  'HEA 600': [397.8, 8978000, 5350, 1156, 27],
+  'HEA 650': [448.3, 11030000, 6136, 1205, 27],
+  'HEA 700': [513.9, 13350000, 7032, 1257, 27],
+  'HEA 800': [596.9, 18290000, 8699, 1312, 30],
+  'HEA 900': [736.8, 24960000, 10810, 1414, 30],
+  'HEA 1000': [822.4, 32070000, 12820, 1470, 30],
+  'HEB 100': [9.25, 3380, 104.2, 51.42, 12],
+  'HEB 120': [13.84, 9410, 165.2, 80.97, 12],
+  'HEB 140': [20.06, 22480, 245.4, 119.8, 12],
+  'HEB 160': [31.24, 47940, 354, 170, 15],
+  'HEB 180': [42.16, 93750, 481.4, 231, 15],
+  'HEB 200': [59.28, 171100, 642.5, 305.8, 18],
+  'HEB 220': [76.57, 295400, 827, 393.9, 18],
+  'HEB 240': [102.7, 486900, 1053, 498.4, 21],
+  'HEB 260': [123.8, 753700, 1283, 602.2, 24],
+  'HEB 280': [143.7, 1130000, 1534, 717.6, 24],
+  'HEB 300': [185, 1688000, 1869, 870.1, 27],
+  'HEB 320': [225.1, 2069000, 2149, 939.1, 27],
+  'HEB 340': [257.2, 2454000, 2408, 985.7, 27],
+  'HEB 360': [292.5, 2883000, 2683, 1032, 27],
+  'HEB 400': [355.7, 3817000, 3232, 1104, 27],
+  'HEB 450': [440.5, 5258000, 3982, 1198, 27],
+  'HEB 500': [538.4, 7018000, 4815, 1292, 27],
+  'HEB 550': [600.3, 8856000, 5591, 1341, 27],
+  'HEB 600': [667.2, 10970000, 6425, 1391, 27],
+  'HEB 650': [739.2, 13360000, 7320, 1441, 27],
+  'HEB 700': [830.9, 16060000, 8327, 1495, 27],
+  'HEB 800': [946, 21840000, 10230, 1553, 30],
+  'HEB 900': [1137, 29460000, 12580, 1658, 30],
+  'HEB 1000': [1254, 37640000, 14860, 1716, 30],
+  'UPN 80': [2.16, 170, 31.8, 12.1, 8],
+  'UPN 100': [2.81, 410, 49, 16.2, 8.5],
+  'UPN 120': [4.15, 900, 72.6, 21.2, 9],
+  'UPN 140': [5.68, 1800, 103, 28.3, 10],
+  'UPN 160': [7.39, 3260, 138, 35.2, 10.5],
+  'UPN 180': [9.55, 5570, 179, 42.9, 11],
+  'UPN 200': [11.9, 9070, 228, 51.8, 11.5],
+  'UPN 220': [16, 14600, 292, 64.1, 12.5],
+  'UPN 240': [19.7, 22100, 358, 75.7, 13],
+  'UPN 260': [25.5, 33300, 442, 91.6, 14],
+  'UPN 280': [31, 48500, 532, 109, 15],
+  'UPN 300': [37.4, 69100, 632, 130, 16],
+  'UPN 320': [66.7, 96100, 826, 152, 17.5],
+  'UPN 350': [61.2, 114000, 918, 143, 16],
+  'UPN 380': [59.1, 146000, 1014, 148, 16],
+  'UPN 400': [81.6, 221000, 1240, 190, 18],
 };
 
 /** Forma della sezione a tabella: cambia solo le formule di riserva. */
@@ -255,7 +267,7 @@ const daTabella = (
       const geom = debolePerDoppioT(h, b, tw, tf);
       const Iy = IyTab ?? geom.Iy;
       const Wy = WyTab ?? geom.Wy;
-      const tors = TORSIONE_IHU[k];
+      const tab = TABELLA_IHU[k];
       const torsGeom = torsioneDaGeometria(h, b, tw, tf, Iy, forma);
       const plGeom = plasticiDaGeometria(h, b, tw, tf, Wy, forma);
       return [
@@ -270,12 +282,17 @@ const daTabella = (
           Iy,
           Wy,
           Avy: (2 * b * tf) / 100,
-          It: tors?.[0] ?? torsGeom.It,
-          Iw: tors?.[1] ?? torsGeom.Iw,
-          Wplx: tors?.[2] ?? plGeom.Wplx,
-          Wply: tors?.[3] ?? plGeom.Wply,
+          It: tab?.[0] ?? torsGeom.It,
+          Iw: tab?.[1] ?? torsGeom.Iw,
+          Wplx: tab?.[2] ?? plGeom.Wplx,
+          Wply: tab?.[3] ?? plGeom.Wply,
           // doppi T e U flettono attorno agli assi principali geometrici
           Imin: Math.min(Ix, Iy),
+          tw,
+          tf,
+          // negli UPN il raccordo vale quanto l'ala (DIN 1026-1: r1 = t), ed è
+          // la riserva per le due taglie che il sagomario non riporta
+          r: tab?.[4] ?? (forma === 'U' ? tf : 0),
         },
       ];
     }),
@@ -453,6 +470,9 @@ function angolare(b: number, t: number): ProprietaProfilo {
     Wplx: Wpl / 1000,
     Wply: Wpl / 1000,
     Imin: (Ix - Math.abs(Ixy)) / 10000,
+    tw: t,
+    tf: t,
+    r: 0,
   };
 }
 
@@ -480,6 +500,9 @@ function tuboQuadro(b: number, t: number): ProprietaProfilo {
     Wplx: Wpl / 1000,
     Wply: Wpl / 1000,
     Imin: Ix / 10000,
+    tw: t,
+    tf: t,
+    r: 0,
   };
 }
 
@@ -508,6 +531,9 @@ function tuboRettangolare(b: number, h: number, t: number): ProprietaProfilo {
     Wplx: (b * h ** 2 - Math.max(bi, 0) * Math.max(hi, 0) ** 2) / 4 / 1000,
     Wply: (h * b ** 2 - Math.max(hi, 0) * Math.max(bi, 0) ** 2) / 4 / 1000,
     Imin: Math.min(Ix, Iy) / 10000,
+    tw: t,
+    tf: t,
+    r: 0,
   };
 }
 
@@ -535,6 +561,9 @@ function tuboTondo(D: number, t: number): ProprietaProfilo {
     Wplx: Wpl / 1000,
     Wply: Wpl / 1000,
     Imin: Ix / 10000,
+    tw: t,
+    tf: t,
+    r: 0,
   };
 }
 

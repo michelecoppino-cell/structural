@@ -266,15 +266,19 @@ con i suoi ganci, non un ferro longitudinale in più — con un ferro longitudin
 Le pastiglie della scheda (materiale, verifica visibile, VEd da Sollecitazioni) stanno tutte
 in fila a sinistra della barra.
 
+Nella scheda i numeri sono **allineati a sinistra**, nei campi come nelle colonne delle
+tabelle di esito: con i campi numerici a destra e le tendine a sinistra la colonna aveva due
+margini di lettura, e l'occhio doveva saltare fra l'uno e l'altro.
+
 Ogni verifica riporta esito, margine percentuale e barra di sfruttamento; sono verificati
 anche i minimi di normativa (Asw,min = 1.5·bw e passo massimo min(330; 0.8·d), §4.1.6.1.1).
 I dati in ingresso sono **controllati**: passo delle staffe o luce nulli, d maggiore di h,
 α fuori da 45°÷90°, γc < 1 marcano il campo e **bloccano l'esito** invece di dichiararne uno
 falso. Accanto ai campi c'è la **sezione quotata** con bw, h, d, staffe e armatura.
 
-L'**acciaio** ha quattro verifiche, tutte sul profilo scelto dal sagomario (IPE, HEA, HEB,
+L'**acciaio** ha sei verifiche, tutte sul profilo scelto dal sagomario (IPE, HEA, HEB,
 UPN, angolari a lati uguali, tubi quadri, rettangolari e tondi): profilo, classe di acciaio
-e MEd sono condivisi fra le quattro, così cambiare taglia le aggiorna tutte insieme.
+e sollecitazioni sono condivisi fra tutte, così cambiare taglia le aggiorna insieme.
 
 | Verifica | Formula | Riferimento |
 |---|---|---|
@@ -282,6 +286,22 @@ e MEd sono condivisi fra le quattro, così cambiare taglia le aggiorna tutte ins
 | Compressione elastica | NRd = A · fyd (senza instabilità) | §4.2.4.1.2 |
 | Taglio elastico | VRd = Avz · fyd / √3 | §4.2.4.1.2.4 |
 | Instabilità flesso-torsionale | Mb,Rd = χLT · Wy · fyk / γM1 | §4.2.4.1.3.2 |
+| Instabilità di punta | Nb,Rd = χ · A · fyk / γM1 | §4.2.4.1.3.1 |
+| Presso-flessione, Metodo A | somma dei tre termini ≤ 1 | Circolare §C4.2.4.1.3.3 |
+
+La **classe della sezione** è calcolata dalla scheda (§4.2.3): ogni parete si misura sul
+proprio rapporto c/t — larghezze prese *fra i raccordi*, come vuole il prospetto — e la
+sezione prende la classe peggiore. La classificazione cambia con l'acciaio, tramite
+ε = √(235/fyk), e con il tipo di sollecitazione: un'anima inflessa ha l'asse neutro in
+mezzeria e limiti larghi, la stessa anima tutta compressa li ha molto più stretti (un
+IPE 600 in S235 è classe 1 in flessione e classe 4 in compressione pura). Dove agiscono
+insieme assiale e momento si usa il caso compresso, che è il più severo dei due.
+
+Da qui esce il **modulo resistente** delle verifiche di stabilità: plastico in classe 1 e 2,
+elastico in classe 3. Si può ancora imporre a mano, ma di serie lo decide la classe. La
+**classe 4** non viene verificata di nascosto: la scheda dice quale parete è snella e di
+quanto sfora, e avvisa che il risultato — calcolato sulla sezione lorda, perché le proprietà
+efficaci non sono implementate — è ottimistico.
 
 L'**instabilità flesso-torsionale** è trascritta dal foglio `Verifica_aste_acciaio_rev01.xlsm`
 (foglio "Verifica aste" e funzione VBA `Mom_critico_Mcr`). Il momento critico elastico segue
@@ -308,6 +328,29 @@ rigidezza torsionale, che è così alta da portare λLT sotto la soglia e χLT a
 quadro e tubo tondo, che hanno la stessa inerzia in tutte le direzioni, lo sbandamento
 laterale non può proprio avvenire: la scheda lo dice e Mb,Rd coincide con il momento
 resistente della sezione.
+
+L'**instabilità di punta** guarda i due assi separatamente — lunghezza dell'asta e
+coefficiente di libera inflessione β per ciascuno, perché i controventi trattengono l'asse
+debole più spesso di quello forte — e tiene il χ più basso dei due: si sbanda dove si è più
+deboli. La curva viene dalla tab. 4.2.VIII (h/b e spessore dell'ala per i doppi T, formatura
+per i profili cavi, `b` per gli angolari, `c` per gli U), e la tabella dei risultati mostra
+per ogni asse Lcr, λ, λ̄, curva, χ e Nb,Rd, con evidenziato quello che governa. Una snellezza
+oltre 200 viene segnalata. Per gli angolari la snellezza è quella attorno all'asse principale
+minimo, che non è quello dei lati.
+
+La **presso-flessione combinata** è il Metodo A della Circolare: mette insieme quello che le
+altre schede guardano separatamente —
+
+```
+NEd/(χmin·Npl,Rd) + My,Ed/[χLT·My,Rd·(1 − NEd/Ncr,y)] + Mz,Ed/[Mz,Rd·(1 − NEd/Ncr,z)] ≤ 1
+```
+
+— riusando χmin dall'instabilità di punta e χLT dalla flesso-torsionale, senza ricalcolarli.
+I due fattori 1/(1 − NEd/Ncr) sono l'effetto del secondo ordine: l'assiale non consuma solo
+resistenza propria, amplifica anche i momenti. La tabella mostra i tre termini uno per uno,
+con domanda, capacità e amplificazione, così si vede quale dei tre sta mangiando il margine.
+Quando NEd raggiunge un carico critico euleriano la formula perde senso e la scheda lo dice
+invece di stampare un numero.
 
 Legno e muratura sono segnaposto — vedi "Prossimi passi".
 
@@ -734,7 +777,8 @@ src/
     sismica.ts     pericolosità sismica di base: TR, ag/F0/TC*, SS, CC (§3.2)
     sollecitazioni.ts  combinazioni di carico e collegamento con il solutore
     verifiche.ts   verifiche a taglio, flessione e sezioni in acciaio (dai fogli Excel)
-    instabilita.ts instabilità flesso-torsionale delle travi inflesse (§4.2.4.1.3.2)
+    instabilita.ts stabilità delle membrature in acciaio: punta, flesso-torsionale, Metodo A
+    classificazione.ts  classe della sezione dai rapporti c/t (§4.2.3)
     calcolatrice.ts  interprete delle espressioni e sequenza delle grandezze
     unita.ts       forma e scala delle unità di misura, e la loro conversione
     quaderno.ts    blocchi del foglio e loro ricalcolo dalle fonti collegate
@@ -841,10 +885,21 @@ npm test
 - I coefficienti **C1, C2, C3** del prospetto F.1 sono tabellati per punti: k vale 1, 0.7 o
   0.5 e ψ va di quarto in quarto. Un valore intermedio viene ricondotto al più vicino, e la
   scheda avvisa quando lo fa.
-- Il **modulo resistente** dell'instabilità flesso-torsionale è una scelta, non una
-  deduzione: la classificazione della sezione (che deciderebbe fra Wpl e Wel) non è
-  implementata, e il valore di serie è quello elastico — a favore di sicurezza per le
-  sezioni compatte, corretto per quelle in classe 3.
+- Il foglio `Verifica_aste_acciaio_rev01.xlsm` scrive il terzo termine del Metodo A con il
+  modulo dell'**asse forte** (`Wy_pl` dove la formula vuole `Wz`), e tratta la compressione
+  come negativa dentro `(1 − NEd/Ncr)` — con quel segno il fattore *smorza* l'effetto del
+  secondo ordine invece di amplificarlo. **L'app usa Wz e amplifica nel verso giusto**; è
+  la ragione per cui, con un assiale in gioco, i suoi numeri sono più severi di quelli del
+  foglio.
+- La curva di instabilità dei **profili cavi** dipende da come sono stati ottenuti: a caldo
+  la `a`, a freddo la `c`, che è molto più penalizzante. Il sagomario non lo registra, così
+  la scheda lo chiede, e parte da «formato a freddo» — se il tubo è laminato a caldo lo si
+  dice e la curva migliora.
+- La **classificazione** copre il caso di sola flessione e quello di sola compressione. Con
+  assiale e momento insieme non si interpola sulla posizione dell'asse neutro: si usa il
+  caso compresso, il più severo. Per tubi e angolari, che nel sagomario non hanno raggi di
+  piegatura, le larghezze vengono dalla convenzione c = b − 3·t della UNI EN 1993-1-1, e la
+  scheda marca il risultato come approssimato.
 - Prima della versione 7 dello schema l'algebra era **simbolica**: `cm*cm` faceva `cmq` e i
   fattori restavano a chi scriveva i numeri. Un progetto salvato allora si riapre, ma le
   formule che portavano dentro un fattore di conversione scritto a mano (`*1000`, `*1e4`) ora
@@ -852,10 +907,9 @@ npm test
 
 ## Prossimi passi
 
-1. Il resto del foglio `Verifica_aste_acciaio_rev01.xlsm`: classificazione automatica della
-   sezione (§4.2.3), instabilità flessionale delle aste compresse (§4.2.4.1.3.1),
-   presso-flessione biassiale (§4.2.4.1.2.8), aste presso-inflesse con il metodo A della
-   Circolare (§C4.2.4.1.3.3) e verifica a schiacciamento dell'anima.
+1. Quel che resta del foglio `Verifica_aste_acciaio_rev01.xlsm`: presso-flessione biassiale
+   plastica di sezione (§4.2.4.1.2.8), verifica a schiacciamento dell'anima, e le proprietà
+   efficaci delle sezioni in classe 4, oggi solo segnalate.
 2. Verifiche a flessione e pressoflessione per il calcestruzzo.
 3. Legno e muratura.
 4. Spettro di risposta disegnato (Se(T) e Sd(T)) a partire dai parametri già calcolati.

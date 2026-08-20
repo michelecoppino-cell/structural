@@ -1,11 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import {
   CONDIZIONI_CARICO,
-  INSTABILITA_LT_DEFAULT,
+  STABILITA_DEFAULT,
   coefficientiC,
   curvaLT,
   verificaInstabilitaLT,
-  type InputInstabilitaLT,
+  verificaInstabilitaPunta,
+  verificaPressoflessione,
+  type InputStabilita,
 } from './instabilita';
 import { ACCIAIO_SEZIONE_DEFAULT, type InputAcciaioSezione } from './verifiche';
 import { proprietaProfilo } from '../data/profili-acciaio';
@@ -26,8 +28,8 @@ const SEZ: InputAcciaioSezione = {
   MEd: '22',
 };
 
-const LT: InputInstabilitaLT = {
-  ...INSTABILITA_LT_DEFAULT,
+const LT: InputStabilita = {
+  ...STABILITA_DEFAULT,
   L: '2000',
   carico: '2',
   kz: '1',
@@ -199,5 +201,179 @@ describe('curve di instabilità e tabelle', () => {
         expect(r.C1, `${c.id}/${k}`).toBeGreaterThan(0);
       }
     }
+  });
+});
+
+/* ────────────────────── instabilità di punta e combinata ───────────────── */
+
+/**
+ * Anche qui il riscontro è il foglio, che sullo stesso IPE 160 in S275 con
+ * Lyy = 4000 mm e Lzz = 2000 mm ottiene: λ1 = 86.81; asse y λ = 60.79,
+ * λ̄ = 0.7002, curva a, χ = 0.8476, Nb,Rd = 446.2 kN; asse z λ = 108.70,
+ * λ̄ = 1.2520, curva b, χ = 0.4507, Nb,Rd = 237.3 kN.
+ */
+describe('§4.2.4.1.3.1 — instabilità di punta, caso del foglio di calcolo', () => {
+  const r = verificaInstabilitaPunta(SEZ, { ...LT, Ly: '4000', betaY: '1', Lz: '2000', betaZ: '1' });
+
+  it('snellezze e raggi d’inerzia', () => {
+    expect(r.lambda1).toBeCloseTo(86.815, 2);
+    expect(r.y.i).toBeCloseTo(65.8, 1);
+    expect(r.z.i).toBeCloseTo(18.4, 1);
+    expect(r.y.lambda).toBeCloseTo(60.79, 1);
+    // 108.61 contro i 108.70 del foglio: è sempre l'Iz calcolato dalla geometria
+    expect(r.z.lambda).toBeCloseTo(108.7, 0);
+    expect(r.y.lambdaAd).toBeCloseTo(0.7002, 2);
+    expect(r.z.lambdaAd).toBeCloseTo(1.2520, 2);
+  });
+
+  it('carichi critici euleriani', () => {
+    expect(r.y.Ncr).toBeCloseTo(1126, -1);
+    expect(r.z.Ncr).toBeCloseTo(354, -1);
+  });
+
+  it('curve di instabilità dalla tab. 4.2.VIII', () => {
+    // IPE 160: h/b = 1.95 > 1.2 e tf = 7.4 ≤ 40 mm → a attorno a y, b attorno a z
+    expect(r.y.curva).toBe('a');
+    expect(r.y.alfa).toBe(0.21);
+    expect(r.z.curva).toBe('b');
+    expect(r.z.alfa).toBe(0.34);
+  });
+
+  it('χ, resistenza e asse che governa', () => {
+    expect(r.y.chi).toBeCloseTo(0.8476, 2);
+    expect(r.z.chi).toBeCloseTo(0.4507, 2);
+    expect(r.y.NbRd).toBeCloseTo(446.2, 0);
+    expect(r.z.NbRd).toBeCloseTo(237.3, 0);
+    // si sbanda dove si è più deboli
+    expect(r.governa).toBe('z');
+    expect(r.NbRd).toBeCloseTo(r.z.NbRd, 9);
+    expect(r.NbRd).toBeLessThan(r.NcRd);
+  });
+});
+
+describe('instabilità di punta — comportamento', () => {
+  const base = { ...LT, Ly: '4000', betaY: '1', Lz: '2000', betaZ: '1' };
+
+  it('accorciare l’asta o trattenerla alza la resistenza', () => {
+    const corta = verificaInstabilitaPunta(SEZ, { ...base, Lz: '1000' });
+    const vincolata = verificaInstabilitaPunta(SEZ, { ...base, betaZ: '0.5' });
+    const lunga = verificaInstabilitaPunta(SEZ, base);
+    expect(corta.NbRd).toBeGreaterThan(lunga.NbRd);
+    expect(vincolata.NbRd).toBeCloseTo(corta.NbRd, 6); // β = 0.5 su 2000 = 1000
+  });
+
+  it('segnala la snellezza oltre 200', () => {
+    const filiforme = verificaInstabilitaPunta(SEZ, { ...base, Lz: '5000' });
+    expect(filiforme.z.lambda).toBeGreaterThan(200);
+    expect(filiforme.z.troppoSnella).toBe(true);
+    expect(verificaInstabilitaPunta(SEZ, base).z.troppoSnella).toBe(false);
+  });
+
+  it('la trazione non instabilizza', () => {
+    const teso = verificaInstabilitaPunta({ ...SEZ, NEd: '-500' }, base);
+    expect(teso.esito.sfruttamento).toBe(0);
+  });
+
+  it('l’angolare sbanda attorno all’asse principale minimo', () => {
+    const l = verificaInstabilitaPunta(
+      { ...SEZ, tipoProfilo: 'ANGOLARE', profilo: '100x10' },
+      base,
+    );
+    const p = proprietaProfilo('ANGOLARE', '100x10')!;
+    expect(l.z.I).toBeCloseTo(p.Imin, 6);
+    expect(l.z.I).toBeLessThan(l.y.I);
+    expect(l.z.curva).toBe('b'); // angolari: curva b
+  });
+
+  it('i tubi formati a freddo stanno su una curva peggiore di quelli a caldo', () => {
+    const sez = { ...SEZ, tipoProfilo: 'TUBO_QUADRO' as const, profilo: '100x5' };
+    const freddo = verificaInstabilitaPunta(sez, { ...base, formatura: 'freddo' });
+    const caldo = verificaInstabilitaPunta(sez, { ...base, formatura: 'caldo' });
+    expect(freddo.z.curva).toBe('c');
+    expect(caldo.z.curva).toBe('a');
+    expect(freddo.NbRd).toBeLessThan(caldo.NbRd);
+  });
+});
+
+describe('§C4.2.4.1.3.3 — verifica combinata, Metodo A', () => {
+  const base = { ...LT, Ly: '4000', betaY: '1', Lz: '2000', betaZ: '1' };
+  const combinata = (sez: InputAcciaioSezione, inp = base) =>
+    verificaPressoflessione(sez, inp, verificaInstabilitaLT(sez, inp), verificaInstabilitaPunta(sez, inp));
+
+  it('senza assiale coincide con la sola flesso-torsionale', () => {
+    const r = combinata(SEZ);
+    const lt = verificaInstabilitaLT(SEZ, base);
+    expect(r.termineN).toBe(0);
+    expect(r.termineMz).toBe(0);
+    expect(r.amplificaY).toBe(1);
+    expect(r.termineMy).toBeCloseTo(lt.esito.sfruttamento, 9);
+    // è il valore che il foglio riporta per lo stesso caso
+    expect(r.sfruttamento).toBeCloseTo(0.872, 2);
+  });
+
+  it('l’assiale amplifica i momenti oltre a consumare resistenza propria', () => {
+    const senza = combinata({ ...SEZ, NEd: '0' });
+    const con = combinata({ ...SEZ, NEd: '100' });
+    expect(con.termineN).toBeGreaterThan(0);
+    expect(con.amplificaY).toBeGreaterThan(1);
+    // 1/(1 − 100/1126)
+    expect(con.amplificaY).toBeCloseTo(1 / (1 - 100 / 1126), 2);
+    expect(con.termineMy).toBeGreaterThan(senza.termineMy);
+    expect(con.sfruttamento).toBeGreaterThan(senza.sfruttamento);
+  });
+
+  it('il momento attorno all’asse debole entra con il suo modulo', () => {
+    const r = combinata({ ...SEZ, MEd: '0', MzEd: '3' });
+    expect(r.termineMy).toBe(0);
+    expect(r.Wz).toBeLessThan(r.Wy);
+    // Mz,Rd = Wz·fyk/γM1, con Wz plastico perché la sezione è compatta
+    expect(r.termineMz).toBeCloseTo(3 / ((r.Wz * 275) / 1.05 / 1e6), 6);
+  });
+
+  it('oltre il carico critico la verifica non ha più senso e lo dice', () => {
+    // NEd = 400 kN supera Ncr,z = 354 kN: l'asta è già oltre il carico di Eulero
+    const r = combinata({ ...SEZ, NEd: '400' });
+    expect(r.oltreCritico).toBe(true);
+    expect(r.termineN).toBeGreaterThan(1);
+    expect(r.esito.ok).toBe(false);
+    // con un momento attorno all'asse debole non c'è più nemmeno un numero
+    const conMz = combinata({ ...SEZ, NEd: '400', MzEd: '1' });
+    expect(Number.isFinite(conMz.sfruttamento)).toBe(false);
+    expect(conMz.esito.ok).toBe(false);
+  });
+
+  it('la somma dei tre termini è il fattore di sfruttamento', () => {
+    const r = combinata({ ...SEZ, NEd: '80', MEd: '10', MzEd: '1.5' });
+    expect(r.sfruttamento).toBeCloseTo(r.termineN + r.termineMy + r.termineMz, 9);
+    expect(r.esito.ok).toBe(r.sfruttamento <= 1);
+  });
+});
+
+describe('classe della sezione dentro le verifiche di stabilità', () => {
+  it('il modulo automatico segue la classe', () => {
+    // IPE 160 in flessione è classe 1 → modulo plastico
+    const auto = verificaInstabilitaLT(SEZ, { ...LT, modulo: 'automatico' });
+    expect(auto.classe.classe).toBe(1);
+    expect(auto.moduloUsato).toBe('plastico');
+    expect(auto.Wy).toBeCloseTo(123.9 * 1000, 6);
+    // e resta imponibile a mano
+    const elastico = verificaInstabilitaLT(SEZ, { ...LT, modulo: 'elastico' });
+    expect(elastico.moduloUsato).toBe('elastico');
+    expect(elastico.Wy).toBeCloseTo(109 * 1000, 6);
+    expect(elastico.MbRd).toBeLessThan(auto.MbRd);
+  });
+
+  it('una sezione snella scende al modulo elastico da sola', () => {
+    // IPE 600 in compressione è classe 4: la presso-flessione lo rileva
+    const sez = { ...SEZ, profilo: 'IPE 600', NEd: '200' };
+    const auto = { ...LT, modulo: 'automatico' as const };
+    const r = verificaPressoflessione(
+      sez,
+      auto,
+      verificaInstabilitaLT(sez, auto),
+      verificaInstabilitaPunta(sez, auto),
+    );
+    expect(r.classe.classe).toBe(4);
+    expect(r.moduloUsato).toBe('elastico');
   });
 });

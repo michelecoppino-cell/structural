@@ -197,12 +197,12 @@ describe('collegamento del VEd alle Sollecitazioni', () => {
   });
 });
 
-describe('migrazione di un progetto senza i dati di instabilità', () => {
+describe('migrazione di un progetto senza i dati di stabilità', () => {
   it('riempie la scheda con i valori di serie', () => {
     const vecchio = migra({
       schemaVersion: 7,
-      verifiche: { ...STATO_INIZIALE.verifiche, instabilitaLT: undefined },
+      verifiche: { ...STATO_INIZIALE.verifiche, stabilita: undefined },
     } as unknown as Partial<AppState>);
-    expect(vecchio.verifiche.instabilitaLT).toEqual(STATO_INIZIALE.verifiche.instabilitaLT);
+    expect(vecchio.verifiche.stabilita).toEqual(STATO_INIZIALE.verifiche.stabilita);
   });
 });
