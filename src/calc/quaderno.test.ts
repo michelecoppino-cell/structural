@@ -217,14 +217,30 @@ describe('blocchi del quaderno', () => {
     expect(r.map((b) => b.passo)).toEqual(['01', '02', '03']);
   });
 
+  it('la linea divide il foglio in capitoli: tutta la riga, con il suo titolo', () => {
+    const r = ricalcolaQuaderno(
+      [nuovoBlocco('linea', { testo: '  Verifica a taglio  ' }), nuovoBlocco('valore', { fonte: 'v-b' })],
+      sorgenti(TRAVE),
+    );
+    expect(r[0].pieno).toBe(true);
+    expect(r[0].testo).toBe('Verifica a taglio');
+    expect(spanBlocco(r[0])).toBe(COLONNE_FOGLIO);
+    // non è una riga di calcolo: non porta nome né errori, e non è una cella
+    expect(r[0].errore).toBe('');
+    expect(bloccoVariabile(r[0])).toBe(false);
+    // e non conta come passaggio in meno per chi viene dopo
+    expect(r[1].nome).toBe('b');
+  });
+
   it('i blocchi salvati si rileggono, quelli inventati si scartano', () => {
     const raw = [
       { tipo: 'formula', nome: 'A', espressione: 'b*h', um: 'mq' },
       { tipo: 'chissà', nome: 'x' },
       { id: 'q-9', tipo: 'nota', testo: 'promemoria' },
+      { tipo: 'linea', testo: 'Capitolo 2' },
     ] as Partial<BloccoQuaderno>[];
     const b = normalizzaBlocchi(raw);
-    expect(b.map((x) => x.tipo)).toEqual(['formula', 'nota']);
+    expect(b.map((x) => x.tipo)).toEqual(['formula', 'nota', 'linea']);
     expect(b[1].id).toBe('q-9');
     expect(b[0].img).toBe('');
     // un salvataggio di prima non ha la misura degli schemi: intera colonna

@@ -43,14 +43,24 @@ import { UNITA_DEFAULT, dimUnita, inBase, unitaCompatibili, type Dim } from './u
 /**
  * Che cosa può stare su una pagina:
  *  - `valore`, `operazione`, `import`: una riga di calcolo collegata alla sua
- *    fonte (una grandezza del pannello, una formula preimpostata, un risultato
+ *    fonte (una variabile del pannello, una formula preimpostata, un risultato
  *    di un'altra scheda);
  *  - `formula`: una riga scritta qui, con il suo nome e la sua unità;
  *  - `nota` e `immagine`: quello che si aggiunge a mano;
+ *  - `linea`: la riga orizzontale che separa un capitolo dal successivo, con
+ *    il suo titolo scritto lì sopra;
  *  - `capitolo`: un capitolo intero ripreso da un'altra scheda, come faceva la
  *    spunta della vecchia scheda Esporta.
  */
-export type TipoBlocco = 'valore' | 'operazione' | 'formula' | 'import' | 'nota' | 'immagine' | 'capitolo';
+export type TipoBlocco =
+  | 'valore'
+  | 'operazione'
+  | 'formula'
+  | 'import'
+  | 'nota'
+  | 'immagine'
+  | 'linea'
+  | 'capitolo';
 
 export interface BloccoQuaderno {
   id: string;
@@ -262,7 +272,7 @@ const VUOTO = {
 };
 
 /** I blocchi che occupano tutta la riga: hanno un contenuto, non un numero. */
-const PIENI: TipoBlocco[] = ['nota', 'immagine', 'capitolo'];
+const PIENI: TipoBlocco[] = ['nota', 'immagine', 'linea', 'capitolo'];
 
 /**
  * Due numeri sono «lo stesso numero» se differiscono meno di un miliardesimo
@@ -293,6 +303,7 @@ export function ricalcolaQuaderno(
     const base: BloccoCalcolato = { blocco, passo, pieno, ...VUOTO };
 
     if (blocco.tipo === 'nota') return { ...base, etichetta: 'nota' };
+    if (blocco.tipo === 'linea') return { ...base, etichetta: 'capitolo del foglio', testo: blocco.testo.trim() };
     if (blocco.tipo === 'immagine') return { ...base, etichetta: 'schema' };
     if (blocco.tipo === 'capitolo')
       return { ...base, collegato: true, etichetta: 'capitolo', provenienza: blocco.fonte };
@@ -488,7 +499,16 @@ export function colonneValide(v: unknown): number {
 
 /** Rimette in ordine i blocchi che arrivano da un salvataggio. */
 export function normalizzaBlocchi(raw: Partial<BloccoQuaderno>[]): BloccoQuaderno[] {
-  const tipi: TipoBlocco[] = ['valore', 'operazione', 'formula', 'import', 'nota', 'immagine', 'capitolo'];
+  const tipi: TipoBlocco[] = [
+    'valore',
+    'operazione',
+    'formula',
+    'import',
+    'nota',
+    'immagine',
+    'linea',
+    'capitolo',
+  ];
   return (Array.isArray(raw) ? raw : []).flatMap((b, i) => {
     const tipo = tipi.find((t) => t === b?.tipo);
     if (!tipo) return [];

@@ -401,6 +401,7 @@ export type ElementoFoglio =
   | { tipo: 'capitolo'; id: string; capitolo: Capitolo }
   | { tipo: 'calcolo'; id: string; passo: string; testo: string; nota: string; livello: LivelloEsito }
   | { tipo: 'nota'; id: string; testo: string }
+  | { tipo: 'linea'; id: string; titolo: string }
   | { tipo: 'immagine'; id: string; img: string; didascalia: string; larghezza: number };
 
 /**
@@ -416,6 +417,9 @@ export function foglioQuaderno(state: AppState): ElementoFoglio[] {
       if (!c) return [];
       return [{ tipo: 'capitolo', id, capitolo: { ...c, blocchi: blocchiCapitolo(state, c.id) } }];
     }
+    // la linea divide il foglio in capitoli: nel documento è una riga
+    // orizzontale con sopra il titolo di quello che comincia lì
+    if (b.blocco.tipo === 'linea') return [{ tipo: 'linea', id, titolo: b.blocco.testo.trim() }];
     if (b.blocco.tipo === 'nota') {
       const testo = b.blocco.testo.trim();
       return testo ? [{ tipo: 'nota', id, testo }] : [];
@@ -486,6 +490,7 @@ export function testoFoglio(state: AppState): string[] {
   const righe = foglioQuaderno(state).flatMap((e) => {
     if (e.tipo === 'capitolo')
       return [e.capitolo.titolo.toUpperCase(), ''.padEnd(e.capitolo.titolo.length, '─'), ...testoBlocchi(e.capitolo.blocchi), ''];
+    if (e.tipo === 'linea') return ['', ''.padEnd(48, '─'), ...(e.titolo ? [e.titolo.toUpperCase()] : []), ''];
     if (e.tipo === 'nota') return [e.testo, ''];
     if (e.tipo === 'immagine') return [`[schema allegato${e.didascalia ? `: ${e.didascalia}` : ''}]`, ''];
     return [`${e.passo}  ${e.testo}${e.nota ? `   — ${e.nota}` : ''}`];

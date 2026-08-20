@@ -31,6 +31,19 @@ describe('foglio del quaderno', () => {
     expect(documentoHtml(stato)).toContain('Quaderno vuoto');
   });
 
+  it('la linea esce come uno stacco di capitolo, con il suo titolo', () => {
+    const stato = con({ blocchi: [nuovoBlocco('linea', { testo: 'Verifica a taglio' })] });
+    expect(documentoTesto(stato)).toContain('VERIFICA A TAGLIO');
+    const html = documentoHtml(stato);
+    expect(html).toContain('<div class="divisore">');
+    expect(html).toContain('<h2>Verifica a taglio</h2>');
+  });
+
+  it('una linea senza titolo resta uno stacco e basta', () => {
+    const html = documentoHtml(con({ blocchi: [nuovoBlocco('linea')] }));
+    expect(html).toContain('<div class="divisore"></div>');
+  });
+
   it('l’HTML è un file solo, senza risorse esterne', () => {
     const html = documentoHtml(con({ intestazione: 'Trave di copertura', nota: 'da confermare' }));
     expect(html.startsWith('<!doctype html>')).toBe(true);
