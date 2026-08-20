@@ -22,8 +22,8 @@ export default function PannelloSincronia({ sincronia }: { sincronia: ReturnType
             Libreria personale — solo su questo dispositivo
           </span>
           <p className="note">
-            Norme aggiunte a mano, unità di misura e formule preimpostate restano nella memoria di
-            questo browser: sopravvivono a «Svuota tutto», ma non si vedono sugli altri dispositivi e
+            Norme aggiunte a mano, unità di misura, formule preimpostate e grandezze restano nella
+            memoria di questo browser: sopravvivono a «Svuota tutto», ma non si vedono sugli altri dispositivi e
             se ne vanno se cancelli i dati del sito. Per portarle su OneDrive serve l’ID
             dell’applicazione Microsoft (<code>VITE_MS_CLIENT_ID</code>): la procedura è scritta in
             <code> src/cloud/config.ts</code>.
@@ -41,7 +41,7 @@ export default function PannelloSincronia({ sincronia }: { sincronia: ReturnType
     'in-corso': 'Sincronizzazione in corso…',
     'in-pari': [
       'In pari con OneDrive',
-      conteggio && `${conteggio.normative} ${conteggio.normative === 1 ? 'norma' : 'norme'}, ${conteggio.unita} unità, ${conteggio.preimpostate} ${conteggio.preimpostate === 1 ? 'formula' : 'formule'}`,
+      conteggio && `${conteggio.normative} ${conteggio.normative === 1 ? 'norma' : 'norme'}, ${conteggio.unita} unità, ${conteggio.preimpostate} ${conteggio.preimpostate === 1 ? 'formula' : 'formule'}, ${conteggio.grandezze} ${conteggio.grandezze === 1 ? 'grandezza' : 'grandezze'}`,
       ultimo && `ultimo controllo alle ${ultimo}`,
     ]
       .filter(Boolean)
@@ -87,8 +87,9 @@ export default function PannelloSincronia({ sincronia }: { sincronia: ReturnType
             </>
           )}
           Sul tuo OneDrive va un solo file, <code>{CARTELLA}/{FILE_LIBRERIA}</code>: norme e link
-          aggiunti a mano, unità di misura, formule preimpostate. <strong>La commessa non esce di
-          qui</strong> — azioni, sollecitazioni, verifiche, computo e quaderno restano su questo
+          aggiunti a mano, unità di misura, formule preimpostate e le grandezze con cui sono scritte
+          — delle grandezze da compilare vanno nome, unità e nota, non il numero, che è di commessa;
+          delle costanti va anche il valore. <strong>La commessa non esce di qui</strong> — azioni, sollecitazioni, verifiche, computo e quaderno restano su questo
           dispositivo e si portano via con «Esporta JSON». L’app legge e scrive solo la sua cartella
           per conto tuo, dal browser: non c’è nessun server in mezzo. Il permesso si revoca quando
           vuoi da <em>account.microsoft.com → Privacy → App e servizi</em>.

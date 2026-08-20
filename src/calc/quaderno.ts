@@ -29,11 +29,14 @@ import {
   leggiRisultato,
   nomeAmmesso,
   nomiMancanti,
+  nomiRichiesti,
+  risolviNome,
   valutaConUnita,
   variabili,
   unitaVariabili,
   type Preimpostata,
   type VoceCalcolata,
+  type VoceCalcolo,
 } from './calcolatrice';
 import { UNITA_DEFAULT, dimUnita, inBase, unitaCompatibili, type Dim } from './unita';
 
@@ -506,4 +509,132 @@ export function normalizzaBlocchi(raw: Partial<BloccoQuaderno>[]): BloccoQuadern
       },
     ];
   });
+}
+
+/* ──────────────── una formula preimpostata che si porta dietro i suoi dati ──────────────── */
+
+/**
+ * Una formula preimpostata non è mai sola: `M = q·l²/8` senza `q` e senza `l`
+ * non è un calcolo, è un promemoria. Prima, tirarla nel quaderno lasciava una
+ * riga rossa «manca q, l» e toccava andarsi a cercare le due grandezze nel
+ * pannello, aggiungerle, controllare l'unità e tornare indietro.
+ *
+ * Da qui in poi la formula arriva con il suo corredo: le grandezze che le
+ * servono e che il foglio non ha ancora entrano **prima** di lei, nell'ordine
+ * in cui la formula le nomina, così la riga nasce già col numero (o con il
+ * campo pronto da riempire, che è la stessa cosa un attimo prima).
+ *
+ * Dove si va a prendere una grandezza che manca, in ordine:
+ *
+ *  1. **è già fra le grandezze del pannello** — allora si mette sul foglio la
+ *     riga che la richiama, e basta: unità e nota le ha già;
+ *  2. **sta nel catalogo** delle grandezze proposte (`b`, `l`, `q`, `E`, `J`,
+ *     i pesi di volume…) — si aggiunge al pannello **con la sua unità di
+ *     misura**, che è il punto: una `q` senza unità, o in kN/mq invece che in
+ *     kN/m, fa tornare un numero sbagliato senza dire niente;
+ *  3. **non si sa cosa sia** — e allora non si inventa. Il nome finisce fra i
+ *     `da inventare`, che la scheda mostra come suggerimento: sei tu a dire
+ *     cos'è e in che unità si scrive.
+ */
+export interface Corredo {
+  /** Grandezze nuove da aggiungere al pannello, già con nome, unità e nota. */
+  grandezze: VoceCalcolo[];
+  /** Righe da mettere sul foglio prima della formula, nell'ordine giusto. */
+  blocchi: BloccoQuaderno[];
+  /**
+   * Nomi che la formula richiama e che non si sanno da nessuna parte: né sul
+   * foglio, né nel pannello, né nel catalogo. Sono quelli da proporre a chi
+   * calcola — con l'unità, che è l'unica cosa che il codice non può indovinare.
+   */
+  daInventare: string[];
+  /**
+   * Grandezze che ci sono ma **senza unità di misura**: la formula gira lo
+   * stesso, il numero però esce senza scala e non si converte più. Vale la
+   * pena dirlo prima, non dopo.
+   */
+  senzaUnita: string[];
+}
+
+/** Che cosa sa il quaderno nel momento in cui la formula ci entra. */
+export interface Contesto {
+  /**
+   * Le grandezze richiamabili dal pannello, quelle scritte a mano e quelle che
+   * nascono dalle scelte di libreria (`fck`, `Wx`, …): tutte hanno un id, e
+   * quindi possono diventare una riga del foglio senza inventare niente.
+   */
+  voci: VoceCalcolo[];
+  /** I blocchi già sul foglio: quello che portano si conta come disponibile. */
+  blocchi: BloccoCalcolato[];
+  /** Le grandezze proposte, da cui pescare quelle che mancano con la loro unità. */
+  catalogo: Omit<VoceCalcolo, 'id'>[];
+}
+
+/** Un nome è già disponibile fra questi, γ scritta con la g compresa? */
+function fraQuesti(nome: string, nomi: string[]): string | undefined {
+  const insieme = Object.fromEntries(nomi.filter(Boolean).map((n) => [n, true]));
+  return risolviNome(nome, insieme);
+}
+
+/**
+ * Prepara l'ingresso di una formula preimpostata nel quaderno: dice quali
+ * grandezze aggiungere al pannello, quali righe mettere sul foglio prima della
+ * formula e quali nomi non si sanno da dove prendere.
+ *
+ * Non tocca niente: restituisce solo le mosse: chi chiama le applica in un
+ * colpo solo, e i test possono guardarle senza montare mezza scheda.
+ */
+export function corredoFormula(espressione: string, { voci, blocchi, catalogo }: Contesto): Corredo {
+  const sulFoglio = blocchi.filter((b) => !b.pieno).map((b) => b.nome.trim());
+  const nelPannello = voci.map((v) => v.nome.trim());
+
+  const grandezze: VoceCalcolo[] = [];
+  const nuoviBlocchi: BloccoQuaderno[] = [];
+  const daInventare: string[] = [];
+  const senzaUnita: string[] = [];
+
+  for (const nome of nomiRichiesti(espressione)) {
+    // `ans` è l'ultimo risultato: c'è sempre, non è una grandezza da aggiungere
+    if (nome === 'ans') continue;
+    // già sul foglio: la formula lo vede, non c'è niente da aggiungere
+    if (fraQuesti(nome, [...sulFoglio, ...grandezze.map((g) => g.nome)])) continue;
+
+    const daPannello = fraQuesti(nome, nelPannello);
+    const voce = daPannello ? voci.find((v) => v.nome.trim() === daPannello) : undefined;
+    if (voce) {
+      if (!voce.um.trim()) senzaUnita.push(voce.nome.trim());
+      nuoviBlocchi.push(nuovoBlocco('valore', { fonte: voce.id }));
+      continue;
+    }
+
+    const dal = catalogo.find((g) => !!fraQuesti(nome, [g.nome.trim()]));
+    if (dal) {
+      // l'unità viene dal catalogo, ed è tutto il punto della cosa
+      const g: VoceCalcolo = { ...dal, id: `calc-${nome}-${grandezze.length}` };
+      grandezze.push(g);
+      nuoviBlocchi.push(nuovoBlocco('valore', { fonte: g.id }));
+      continue;
+    }
+
+    if (!daInventare.includes(nome)) daInventare.push(nome);
+  }
+
+  return { grandezze, blocchi: nuoviBlocchi, daInventare, senzaUnita };
+}
+
+/**
+ * La riga porta un numero **scritto da qualcuno**, non calcolato: è una cella
+ * editabile, e sul foglio si vede — velatura ocra — perché a colpo d'occhio la
+ * differenza fra «questo l'ho deciso io» e «questo l'ha calcolato il foglio»
+ * è la prima cosa che si cerca rileggendo un calcolo.
+ *
+ * Sono di questa specie la grandezza tirata dal pannello (il valore si scrive
+ * lì) e la formula scritta a mano che non contiene operazioni — `b = 0,30 m`,
+ * cioè una definizione. Un risultato che viene da un'altra scheda no: quello
+ * si cambia dove è nato, non qui.
+ */
+export function bloccoVariabile(b: BloccoCalcolato): boolean {
+  if (b.pieno) return false;
+  if (b.blocco.tipo === 'valore') return !haOperazioni(b.espressione);
+  if (b.blocco.tipo === 'formula') return !!b.blocco.espressione.trim() && !haOperazioni(b.blocco.espressione);
+  return false;
 }

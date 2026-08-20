@@ -372,12 +372,37 @@ si **trascina** nel foglio o si aggiunge con il «+», e ci resta **collegato**:
 | Grandezze da compilare | `b`, `l`, `h`, `q` e le altre del calcolo di oggi, su due colonne |
 | Grandezze fisse | i pesi di volume `γC`, `γS`, `γT` e le costanti, con la γ scritta col pedice |
 | Grandezze da libreria | le quattro tendine (CLS, acciaio, ferro ⌀, bullone M) e le resistenze che ne discendono |
-| Operazioni preimpostate | una card per formula: in testa il risultato che dà — «A (mq)» — e sotto la formula |
+| Operazioni preimpostate | una card per formula: in testa il risultato che dà — «A (mq)» — e sotto la formula; **entra con il suo corredo** (sotto) |
 | Import rapido da altre schede | M max, V max, q di progetto, luce, freccia, neve, vento, VRd, MRd, esiti delle verifiche |
 | Capitoli da altre schede | un capitolo intero di relazione, come faceva la spunta della vecchia Esporta |
 
 Più il **Tastierino**, che scrive nella formula toccata per ultima: serve su cellulare, dove la
 γ e la `^` non ci sono.
+
+**Una formula preimpostata entra con il suo corredo.** `M = q·l²/8` senza `q` e senza `l` non
+è un calcolo, è un promemoria: prima lasciava una riga rossa «manca q, l» e toccava andarsi a
+cercare le due grandezze nel pannello, aggiungerle, controllare l'unità e tornare indietro.
+Ora, tirandola nel foglio, le grandezze che le servono e che non ci sono ancora **arrivano
+prima di lei**, nell'ordine in cui la formula le nomina. Dove si va a prenderle, in ordine:
+
+1. **è già fra le grandezze del pannello** → sul foglio va la riga che la richiama, e basta;
+2. **sta nel catalogo** delle grandezze proposte (`b`, `l`, `q`, `E`, `J`, i pesi di volume…)
+   → si aggiunge a quelle da compilare **con la sua unità di misura**, che è il punto: una `q`
+   senza unità, o in kN/mq invece che in kN/m, fa tornare un numero sbagliato senza dire niente;
+3. **non si sa cosa sia** → non si inventa. Il nome compare in una riga di suggerimenti sopra
+   il foglio, con accanto il campo dell'unità: si scrive «kN/m», si preme «+», e la grandezza
+   entra fra quelle da compilare con la riga già posata prima del passaggio che la nomina.
+
+Una grandezza che c'è ma è **senza unità** non blocca niente e viene detta lo stesso: il numero
+girerebbe senza scala, e accorgersene dopo costa più che leggerlo adesso.
+
+**Celle editabili e celle da calcolare.** Una riga che porta un numero *scritto da qualcuno* —
+una grandezza tirata dal pannello, una definizione scritta a mano come `b = 0,30 m` — ha una
+velatura **ocra trasparente**; una riga che il foglio *calcola* resta sulla carta bianca. Lo
+stesso vale nel pannello, dove il campo del valore di ogni grandezza ha la stessa velatura. È
+la distinzione che a mano si fa cerchiando i dati di partenza: rileggendo un calcolo, sapere
+dove si può mettere le mani è la prima cosa che si cerca. Il valore che arriva da un'altra
+scheda non è ocra — quello si cambia dove è nato.
 
 **Collegamento live.** Un blocco nato da una grandezza, da una formula o da un import non salva
 un valore proprio: salva **da dove viene** e lo ricalcola. Si corregge `b` nel pannello e tutto
@@ -542,7 +567,8 @@ Quaderno: un valore si corregge in un posto solo.
   i campi già compilati — e riporta ogni scheda ai valori iniziali. È l'unico comando che
   perde dati: chiede conferma e ricorda di usare prima *Esporta JSON* per conservare il
   lavoro. **Non** tocca la libreria personale (vedi sotto): le norme aggiunte a mano, le
-  unità e le formule preimpostate non sono roba di commessa e restano dove sono.
+  unità, le formule preimpostate e le grandezze con cui sono scritte non sono roba di
+  commessa e restano dove sono — delle grandezze da compilare torna l'elenco, non i numeri.
 - **Intestazione di scheda sticky**: resta in vista mentre si scorre e ospita i comandi
   della scheda attiva (materiale, verifica visibile, combinazione, orientamento); dove la
   scheda non ha comandi propri sparisce del tutto.
@@ -563,7 +589,7 @@ Nell'app convivono due nature di dati, e distinguerle è il senso di tutta quest
 
 | | **Commessa** | **Libreria personale** |
 |---|---|---|
-| Cosa | azioni, sollecitazioni, verifiche, computo, quaderno | norme e link aggiunti a mano, unità di misura, formule preimpostate |
+| Cosa | azioni, sollecitazioni, verifiche, computo, quaderno, **valori** delle grandezze da compilare | norme e link aggiunti a mano, unità di misura, formule preimpostate, **elenco** delle grandezze da compilare e costanti col loro valore |
 | Dove | `localStorage` di questo browser | `localStorage` **e** un JSON su OneDrive |
 | «Svuota tutto» | azzera | **non tocca** |
 | Come si porta via | *Esporta JSON* | si ritrova da sola su ogni dispositivo collegato |
@@ -590,6 +616,26 @@ dice da solo quale riga aggiungere. È l'unica manutenzione prevista di questa p
 Uno solo: `strutturale/strutturale-libreria.json`, nella root del OneDrive personale — una
 cartella normale, che si apre, si legge e si copia anche senza l'app. **La commessa non ci
 finisce dentro.**
+
+```jsonc
+{
+  "schemaVersion": 4,
+  "aggiornato": "2026-08-20T09:00:00.000Z",
+  "normative": [ /* sigla, titolo, url, categoria, indice dei capitoli */ ],
+  "unita": [ "m", "cm", "kN", "kNm", "MPa", … ],
+  "preimpostate": [ { "id": "pre-m-app", "nome": "M", "espressione": "q*l^2/8", "nota": "…", "um": "kNm" } ],
+  "grandezze": [ { "id": "calc-q", "nome": "q", "espressione": "", "nota": "carico distribuito", "um": "kN/m", "tipo": "compilabile" } ]
+}
+```
+
+Le **grandezze** sono entrate con lo `schemaVersion` 4, e sono l'alfabeto con cui le formule
+preimpostate sono scritte: una formula che nomina `q` non serve a niente sul telefono se lì
+`q` non esiste, o esiste in kN/mq invece che in kN/m. Di quelle **da compilare** viaggia
+l'intestazione — nome, unità, nota — e **non il valore**, che è di questa trave e di questa
+commessa; delle **costanti** (`tipo: "fissa"`) viaggia anche il valore, perché un peso di
+volume è lo stesso ovunque ed è proprio per non riscriverlo che sta lì. Applicando la
+libreria, il valore già scritto su questo dispositivo **resta dov'è**: arriva l'elenco, non
+il foglio bianco.
 
 ### Come si accende
 

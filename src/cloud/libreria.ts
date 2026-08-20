@@ -1,7 +1,8 @@
 /**
  * La **libreria personale**: le poche cose dell'app che non appartengono a una
  * commessa ma a chi la usa — le norme e i link aggiunti a mano, le unità di
- * misura proposte, le formule preimpostate.
+ * misura proposte, le formule preimpostate e le grandezze con cui quelle
+ * formule sono scritte (quelle da compilare e le costanti).
  *
  * Sono i dati che devono comportarsi al contrario di tutti gli altri:
  * sopravvivere a «Svuota tutto», ritrovarsi identici sul telefono in cantiere e
@@ -12,17 +13,18 @@
  * file e la regola con cui due copie della libreria tornano a essere una.
  */
 import { leggiNormative, type LinkUtente } from '../data/normative';
-import type { Preimpostata } from '../calc/calcolatrice';
+import { normalizzaVoci, type Preimpostata, type VoceCalcolo } from '../calc/calcolatrice';
 
 /**
  * Versione del formato del file su OneDrive. È salita a 2 quando i documenti
- * hanno preso l'indice scritto a mano (`capitoli`) e a 3 quando hanno preso la
- * categoria: i file scritti dalle versioni precedenti si rileggono lo stesso,
- * `leggiNormative` li completa con un indice vuoto e senza categoria — i
- * documenti finiscono tutti nello scaffale «Senza categoria», da dove si
- * smistano quando fa comodo.
+ * hanno preso l'indice scritto a mano (`capitoli`), a 3 quando hanno preso la
+ * categoria e a 4 quando sono entrate le grandezze — quelle da compilare e le
+ * costanti. I file scritti dalle versioni precedenti si rileggono lo stesso:
+ * `leggiNormative` completa i documenti con un indice vuoto e senza categoria,
+ * e un file senza `grandezze` lascia semplicemente quelle che il dispositivo
+ * ha già.
  */
-export const LIBRERIA_VERSION = 3;
+export const LIBRERIA_VERSION = 4;
 
 export interface Libreria {
   schemaVersion: number;
@@ -31,10 +33,21 @@ export interface Libreria {
   normative: LinkUtente[];
   unita: string[];
   preimpostate: Preimpostata[];
+  /**
+   * Le grandezze del pannello del Quaderno: quelle **da compilare** (nome,
+   * unità e nota — il valore no, quello è di commessa) e le **costanti**, che
+   * il valore invece se lo portano dietro, perché un peso di volume è lo
+   * stesso su tutti i dispositivi e su tutte le commesse.
+   *
+   * Stanno qui perché sono l'alfabeto con cui si scrivono le formule: una
+   * formula preimpostata che nomina `q` non serve a niente sul telefono se lì
+   * `q` non esiste, o esiste in kg/mq invece che in kN/m.
+   */
+  grandezze: VoceCalcolo[];
 }
 
 export function libreriaVuota(): Libreria {
-  return { schemaVersion: LIBRERIA_VERSION, aggiornato: '', normative: [], unita: [], preimpostate: [] };
+  return { schemaVersion: LIBRERIA_VERSION, aggiornato: '', normative: [], unita: [], preimpostate: [], grandezze: [] };
 }
 
 /**
@@ -54,6 +67,9 @@ export function leggiLibreria(raw: unknown): Libreria {
       if (!p || typeof p.espressione !== 'string') return [];
       return [{ id: p.id || `pre-${i}`, nome: p.nome ?? '', espressione: p.espressione, nota: p.nota ?? '', um: p.um ?? '' }];
     }),
+    // le grandezze passano dalla stessa normalizzazione dei salvataggi di
+    // progetto: nomi, unità e tipo tornano a posto, e i doppioni si smistano
+    grandezze: normalizzaVoci(Array.isArray(o.grandezze) ? (o.grandezze as Partial<VoceCalcolo>[]) : []),
   };
 }
 
@@ -160,12 +176,13 @@ export function fondiLibrerie(locale: Libreria, remoto: Libreria, base: Libreria
     normative: fondiElenco(locale.normative, remoto.normative, base?.normative ?? null, (v) => v.id),
     unita: fondiElenco(locale.unita, remoto.unita, base?.unita ?? null, (v) => v),
     preimpostate: fondiElenco(locale.preimpostate, remoto.preimpostate, base?.preimpostate ?? null, (v) => v.id),
+    grandezze: fondiElenco(locale.grandezze, remoto.grandezze, base?.grandezze ?? null, (v) => v.id),
   };
 }
 
 /** Due librerie hanno lo stesso contenuto? (la data di scrittura non conta) */
 export function stessoContenuto(a: Libreria, b: Libreria): boolean {
-  const spoglia = (l: Libreria) => JSON.stringify([l.normative, l.unita, l.preimpostate]);
+  const spoglia = (l: Libreria) => JSON.stringify([l.normative, l.unita, l.preimpostate, l.grandezze]);
   return spoglia(a) === spoglia(b);
 }
 
@@ -192,5 +209,6 @@ export function perditeIngiustificate(remoto: Libreria, fusa: Libreria, base: Li
     ...perse(remoto.normative, fusa.normative, base?.normative, (v) => v.id, (v) => v.sigla || v.id),
     ...perse(remoto.unita, fusa.unita, base?.unita, (v) => v, (v) => v),
     ...perse(remoto.preimpostate, fusa.preimpostate, base?.preimpostate, (v) => v.id, (v) => v.nome || v.id),
+    ...perse(remoto.grandezze, fusa.grandezze, base?.grandezze, (v) => v.id, (v) => v.nome || v.id),
   ];
 }

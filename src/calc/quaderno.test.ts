@@ -8,6 +8,8 @@ import {
   livelloEsito,
   normalizzaBlocchi,
   nuovoBlocco,
+  bloccoVariabile,
+  corredoFormula,
   ricalcolaQuaderno,
   SALTO_MAX,
   saltoValido,
@@ -384,5 +386,106 @@ describe('migrazione dei progetti salvati', () => {
     const blocchi = [nuovoBlocco('formula', { nome: 'A', espressione: 'b*h', um: 'cmq' })];
     const s = migra({ schemaVersion: SCHEMA_VERSION, quaderno: { blocchi, intestazione: '', nota: '', quadretti: true } });
     expect(s.quaderno.blocchi).toEqual(blocchi);
+  });
+});
+
+describe('una formula preimpostata si porta dietro le sue grandezze', () => {
+  const CATALOGO = [
+    { nome: 'b', espressione: '', nota: 'base', um: 'm', tipo: 'compilabile' as const },
+    { nome: 'h', espressione: '', nota: 'altezza', um: 'm', tipo: 'compilabile' as const },
+    { nome: 'q', espressione: '', nota: 'carico distribuito', um: 'kN/m', tipo: 'compilabile' as const },
+    { nome: 'l', espressione: '', nota: 'luce', um: 'm', tipo: 'compilabile' as const },
+    { nome: 'γC', espressione: '25', nota: 'peso di volume del cls', um: 'kN/mc', tipo: 'fissa' as const },
+  ];
+
+  const contesto = (voci: VoceCalcolo[], blocchi: BloccoQuaderno[] = []) => ({
+    voci,
+    blocchi: ricalcolaQuaderno(blocchi, sorgenti(voci)),
+    catalogo: CATALOGO,
+  });
+
+  it('pesca dal catalogo quelle che mancano, con la loro unità di misura', () => {
+    const c = corredoFormula('q*l^2/8', contesto([]));
+    expect(c.grandezze.map((g) => [g.nome, g.um])).toEqual([
+      ['q', 'kN/m'],
+      ['l', 'm'],
+    ]);
+    // e ognuna arriva sul foglio, prima della formula
+    expect(c.blocchi.map((b) => b.tipo)).toEqual(['valore', 'valore']);
+    expect(c.blocchi.map((b) => b.fonte)).toEqual(c.grandezze.map((g) => g.id));
+    expect(c.daInventare).toEqual([]);
+  });
+
+  it('quelle che il pannello ha già le mette sul foglio senza duplicarle', () => {
+    const voci = [voce('q', '12', 'kN/m'), voce('l', '5', 'm')];
+    const c = corredoFormula('q*l^2/8', contesto(voci));
+    expect(c.grandezze).toEqual([]);
+    expect(c.blocchi.map((b) => b.fonte)).toEqual(['v-q', 'v-l']);
+  });
+
+  it('quelle già sul foglio non le rimette', () => {
+    const voci = [voce('q', '12', 'kN/m'), voce('l', '5', 'm')];
+    const c = corredoFormula('q*l^2/8', contesto(voci, [nuovoBlocco('valore', { fonte: 'v-q' })]));
+    expect(c.blocchi.map((b) => b.fonte)).toEqual(['v-l']);
+  });
+
+  it('un nome che nessuno conosce non se lo inventa: lo chiede', () => {
+    const c = corredoFormula('ψ*q', contesto([voce('q', '12', 'kN/m')]));
+    expect(c.daInventare).toEqual(['ψ']);
+    expect(c.grandezze).toEqual([]);
+  });
+
+  it('avvisa quando una grandezza che c’è è senza unità di misura', () => {
+    const c = corredoFormula('q*l', contesto([voce('q', '12'), voce('l', '5', 'm')]));
+    expect(c.senzaUnita).toEqual(['q']);
+  });
+
+  it('la γ scritta con la g latina è la stessa grandezza', () => {
+    const c = corredoFormula('b*h*gC', contesto([voce('b', '0,3', 'm'), voce('h', '0,5', 'm')]));
+    expect(c.grandezze.map((g) => g.nome)).toEqual(['γC']);
+    expect(c.daInventare).toEqual([]);
+  });
+
+  it('costanti, funzioni e `ans` non sono grandezze da aggiungere', () => {
+    const c = corredoFormula('sqrt(ans*pi)', contesto([]));
+    expect(c.grandezze).toEqual([]);
+    expect(c.daInventare).toEqual([]);
+  });
+
+  it('la formula, con il suo corredo davanti, torna il numero giusto', () => {
+    const c = corredoFormula('q*l^2/8', contesto([]));
+    // le grandezze arrivano vuote: il valore lo scrive chi calcola
+    const voci = c.grandezze.map((g) => ({ ...g, espressione: g.nome === 'q' ? '12' : '5' }));
+    const [, , m] = ricalcolaQuaderno(
+      [...c.blocchi, nuovoBlocco('operazione', { fonte: 'f-m' })],
+      sorgenti(voci),
+    );
+    expect(m.valore).toBeCloseTo(37.5, 6);
+    expect(m.um).toBe('kNm');
+  });
+});
+
+describe('celle editabili e celle da calcolare', () => {
+  const q = (blocchi: BloccoQuaderno[], voci = TRAVE) => ricalcolaQuaderno(blocchi, sorgenti(voci));
+
+  it('una grandezza tirata dal pannello è una cella editabile', () => {
+    expect(bloccoVariabile(q([nuovoBlocco('valore', { fonte: 'v-b' })])[0])).toBe(true);
+  });
+
+  it('una formula preimpostata no: quella la calcola il foglio', () => {
+    expect(bloccoVariabile(q([nuovoBlocco('operazione', { fonte: 'f-m' })])[0])).toBe(false);
+  });
+
+  it('una riga scritta a mano lo è se è una definizione, non se è un conto', () => {
+    expect(bloccoVariabile(q([nuovoBlocco('formula', { nome: 'c', espressione: '0,05' })])[0])).toBe(true);
+    expect(bloccoVariabile(q([nuovoBlocco('formula', { nome: 'A', espressione: 'b*h' })])[0])).toBe(false);
+  });
+
+  it('un valore che arriva da un’altra scheda non si tocca da qui', () => {
+    expect(bloccoVariabile(q([nuovoBlocco('import', { fonte: 'i-v' })])[0])).toBe(false);
+  });
+
+  it('note e schemi non sono celle', () => {
+    expect(bloccoVariabile(q([nuovoBlocco('nota', { testo: 'ciao' })])[0])).toBe(false);
   });
 });
