@@ -2,7 +2,6 @@ import { describe, it, expect } from 'vitest';
 import {
   COLONNE_FOGLIO,
   LARGHEZZA_MIN,
-  colonneBlocco,
   colonneValide,
   larghezzaValida,
   livelloEsito,
@@ -13,7 +12,6 @@ import {
   ricalcolaQuaderno,
   SALTO_MAX,
   saltoValido,
-  spanBlocco,
   testoBlocco,
   type BloccoQuaderno,
   type ImportoScheda,
@@ -224,7 +222,6 @@ describe('blocchi del quaderno', () => {
     );
     expect(r[0].pieno).toBe(true);
     expect(r[0].testo).toBe('Verifica a taglio');
-    expect(spanBlocco(r[0])).toBe(COLONNE_FOGLIO);
     // non è una riga di calcolo: non porta nome né errori, e non è una cella
     expect(r[0].errore).toBe('');
     expect(bloccoVariabile(r[0])).toBe(false);
@@ -267,16 +264,6 @@ describe('blocchi del quaderno', () => {
     expect(colonneValide('tutta')).toBe(0);
   });
 
-  it('senza scelta una riga di calcolo sta in una colonna, note e schemi in tutte', () => {
-    expect(colonneBlocco(nuovoBlocco('formula'))).toBe(1);
-    expect(colonneBlocco(nuovoBlocco('valore', { fonte: 'v-b' }))).toBe(1);
-    expect(colonneBlocco(nuovoBlocco('nota'))).toBe(COLONNE_FOGLIO);
-    expect(colonneBlocco(nuovoBlocco('immagine'))).toBe(COLONNE_FOGLIO);
-    // la scelta esplicita vince su tutte e due
-    expect(colonneBlocco(nuovoBlocco('formula', { colonne: 3 }))).toBe(3);
-    expect(colonneBlocco(nuovoBlocco('nota', { colonne: 1 }))).toBe(1);
-  });
-
   it('i posti liberi prima di un blocco restano fra 0 e due righe piene', () => {
     expect(saltoValido(2)).toBe(2);
     expect(saltoValido(99)).toBe(SALTO_MAX);
@@ -288,24 +275,11 @@ describe('blocchi del quaderno', () => {
     expect(normalizzaBlocchi([{ tipo: 'formula', salto: 4 } as Partial<BloccoQuaderno>])[0].salto).toBe(4);
   });
 
-  it('una riga di calcolo si prende le colonne che le serve, non quelle che le si danno', () => {
-    const corta = nuovoBlocco('formula', { nome: 'A', espressione: '2*3' });
-    const lunga = nuovoBlocco('formula', {
-      nome: 'MRd',
-      espressione: 'N1*b1+(N+N2)*b2+0,5*γC*B1*H1*L1*(b1+b2)',
-    });
-    const [c, l] = ricalcolaQuaderno([corta, lunga], sorgenti(TRAVE));
-    expect(spanBlocco(c)).toBe(1);
-    expect(spanBlocco(l)).toBe(COLONNE_FOGLIO);
-    expect(spanBlocco(l)).toBeGreaterThan(spanBlocco(c));
-
-    // note, schemi e capitoli tengono invece la larghezza scelta
-    const [nota, schema] = ricalcolaQuaderno(
-      [nuovoBlocco('nota'), nuovoBlocco('immagine', { colonne: 1 })],
-      sorgenti(TRAVE),
-    );
-    expect(spanBlocco(nota)).toBe(COLONNE_FOGLIO);
-    expect(spanBlocco(schema)).toBe(1);
+  it('la larghezza scelta a mano non si perde, ma non impagina più niente', () => {
+    // il foglio non ha più colonne: le righe vanno a capo da sé, larghe quanto
+    // il loro contenuto. `colonne` resta solo perché i fogli salvati lo portano
+    const [b] = normalizzaBlocchi([{ tipo: 'immagine', colonne: 2 } as Partial<BloccoQuaderno>]);
+    expect(b.colonne).toBe(2);
   });
 
   it('la nota scritta su un passaggio viaggia con il blocco', () => {

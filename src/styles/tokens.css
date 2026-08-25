@@ -90,6 +90,29 @@
 
   --font: Inter, system-ui, -apple-system, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  /* i numeri e le formule del foglio del Quaderno: un monospaziato da testo,
+     non da terminale — le cifre stanno in colonna e la formula si legge */
+  --font-mono-carta: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* — la carta del Quaderno —
+     è l'unica superficie chiara dell'app: il foglio *è* il documento, e quello
+     che si vede è quello che esce dalla stampante. Il resto dell'interfaccia
+     resta scuro e le fa da cornice. */
+  --carta: #f6f4ef;
+  --carta-riga: #efece5;
+  --inchiostro: #1b1d29;
+  --inchiostro-2: #2a2d3a;
+  --inchiostro-3: #3a3d4a;
+  --inchiostro-4: #5c6072;
+  --inchiostro-5: #6a6e7d;
+  --carta-quadretti: rgba(27, 29, 41, 0.07);
+  --carta-hover: rgba(165, 118, 29, 0.07);
+  --carta-divisore: rgba(27, 29, 41, 0.12);
+  --carta-segno: rgba(27, 29, 41, 0.14);
+  --carta-velo: rgba(27, 29, 41, 0.06);
+  --carta-ocra: #8a6318;
+  --carta-ocra-riga: rgba(165, 118, 29, 0.55);
+  --carta-err: #a33f3f;
 }
 
 @keyframes fadein {
