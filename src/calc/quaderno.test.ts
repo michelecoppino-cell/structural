@@ -275,6 +275,16 @@ describe('blocchi del quaderno', () => {
     expect(normalizzaBlocchi([{ tipo: 'formula', salto: 4 } as Partial<BloccoQuaderno>])[0].salto).toBe(4);
   });
 
+  it('l’a capo chiesto a mano viaggia col blocco; i fogli di prima non ce l’hanno', () => {
+    expect(nuovoBlocco('formula').acapo).toBe(false);
+    const b = normalizzaBlocchi([
+      { tipo: 'formula', acapo: true } as Partial<BloccoQuaderno>,
+      { tipo: 'formula' } as Partial<BloccoQuaderno>,
+      { tipo: 'formula', acapo: 'sì' } as unknown as Partial<BloccoQuaderno>,
+    ]);
+    expect(b.map((x) => x.acapo)).toEqual([true, false, false]);
+  });
+
   it('la larghezza scelta a mano non si perde, ma non impagina più niente', () => {
     // il foglio non ha più colonne: le righe vanno a capo da sé, larghe quanto
     // il loro contenuto. `colonne` resta solo perché i fogli salvati lo portano

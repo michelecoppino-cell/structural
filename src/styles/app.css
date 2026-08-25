@@ -2772,7 +2772,20 @@ button.field-origin:hover {
       Non c'è più una griglia: le righe si mettono in fila e vanno a capo
       quando lo spazio finisce, **ognuna larga quanto il suo contenuto**. Il
       passo fra le righe è largo anche perché ci si alza dentro il pannello di
-      riga quando a destra non ci sta. */
+      riga quando a destra non ci sta.
+
+      Il foglio manda a capo da sé, ma un calcolo ha dei gruppi che si leggono
+      insieme — i dati, poi le azioni, poi la verifica — e dove finisce un
+      gruppo lo sa chi scrive: shift+invio chiude la linea, e quello che viene
+      dopo comincia sotto anche se a destra ci sarebbe ancora posto. Ogni
+      linea è un contenitore suo: così il pannello di riga sa dove finisce. */
+
+.quad-foglio-righe {
+  display: flex;
+  flex-direction: column;
+  row-gap: 26px;
+  margin-bottom: 24px;
+}
 
 .quad-blocchi {
   display: flex;
@@ -2780,7 +2793,6 @@ button.field-origin:hover {
   align-items: flex-start;
   column-gap: 44px;
   row-gap: 26px;
-  margin-bottom: 24px;
 }
 
 .quad-blocco {
@@ -3264,20 +3276,9 @@ button.field-origin:hover {
   color: var(--inchiostro-3);
 }
 
-.quad-img-misura.input {
-  flex: 0 0 92px;
-  width: 92px;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  accent-color: var(--color-accent-600);
-}
-
 @media print {
   .quad-img-maniglia,
-  .quad-img-quota,
-  .quad-img-azioni .btn,
-  .quad-img-misura {
+  .quad-img-quota {
     display: none;
   }
 }
@@ -3357,7 +3358,8 @@ button.field-origin:hover {
     background-size: 12px 12px;
   }
 
-  .quad-blocchi {
+  .quad-blocchi,
+  .quad-foglio-righe {
     column-gap: 24px;
     row-gap: 20px;
   }
@@ -3865,9 +3867,13 @@ button.field-origin:hover {
     background: transparent;
   }
 
-  .quad-blocchi {
+  .quad-blocchi,
+  .quad-foglio-righe {
     column-gap: 30px;
     row-gap: 14px;
+  }
+
+  .quad-foglio-righe {
     margin-bottom: 16px;
   }
 }
