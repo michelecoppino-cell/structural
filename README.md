@@ -439,8 +439,14 @@ Una formula nuova entra **subito dopo la riga toccata per ultima** e nasce con i
 **nome**: una riga si scrive nell'ordine in cui si legge, prima come si chiama il risultato e
 poi come lo si calcola, e il Tab porta dall'uno all'altro. Da una riga, **`Ctrl+Tab` infila una
 formula subito dopo**: si scrive un passaggio e si va al prossimo senza staccare le mani dalla
-tastiera. Nei campi del foglio **invio conferma e chiude**, **shift+invio** va a capo dentro il
-campo.
+tastiera. Nei campi del foglio **invio conferma e chiude**.
+
+**`shift+invio` chiude la linea.** Il foglio manda a capo da sé quando lo spazio finisce, ma un
+calcolo ha dei gruppi che si leggono insieme — i dati di partenza, poi le azioni, poi la
+verifica — e dove finisce un gruppo lo sa chi scrive, non la larghezza della carta: da una riga,
+`shift+invio` fa cominciare sotto tutto quello che viene dopo, anche se a destra ci sarebbe
+ancora posto. Premuto di nuovo, la linea si riapre. Dentro una nota o un commento resta quello
+che è dappertutto, un a capo nel testo.
 
 **Il pannello di riga.** Uno solo per tutto il foglio, non uno per blocco: compare sulla riga
 sotto il cursore (o con il focus dentro) e si posa a destra della riga, o si alza sopra il suo
@@ -511,7 +517,8 @@ solo la **nota** e lo **schema**.
   con Ctrl+V (anche direttamente sul foglio) o si sceglie da file. L'immagine viene ridotta a
   1400 px e tenuta dentro il progetto, quindi finisce anche nell'HTML esportato. La misura si
   tira dal bordo destro ed è in **percentuale del foglio**: due schemi stretti stanno
-  affiancati sulla stessa riga.
+  affiancati sulla stessa riga. Sotto lo schema c'è la sola didascalia — a togliere lo schema
+  ci pensa la × del pannello di riga.
 
 **Il risultato si legge con una cifra dopo la virgola**: un'area di 0,0855 mq si scrive
 0,1 mq, perché le cifre in più non dicono niente di più di quello che il dato di partenza sa.

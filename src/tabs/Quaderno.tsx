@@ -48,7 +48,6 @@ import {
   type VoceCalcolata,
 } from '../calc/calcolatrice';
 import {
-  LARGHEZZA_MIN,
   corredoFormula,
   larghezzaValida,
   livelloEsito,
@@ -91,10 +90,12 @@ const CATALOGO: Omit<VoceCalcolo, 'id'>[] = [
 ];
 
 /**
- * I tasti dei campi del foglio: **invio conferma e chiude**, shift+invio va a
- * capo dentro il campo. Su un foglio non si «salva» una casella: si finisce di
- * scrivere e si passa oltre — e chi ha bisogno di due righe le prende con
- * shift, come in una chat, senza che l'invio gli sbatta fuori il cursore.
+ * I tasti dei campi del foglio: **invio conferma e chiude**. Su un foglio non
+ * si «salva» una casella: si finisce di scrivere e si passa oltre.
+ *
+ * Shift+invio non passa di qui: in un campo di testo va a capo da sé, e su una
+ * riga di calcolo lo raccoglie il blocco, che con quello chiude la linea del
+ * foglio (vedi `tasti` in `BloccoCard`).
  */
 function tastiCampo(e: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) {
   if (e.key !== 'Enter' || e.shiftKey) return;
@@ -910,6 +911,28 @@ export default function Quaderno() {
     flash('File HTML salvato: si apre con qualunque browser');
   };
 
+  /**
+   * Le **linee del foglio**: i blocchi in fila, spezzati dove qualcuno ha
+   * chiesto di andare a capo. Dentro una linea le righe vanno a capo da sé
+   * quando lo spazio finisce; fra una linea e l'altra ci va invece quello che
+   * ha deciso chi scrive — la fine di un gruppo di passaggi.
+   */
+  const linee = useMemo(() => {
+    const out: { da: number; blocchi: BloccoCalcolato[] }[] = [];
+    let corrente: BloccoCalcolato[] = [];
+    let da = 0;
+    calcolati.forEach((b, i) => {
+      corrente.push(b);
+      if (b.blocco.acapo) {
+        out.push({ da, blocchi: corrente });
+        corrente = [];
+        da = i + 1;
+      }
+    });
+    if (corrente.length) out.push({ da, blocchi: corrente });
+    return out;
+  }, [calcolati]);
+
   /* ── il pannello di riga: uno solo, che si posa dove serve ── */
 
   /** Il blocco sotto il pannello, se c'è ancora: cancellarlo lo fa sparire. */
@@ -1208,29 +1231,37 @@ export default function Quaderno() {
             />
 
             {calcolati.length > 0 && (
-              <div className="quad-blocchi">
-                {calcolati.map((b, i) => (
-                  <BloccoCard
-                    key={b.blocco.id}
-                    b={b}
-                    campoRef={ultimoCampo}
-                    scrivi={b.blocco.id === daScrivere}
-                    attiva={b.blocco.id === rigaAttiva}
-                    notaAperta={b.blocco.id === appuntoAperto}
-                    onChiudiNota={() => setAppuntoAperto('')}
-                    onScritto={() => setDaScrivere('')}
-                    onAggiorna={(patch) => aggiornaBlocco(b.blocco.id, patch)}
-                    onFonte={(patch) => aggiornaVoce(b.blocco.fonte, patch)}
-                    fonteEditabile={calc.voci.some((v) => v.id === b.blocco.fonte)}
-                    onScorri={(verso) => scorri(b.blocco.id, verso)}
-                    onInserisci={() => aggiungiFormula(i + 1)}
-                    onDropPrima={(e) => onDrop(e, i)}
-                    capitolo={
-                      b.blocco.tipo === 'capitolo'
-                        ? blocchiCapitolo(state, b.blocco.fonte as CapitoloId)
-                        : undefined
-                    }
-                  />
+              <div className="quad-foglio-righe">
+                {linee.map((linea) => (
+                  <div className="quad-blocchi" key={linea.blocchi[0].blocco.id}>
+                    {linea.blocchi.map((b, j) => {
+                      const i = linea.da + j;
+                      return (
+                        <BloccoCard
+                          key={b.blocco.id}
+                          b={b}
+                          campoRef={ultimoCampo}
+                          scrivi={b.blocco.id === daScrivere}
+                          attiva={b.blocco.id === rigaAttiva}
+                          notaAperta={b.blocco.id === appuntoAperto}
+                          onChiudiNota={() => setAppuntoAperto('')}
+                          onScritto={() => setDaScrivere('')}
+                          onAggiorna={(patch) => aggiornaBlocco(b.blocco.id, patch)}
+                          onFonte={(patch) => aggiornaVoce(b.blocco.fonte, patch)}
+                          fonteEditabile={calc.voci.some((v) => v.id === b.blocco.fonte)}
+                          onScorri={(verso) => scorri(b.blocco.id, verso)}
+                          onACapo={() => aggiornaBlocco(b.blocco.id, { acapo: !b.blocco.acapo })}
+                          onInserisci={() => aggiungiFormula(i + 1)}
+                          onDropPrima={(e) => onDrop(e, i)}
+                          capitolo={
+                            b.blocco.tipo === 'capitolo'
+                              ? blocchiCapitolo(state, b.blocco.fonte as CapitoloId)
+                              : undefined
+                          }
+                        />
+                      );
+                    })}
+                  </div>
                 ))}
               </div>
             )}
@@ -1709,6 +1740,7 @@ function BloccoCard({
   onFonte,
   fonteEditabile,
   onScorri,
+  onACapo,
   onInserisci,
   onDropPrima,
   capitolo,
@@ -1734,6 +1766,8 @@ function BloccoCard({
   fonteEditabile: boolean;
   /** Un passo indietro (−1) o avanti (+1) nella sequenza del foglio. */
   onScorri: (verso: -1 | 1) => void;
+  /** Chiude la linea del foglio dopo questa riga, o la riapre. */
+  onACapo: () => void;
   /** Una formula nuova subito dopo questo blocco. */
   onInserisci: () => void;
   /** Qualcosa lasciato su questo blocco: entra *prima* di lui. */
@@ -1761,13 +1795,27 @@ function BloccoCard({
 
   /**
    * Le scorciatoie della riga: **Ctrl+Tab** infila una formula subito dopo —
-   * si scrive un passaggio e si va al successivo senza staccare le mani — e
-   * **Alt+↑ / Alt+↓** la spostano di un posto. Le frecce sostituiscono il
-   * trascinamento, che su un foglio lungo è scomodo.
+   * si scrive un passaggio e si va al successivo senza staccare le mani —
+   * **Alt+↑ / Alt+↓** la spostano di un posto, e **shift+invio** chiude qui la
+   * linea del foglio: quello che viene dopo comincia sulla linea sotto, anche
+   * se a destra ci sarebbe ancora posto. Premuto di nuovo, la riapre.
+   *
+   * Dentro una nota o un commento shift+invio resta quello che è dappertutto —
+   * un a capo nel testo — e non arriva fin qui.
    */
   const tasti = (e: React.KeyboardEvent) => {
     if (e.metaKey) return;
-    if (e.ctrlKey && !e.altKey && e.key === 'Tab') {
+    if (
+      e.shiftKey &&
+      !e.ctrlKey &&
+      !e.altKey &&
+      e.key === 'Enter' &&
+      (e.target as HTMLElement).tagName !== 'TEXTAREA'
+    ) {
+      e.preventDefault();
+      e.stopPropagation();
+      onACapo();
+    } else if (e.ctrlKey && !e.altKey && e.key === 'Tab') {
       e.preventDefault();
       e.stopPropagation();
       onInserisci();
@@ -1876,6 +1924,10 @@ function BloccoCard({
                 larghezza={bl.larghezza}
                 onLarghezza={(larghezza) => onAggiorna({ larghezza })}
               />
+              {/* sotto lo schema resta la sola didascalia: la misura si prende
+                  dal bordo destro e si tira, e a togliere lo schema ci pensa
+                  la × del pannello di riga — due modi per la stessa cosa sono
+                  uno di troppo su un foglio */}
               <div className="quad-img-azioni">
                 <input
                   className="input quad-img-didascalia"
@@ -1885,20 +1937,6 @@ function BloccoCard({
                   onKeyDown={tastiCampo}
                   onChange={(e) => onAggiorna({ testo: e.target.value })}
                 />
-                <input
-                  className="input quad-img-misura"
-                  type="range"
-                  min={LARGHEZZA_MIN}
-                  max={100}
-                  step={5}
-                  value={bl.larghezza || 100}
-                  aria-label="Larghezza dello schema in percentuale"
-                  title={`Larghezza ${bl.larghezza || 100}% — vale anche nel file stampato`}
-                  onChange={(e) => onAggiorna({ larghezza: larghezzaValida(Number(e.target.value)) })}
-                />
-                <button type="button" className="btn btn-secondary btn-icon" title="Togli l’immagine" onClick={() => onAggiorna({ img: '' })}>
-                  <Trash size={13} />
-                </button>
               </div>
             </>
           ) : (

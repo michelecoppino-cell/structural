@@ -93,6 +93,15 @@ export interface BloccoQuaderno {
    * il campo resta solo per non rompere i salvataggi di prima.
    */
   salto: number;
+  /**
+   * **Qui la linea finisce**: quello che viene dopo comincia sulla linea sotto,
+   * anche se a destra ci sarebbe ancora posto. Il foglio manda a capo da sé
+   * quando lo spazio finisce, ma un calcolo ha dei gruppi che si leggono
+   * insieme — i dati di partenza, poi le azioni, poi la verifica — e dove
+   * finisce un gruppo lo sa chi scrive, non la larghezza della carta.
+   * Si mette e si toglie con **shift+invio** dalla riga.
+   */
+  acapo: boolean;
   /** Immagine incollata o trascinata, come data URL. */
   img: string;
   /**
@@ -116,6 +125,7 @@ export function nuovoBlocco(tipo: TipoBlocco, patch: Partial<BloccoQuaderno> = {
     appunto: '',
     colonne: 0,
     salto: 0,
+    acapo: false,
     img: '',
     larghezza: 0,
     ...patch,
@@ -474,6 +484,7 @@ export function normalizzaBlocchi(raw: Partial<BloccoQuaderno>[]): BloccoQuadern
         appunto: b?.appunto ?? '',
         colonne: colonneValide(b?.colonne),
         salto: saltoValido(b?.salto),
+        acapo: b?.acapo === true,
         img: typeof b?.img === 'string' ? b.img : '',
         larghezza: larghezzaValida(b?.larghezza),
       },
