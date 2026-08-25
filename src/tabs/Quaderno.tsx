@@ -1,10 +1,14 @@
-import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent, type ReactNode } from 'react';
 import {
-  ArrowLeft,
-  ArrowRight,
-  ArrowLineDown,
-  ArrowLineUp,
-  ArrowsOutLineHorizontal,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type DragEvent,
+  type ReactNode,
+} from 'react';
+import {
   Backspace,
   CaretDown,
   CaretUp,
@@ -15,7 +19,6 @@ import {
   GridNine,
   Image as ImageIcon,
   Info,
-  Link as LinkIcon,
   Minus,
   NotePencil,
   PencilSimple,
@@ -45,17 +48,12 @@ import {
   type VoceCalcolata,
 } from '../calc/calcolatrice';
 import {
-  COLONNE_FOGLIO,
   LARGHEZZA_MIN,
-  bloccoVariabile,
-  colonneBlocco,
   corredoFormula,
   larghezzaValida,
   livelloEsito,
   nuovoBlocco,
   ricalcolaQuaderno,
-  saltoValido,
-  spanBlocco,
   type Corredo,
   type BloccoCalcolato,
   type BloccoQuaderno,
@@ -91,6 +89,65 @@ const CATALOGO: Omit<VoceCalcolo, 'id'>[] = [
   ...VOCI_DEFAULT.map(({ id: _id, ...g }) => g),
   ...GRANDEZZE_CATALOGO,
 ];
+
+/**
+ * I tasti dei campi del foglio: **invio conferma e chiude**, shift+invio va a
+ * capo dentro il campo. Su un foglio non si «salva» una casella: si finisce di
+ * scrivere e si passa oltre — e chi ha bisogno di due righe le prende con
+ * shift, come in una chat, senza che l'invio gli sbatta fuori il cursore.
+ */
+function tastiCampo(e: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) {
+  if (e.key !== 'Enter' || e.shiftKey) return;
+  e.preventDefault();
+  e.currentTarget.blur();
+}
+
+/**
+ * Un campo di testo che cresce con quello che ci si scrive. Sulla carta un
+ * campo non è una casella con la barra di scorrimento: è il testo del
+ * documento, e il documento è alto quanto quello che ci sta scritto.
+ */
+function CampoTesto({
+  value,
+  onChange,
+  onKeyDown,
+  ...resto
+}: Omit<React.TextareaHTMLAttributes<HTMLTextAreaElement>, 'value' | 'onChange' | 'rows'> & {
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  const ref = useRef<HTMLTextAreaElement>(null);
+
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${el.scrollHeight}px`;
+  }, [value]);
+
+  return (
+    <textarea
+      {...resto}
+      ref={ref}
+      rows={1}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      onKeyDown={(e) => {
+        onKeyDown?.(e);
+        if (!e.defaultPrevented) tastiCampo(e);
+      }}
+    />
+  );
+}
+
+/**
+ * Quanto è largo un campo che si misura sul suo contenuto. `field-sizing` fa
+ * già tutto dove c'è; dove non c'è, questo è il numero di caratteri con cui il
+ * campo nasce — così la riga resta larga quanto quello che porta scritto.
+ */
+function misuraCampo(testo: string, minimo: number): number {
+  return Math.max(minimo, testo.length + 1);
+}
 
 /** La γ dei pesi di volume si scrive con il pedice: γC, non gC. */
 function Nome({ nome }: { nome: string }) {
@@ -570,6 +627,22 @@ export default function Quaderno() {
   /** Blocco appena aggiunto: nasce con il cursore già dentro, si scrive e via. */
   const [daScrivere, setDaScrivere] = useState('');
   /**
+   * La riga sotto il cursore (o con il focus dentro): è quella su cui si posa
+   * il pannello dei comandi. Uno solo per tutto il foglio, non uno per riga.
+   */
+  const [rigaAttiva, setRigaAttiva] = useState('');
+  /**
+   * L'ultima riga toccata: è il punto in cui la barra infila quello che si
+   * aggiunge. Non è quella sotto il cursore — se no il posto cambierebbe a
+   * ogni movimento del mouse mentre si va a premere il pulsante.
+   */
+  const [rigaScelta, setRigaScelta] = useState('');
+  /** La riga di cui è aperto l'appunto: uno per volta, come il pannello. */
+  const [appuntoAperto, setAppuntoAperto] = useState('');
+  const foglioRef = useRef<HTMLDivElement>(null);
+  const pannelloRef = useRef<HTMLDivElement>(null);
+  const [posPannello, setPosPannello] = useState<{ left: number; top: number } | null>(null);
+  /**
    * I nomi che l'ultima formula richiamava e che non si sanno da nessuna
    * parte: si mostrano sotto la barra dei comandi, con l'unità da scrivere.
    * Non è un errore da chiudere, è la domanda «questa cos'è?» — resta lì
@@ -612,16 +685,26 @@ export default function Quaderno() {
 
   /* ── comporre il quaderno ── */
 
+  /**
+   * Il posto in cui la barra infila quello che si aggiunge: **subito dopo la
+   * riga toccata per ultima**. È il posto in cui si sta scrivendo, ed è il
+   * motivo per cui il «+» su ogni riga non serve più.
+   */
+  const dopoLaScelta = () => {
+    const i = q.blocchi.findIndex((b) => b.id === rigaScelta);
+    return i < 0 ? undefined : i + 1;
+  };
+
   /** Mette un blocco al posto `dove` (in coda se non lo si dice). */
   const aggiungi = (b: BloccoQuaderno, dove?: number) => {
     const i = dove == null ? q.blocchi.length : Math.max(0, Math.min(q.blocchi.length, dove));
     setQ({ blocchi: [...q.blocchi.slice(0, i), b, ...q.blocchi.slice(i)] });
+    setRigaScelta(b.id);
   };
   /**
-   * Una formula nuova: si propone nel primo posto libero — subito dopo il
-   * blocco da cui si è partiti — e nasce con il cursore dentro. Da lì, se il
-   * posto non va bene, la si porta più in basso con i suoi comandi (o con
-   * Ctrl+↓): il foglio è una griglia, e i posti sono le sue caselle.
+   * Una formula nuova: entra subito dopo la riga su cui si sta scrivendo e
+   * nasce con il cursore dentro. Se il posto non va bene la si sposta —
+   * trascinandola per la sua presa, o con Alt+↑ / Alt+↓.
    */
   const aggiungiFormula = (dove?: number) => {
     const b = nuovoBlocco('formula');
@@ -674,7 +757,11 @@ export default function Quaderno() {
 
   const aggiornaBlocco = (id: string, patch: Partial<BloccoQuaderno>) =>
     setQ({ blocchi: q.blocchi.map((b) => (b.id === id ? { ...b, ...patch } : b)) });
-  const eliminaBlocco = (id: string) => setQ({ blocchi: q.blocchi.filter((b) => b.id !== id) });
+  const eliminaBlocco = (id: string) => {
+    setQ({ blocchi: q.blocchi.filter((b) => b.id !== id) });
+    if (rigaAttiva === id) setRigaAttiva('');
+    if (rigaScelta === id) setRigaScelta('');
+  };
 
   /**
    * Sposta un blocco al posto `dove`, contato sul foglio di adesso: è il
@@ -690,18 +777,7 @@ export default function Quaderno() {
     setQ({ blocchi: [...senza.slice(0, meta), q.blocchi[da], ...senza.slice(meta)] });
   };
 
-  /**
-   * Porta un blocco più in basso sulla griglia (o lo fa risalire) lasciando
-   * liberi i posti che stanno prima: l'ordine del calcolo non cambia, cambia
-   * dove la riga si posa sul foglio.
-   */
-  const salta = (id: string, verso: -1 | 1) => {
-    const b = q.blocchi.find((x) => x.id === id);
-    if (!b) return;
-    aggiornaBlocco(id, { salto: saltoValido(b.salto + verso) });
-  };
-
-  /** Un passo avanti o indietro: il riordino da dito, dove il trascinamento non c'è. */
+  /** Un passo avanti o indietro: il riordino da tastiera (Alt+↑ / Alt+↓). */
   const scorri = (id: string, verso: -1 | 1) => {
     const da = q.blocchi.findIndex((b) => b.id === id);
     if (da < 0) return;
@@ -834,6 +910,57 @@ export default function Quaderno() {
     flash('File HTML salvato: si apre con qualunque browser');
   };
 
+  /* ── il pannello di riga: uno solo, che si posa dove serve ── */
+
+  /** Il blocco sotto il pannello, se c'è ancora: cancellarlo lo fa sparire. */
+  const attivo = calcolati.find((b) => b.blocco.id === rigaAttiva);
+  /**
+   * Una riga già scritta si può riprendere in mano: diventa una formula
+   * scritta qui, con lo stesso nome e la stessa espressione. Si stacca dalla
+   * sua fonte — è il prezzo per poterla correggere.
+   */
+  const rendiModificabile = (b: BloccoCalcolato) =>
+    aggiornaBlocco(b.blocco.id, {
+      tipo: 'formula',
+      nome: b.nome,
+      espressione: b.espressione,
+      um: b.blocco.um || b.umFonte,
+      appunto: b.blocco.appunto || b.nota,
+    });
+  const modificabile = !!attivo && !attivo.pieno && attivo.blocco.tipo !== 'formula' && !!attivo.espressione.trim();
+
+  /** La riga sotto il cursore, o quella che ha il focus dentro: è la stessa cosa. */
+  const suRiga = (e: React.MouseEvent | React.FocusEvent, scegli: boolean) => {
+    const riga = (e.target as HTMLElement).closest?.('[data-riga]') as HTMLElement | null;
+    const id = riga?.dataset.riga;
+    if (!id) return;
+    setRigaAttiva(id);
+    if (scegli) setRigaScelta(id);
+  };
+
+  /**
+   * Dove si posa il pannello: **a destra della riga** se ci sta prima della
+   * riga che le sta accanto; se no si alza sopra il suo bordo destro, nello
+   * spazio fra una riga e l'altra. Non deve mai coprire quello che è scritto.
+   */
+  useLayoutEffect(() => {
+    const foglio = foglioRef.current;
+    const pannello = pannelloRef.current;
+    if (!foglio || !pannello || !attivo) return setPosPannello(null);
+    const riga = foglio.querySelector<HTMLElement>(`[data-riga="${CSS.escape(rigaAttiva)}"]`);
+    if (!riga) return setPosPannello(null);
+    const r = riga.getBoundingClientRect();
+    const f = foglio.getBoundingClientRect();
+    const pan = pannello.getBoundingClientRect();
+    const dopo = (riga.nextElementSibling as HTMLElement | null)?.getBoundingClientRect();
+    const libero = (dopo ? dopo.left : f.right - 12) - r.right;
+    const dentro = libero >= pan.width + 12;
+    setPosPannello({
+      left: dentro ? r.right - f.left + 6 : Math.max(0, r.right - pan.width - f.left),
+      top: dentro ? r.top - f.top - 1 : r.top - f.top - pan.height + 3,
+    });
+  }, [rigaAttiva, attivo, calcolati, modificabile]);
+
   const p = state.progetto;
   const capitoliDentro = new Set(q.blocchi.filter((b) => b.tipo === 'capitolo').map((b) => b.fonte));
 
@@ -846,6 +973,46 @@ export default function Quaderno() {
       </datalist>
 
       <ComandiScheda>
+        {/* quello che si aggiunge al foglio si sceglie qui, sulla cornice: la
+            carta è il documento, e un documento non porta i propri pulsanti.
+            Quello che si aggiunge entra **dopo la riga toccata per ultima** */}
+        <button
+          type="button"
+          className="btn btn-secondary"
+          title="Una nota a piena riga, dopo la riga su cui stai scrivendo"
+          onClick={() => aggiungi(nuovoBlocco('nota'), dopoLaScelta())}
+        >
+          <NotePencil size={14} />
+          Nota
+        </button>
+        <button
+          type="button"
+          className="btn btn-secondary"
+          title="Una riga di calcolo, dopo la riga su cui stai scrivendo — da una riga, Ctrl+Tab"
+          onClick={() => aggiungiFormula(dopoLaScelta())}
+        >
+          <PencilSimple size={14} />
+          Formula
+        </button>
+        <button
+          type="button"
+          className="btn btn-secondary"
+          title="Uno schema da incollare o da trascinare"
+          onClick={() => aggiungi(nuovoBlocco('immagine'), dopoLaScelta())}
+        >
+          <ImageIcon size={14} />
+          Schema
+        </button>
+        <button
+          type="button"
+          className="btn btn-secondary"
+          title="Un capitolo: il titolo di quello che comincia da qui in poi"
+          onClick={() => aggiungi(nuovoBlocco('linea'), dopoLaScelta())}
+        >
+          <Minus size={14} weight="bold" />
+          Capitolo
+        </button>
+        <span className="tab-toolbar-sep" aria-hidden="true" />
         <button
           type="button"
           className="btn btn-secondary"
@@ -954,153 +1121,171 @@ export default function Quaderno() {
         </section>
       )}
 
+      {daInventare.length > 0 && (
+        <div className="quad-suggerimenti" role="status">
+          <p>
+            La formula richiama <strong>{daInventare.map((v) => v.nome).join(', ')}</strong>, che non
+            {daInventare.length === 1 ? ' è' : ' sono'} fra le variabili e non
+            {daInventare.length === 1 ? ' sta' : ' stanno'} nel catalogo. Scrivi l’unità di misura e
+            {daInventare.length === 1 ? ' la aggiungo' : ' le aggiungo'}: senza, il numero esce senza scala.
+          </p>
+          <div className="quad-suggerimenti-righe">
+            {daInventare.map((v) => (
+              <div className="quad-suggerimento" key={v.nome}>
+                <span className="n">
+                  <Nome nome={v.nome} />
+                </span>
+                <input
+                  className="input"
+                  value={v.um}
+                  list="quad-elenco-unita"
+                  placeholder="unità (kN/m, m, MPa…)"
+                  aria-label={`Unità di misura di ${v.nome}`}
+                  autoComplete="off"
+                  spellCheck={false}
+                  onChange={(e) =>
+                    setDaInventare((prima) =>
+                      prima.map((x) => (x.nome === v.nome ? { ...x, um: e.target.value } : x)),
+                    )
+                  }
+                  onKeyDown={(e) => {
+                    if (e.key !== 'Enter') return;
+                    e.preventDefault();
+                    inventaGrandezza(v.nome, v.um);
+                  }}
+                />
+                <button
+                  type="button"
+                  className="btn btn-primary btn-icon"
+                  title={`Aggiungi ${v.nome} alle variabili`}
+                  onClick={() => inventaGrandezza(v.nome, v.um)}
+                >
+                  <Plus size={13} weight="bold" />
+                </button>
+              </div>
+            ))}
+          </div>
+          <button
+            type="button"
+            className="quad-suggerimenti-chiudi"
+            title="Lascia perdere: la formula resta com’è"
+            onClick={() => setDaInventare([])}
+          >
+            <X size={12} weight="bold" />
+          </button>
+        </div>
+      )}
+
       <div className="quad-corpo">
         {/* ─────────────── il foglio ─────────────── */}
         <div className="quad-area" onDragOver={(e) => e.preventDefault()} onDrop={(e) => onDrop(e)} onPaste={onPaste}>
-          <div className={`quad-foglio${q.quadretti ? ' is-quadretti' : ''}`} id="foglio-esportazione">
+          <div
+            className={`quad-foglio${q.quadretti ? ' is-quadretti' : ''}`}
+            id="foglio-esportazione"
+            ref={foglioRef}
+            /* i comandi di riga si delegano al foglio: il pannello è uno solo e
+               si sposta, invece di essere ripetuto su ogni riga */
+            onMouseOver={(e) => suRiga(e, false)}
+            onFocus={(e) => suRiga(e, true)}
+            onMouseLeave={() => setRigaAttiva('')}
+            /* dove non c'è il passaggio del mouse — un dito su un telefono —
+               il pannello se ne va quando il foglio perde il cursore */
+            onBlur={(e) => {
+              if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setRigaAttiva('');
+            }}
+          >
             <header className="quad-testa">
-              <div>
-                <div className="quad-titolo">{p.nome}</div>
-              </div>
+              <div className="quad-titolo">{p.nome}</div>
               <div className="quad-data">{oggi()}</div>
             </header>
 
-            <input
+            <CampoTesto
               className="quad-intestazione"
               value={q.intestazione}
-              placeholder="Oggetto del calcolo — scrivi qui una riga di premessa (facoltativa)"
+              placeholder="Oggetto del calcolo — scrivi qui la premessa (facoltativa)"
               aria-label="Riga di premessa del foglio"
-              onChange={(e) => setQ({ intestazione: e.target.value })}
+              onChange={(v) => setQ({ intestazione: v })}
             />
-
-            <div className="quad-rapidi">
-              <button type="button" className="btn btn-secondary" onClick={() => aggiungi(nuovoBlocco('nota'))}>
-                <NotePencil size={14} />
-                Nota
-              </button>
-              <button
-                type="button"
-                className="btn btn-secondary"
-                onClick={() => aggiungiFormula()}
-                title="Una riga di calcolo scritta qui, con la sua unità — da una cella, Ctrl+Tab"
-              >
-                <PencilSimple size={14} />
-                Formula
-              </button>
-              <button type="button" className="btn btn-secondary" onClick={() => aggiungi(nuovoBlocco('immagine'))}>
-                <ImageIcon size={14} />
-                Screenshot
-              </button>
-              <button
-                type="button"
-                className="btn btn-secondary"
-                title="Una riga orizzontale che divide il foglio in capitoli, con il titolo di quello che comincia lì"
-                onClick={() => aggiungi(nuovoBlocco('linea'))}
-              >
-                <Minus size={14} weight="bold" />
-                Linea
-              </button>
-            </div>
-
-            {daInventare.length > 0 && (
-              <div className="quad-suggerimenti" role="status">
-                <p>
-                  La formula richiama <strong>{daInventare.map((v) => v.nome).join(', ')}</strong>, che non
-                  {daInventare.length === 1 ? ' è' : ' sono'} fra le variabili e non
-                  {daInventare.length === 1 ? ' sta' : ' stanno'} nel catalogo. Scrivi l’unità di misura e
-                  {daInventare.length === 1 ? ' la aggiungo' : ' le aggiungo'}: senza, il numero esce senza scala.
-                </p>
-                <div className="quad-suggerimenti-righe">
-                  {daInventare.map((v) => (
-                    <div className="quad-suggerimento" key={v.nome}>
-                      <span className="n">
-                        <Nome nome={v.nome} />
-                      </span>
-                      <input
-                        className="input"
-                        value={v.um}
-                        list="quad-elenco-unita"
-                        placeholder="unità (kN/m, m, MPa…)"
-                        aria-label={`Unità di misura di ${v.nome}`}
-                        autoComplete="off"
-                        spellCheck={false}
-                        onChange={(e) =>
-                          setDaInventare((prima) =>
-                            prima.map((x) => (x.nome === v.nome ? { ...x, um: e.target.value } : x)),
-                          )
-                        }
-                        onKeyDown={(e) => {
-                          if (e.key !== 'Enter') return;
-                          e.preventDefault();
-                          inventaGrandezza(v.nome, v.um);
-                        }}
-                      />
-                      <button
-                        type="button"
-                        className="btn btn-primary btn-icon"
-                        title={`Aggiungi ${v.nome} alle variabili`}
-                        onClick={() => inventaGrandezza(v.nome, v.um)}
-                      >
-                        <Plus size={13} weight="bold" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-                <button
-                  type="button"
-                  className="quad-suggerimenti-chiudi"
-                  title="Lascia perdere: la formula resta com’è"
-                  onClick={() => setDaInventare([])}
-                >
-                  <X size={12} weight="bold" />
-                </button>
-              </div>
-            )}
 
             {calcolati.length > 0 && (
               <div className="quad-blocchi">
                 {calcolati.map((b, i) => (
-                  <Fragment key={b.blocco.id}>
-                    {/* i posti che il blocco ha scelto di saltare: caselle vuote,
-                        si premono per farlo risalire e ci si può lasciar cadere
-                        il prossimo passaggio */}
-                    {Array.from({ length: b.blocco.salto }, (_, k) => (
-                      <button
-                        key={k}
-                        type="button"
-                        className="quad-vuoto"
-                        title="Posto libero: premi per far risalire la riga che segue"
-                        aria-label="Posto libero sulla griglia"
-                        onDragOver={(e) => e.preventDefault()}
-                        onDrop={(e) => onDrop(e, i)}
-                        onClick={() => salta(b.blocco.id, -1)}
-                      />
-                    ))}
-                    <BloccoCard
-                      b={b}
-                      primo={i === 0}
-                      ultimo={i === calcolati.length - 1}
-                      campoRef={ultimoCampo}
-                      scrivi={b.blocco.id === daScrivere}
-                      onScritto={() => setDaScrivere('')}
-                      onAggiorna={(patch) => aggiornaBlocco(b.blocco.id, patch)}
-                      onFonte={(patch) => aggiornaVoce(b.blocco.fonte, patch)}
-                      fonteEditabile={calc.voci.some((v) => v.id === b.blocco.fonte)}
-                      onElimina={() => eliminaBlocco(b.blocco.id)}
-                      onScorri={(verso) => scorri(b.blocco.id, verso)}
-                      onSalta={(verso) => salta(b.blocco.id, verso)}
-                      onInserisci={() => aggiungiFormula(i + 1)}
-                      onDropPrima={(e) => onDrop(e, i)}
-                      capitolo={
-                        b.blocco.tipo === 'capitolo'
-                          ? blocchiCapitolo(state, b.blocco.fonte as CapitoloId)
-                          : undefined
-                      }
-                    />
-                  </Fragment>
+                  <BloccoCard
+                    key={b.blocco.id}
+                    b={b}
+                    campoRef={ultimoCampo}
+                    scrivi={b.blocco.id === daScrivere}
+                    attiva={b.blocco.id === rigaAttiva}
+                    notaAperta={b.blocco.id === appuntoAperto}
+                    onChiudiNota={() => setAppuntoAperto('')}
+                    onScritto={() => setDaScrivere('')}
+                    onAggiorna={(patch) => aggiornaBlocco(b.blocco.id, patch)}
+                    onFonte={(patch) => aggiornaVoce(b.blocco.fonte, patch)}
+                    fonteEditabile={calc.voci.some((v) => v.id === b.blocco.fonte)}
+                    onScorri={(verso) => scorri(b.blocco.id, verso)}
+                    onInserisci={() => aggiungiFormula(i + 1)}
+                    onDropPrima={(e) => onDrop(e, i)}
+                    capitolo={
+                      b.blocco.tipo === 'capitolo'
+                        ? blocchiCapitolo(state, b.blocco.fonte as CapitoloId)
+                        : undefined
+                    }
+                  />
                 ))}
               </div>
             )}
+
+            {/* ── il pannello di riga: uno solo, si posa sulla riga sotto il
+                   cursore. Presa per spostare, appunto, cestino — e la matita
+                   solo dove c'è una formula da riprendere in mano ── */}
+            <div
+              className={`quad-pannello-riga${attivo && posPannello ? ' is-visibile' : ''}`}
+              ref={pannelloRef}
+              style={posPannello ?? undefined}
+              aria-hidden={!attivo}
+            >
+              <span
+                className="maniglia"
+                draggable
+                title="Trascina per spostare la riga: lasciala sulla riga davanti alla quale deve stare"
+                onDragStart={(e) => {
+                  if (!attivo) return;
+                  iniziaTrascinamento(e, {
+                    tipo: attivo.blocco.tipo,
+                    fonte: attivo.blocco.fonte,
+                    sposta: attivo.blocco.id,
+                  });
+                }}
+              >
+                <DotsSixVertical size={14} weight="bold" />
+              </span>
+              <button
+                type="button"
+                className={attivo?.blocco.appunto || appuntoAperto === rigaAttiva ? 'is-acceso' : undefined}
+                aria-expanded={appuntoAperto === rigaAttiva}
+                title={attivo?.blocco.appunto ? `Appunto: ${attivo.blocco.appunto}` : 'Scrivi un appunto su questa riga'}
+                onClick={() => setAppuntoAperto((v) => (v === rigaAttiva ? '' : rigaAttiva))}
+              >
+                <Info size={13} weight={attivo?.blocco.appunto ? 'fill' : 'regular'} />
+              </button>
+              {modificabile && attivo && (
+                <button
+                  type="button"
+                  title="Riprendi in mano la formula: la riga si stacca dalla sua fonte e diventa scrivibile qui"
+                  onClick={() => rendiModificabile(attivo)}
+                >
+                  <PencilSimple size={13} />
+                </button>
+              )}
+              <button
+                type="button"
+                className="chiudi"
+                title="Togli la riga dal quaderno"
+                onClick={() => rigaAttiva && eliminaBlocco(rigaAttiva)}
+              >
+                <X size={14} weight="bold" />
+              </button>
+            </div>
 
             <div className="quad-drop" onDragOver={(e) => e.preventDefault()} onDrop={(e) => onDrop(e)}>
               {calcolati.length === 0
@@ -1108,13 +1293,12 @@ export default function Quaderno() {
                 : 'Trascina qui il prossimo passaggio — si aggiunge in coda. Per metterlo prima, lascialo sopra il blocco davanti al quale deve stare.'}
             </div>
 
-            <textarea
+            <CampoTesto
               className="quad-nota-foglio"
               value={q.nota}
-              rows={2}
               placeholder="Nota a piè di foglio (facoltativa)"
               aria-label="Nota a piè di foglio"
-              onChange={(e) => setQ({ nota: e.target.value })}
+              onChange={(v) => setQ({ nota: v })}
             />
 
             <footer className="quad-piede">
@@ -1515,27 +1699,29 @@ const TASTI: { t: string; ins?: string; classe?: string; titolo?: string }[] = [
  */
 function BloccoCard({
   b,
-  primo,
-  ultimo,
   campoRef,
   scrivi,
+  attiva,
+  notaAperta,
+  onChiudiNota,
   onScritto,
   onAggiorna,
   onFonte,
   fonteEditabile,
-  onElimina,
   onScorri,
-  onSalta,
   onInserisci,
   onDropPrima,
   capitolo,
 }: {
   b: BloccoCalcolato;
-  primo: boolean;
-  ultimo: boolean;
   campoRef: { current: HTMLInputElement | null };
   /** true = è appena nato: il cursore va qui dentro. */
   scrivi: boolean;
+  /** true = è la riga sotto il cursore: quella su cui sta il pannello. */
+  attiva: boolean;
+  /** true = l'appunto di questa riga è aperto in scrittura. */
+  notaAperta: boolean;
+  onChiudiNota: () => void;
   onScritto: () => void;
   onAggiorna: (patch: Partial<BloccoQuaderno>) => void;
   /**
@@ -1546,11 +1732,8 @@ function BloccoCard({
   onFonte: (patch: Partial<VoceCalcolo>) => void;
   /** true = la fonte è una variabile del pannello, quindi si scrive da qui. */
   fonteEditabile: boolean;
-  onElimina: () => void;
   /** Un passo indietro (−1) o avanti (+1) nella sequenza del foglio. */
   onScorri: (verso: -1 | 1) => void;
-  /** Una casella più in basso (+1) o più in su (−1) sulla griglia. */
-  onSalta: (verso: -1 | 1) => void;
   /** Una formula nuova subito dopo questo blocco. */
   onInserisci: () => void;
   /** Qualcosa lasciato su questo blocco: entra *prima* di lui. */
@@ -1565,13 +1748,8 @@ function BloccoCard({
   /** Il campo della formula: ci si arriva col Tab, subito dopo il nome. */
   const esprRef = useRef<HTMLInputElement | null>(null);
   const [bersaglio, setBersaglio] = useState(false);
-  /** La nota del passaggio: si apre con la (i) e resta aperta finché serve. */
-  const [notaAperta, setNotaAperta] = useState(false);
   // il semaforo dei rapporti di verifica: colora il numero, non l'intero blocco
   const livello = livelloEsito(b);
-  // la larghezza non si sceglie più a mano su una riga di calcolo: la decide
-  // quanto è lunga la riga, così una formula corta non tiene una colonna vuota
-  const colonne = spanBlocco(b);
 
   // una riga si scrive nell'ordine in cui si legge: prima come si chiama il
   // risultato, poi come lo si calcola — il Tab porta dal nome alla formula
@@ -1582,30 +1760,24 @@ function BloccoCard({
   }, [scrivi, onScritto]);
 
   /**
-   * Le scorciatoie della cella: Ctrl+Tab infila una formula subito dopo —
+   * Le scorciatoie della riga: **Ctrl+Tab** infila una formula subito dopo —
    * si scrive un passaggio e si va al successivo senza staccare le mani — e
-   * Ctrl+↓ / Ctrl+↑ portano la riga più in basso o più in su sulla griglia.
+   * **Alt+↑ / Alt+↓** la spostano di un posto. Le frecce sostituiscono il
+   * trascinamento, che su un foglio lungo è scomodo.
    */
   const tasti = (e: React.KeyboardEvent) => {
-    if (!e.ctrlKey || e.altKey || e.metaKey) return;
-    if (e.key === 'Tab') {
+    if (e.metaKey) return;
+    if (e.ctrlKey && !e.altKey && e.key === 'Tab') {
       e.preventDefault();
       e.stopPropagation();
       onInserisci();
-    } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+    } else if (e.altKey && !e.ctrlKey && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
       e.preventDefault();
       e.stopPropagation();
-      onSalta(e.key === 'ArrowDown' ? 1 : -1);
+      onScorri(e.key === 'ArrowDown' ? 1 : -1);
     }
   };
 
-  /**
-   * Una riga già sul foglio si può riprendere in mano: il blocco diventa una
-   * formula scritta qui, con lo stesso nome e la stessa espressione di prima.
-   * Si stacca dalla sua fonte — è il prezzo per poterla correggere — e da lì
-   * in avanti è testo che si edita.
-   */
-  const modificabile = !b.pieno && bl.tipo !== 'formula' && !!b.espressione.trim();
   /**
    * La riga definisce una grandezza invece di calcolarla: quello che c'è
    * scritto è un numero e basta, senza nessuna operazione. Allora il secondo
@@ -1615,25 +1787,13 @@ function BloccoCard({
    */
   const definizione = !b.pieno && !haOperazioni(bl.tipo === 'formula' ? bl.espressione : b.espressione);
   /**
-   * La riga porta un dato scritto, non un risultato: prende la velatura ocra
-   * delle celle editabili. È l'unico colore di fondo del foglio, e dice una
-   * cosa sola — «qui il numero lo metti tu».
-   */
-  const variabile = bloccoVariabile(b);
-  /**
    * La riga è collegata a una variabile del pannello: il valore si scrive
-   * **qui**, nella cella, e va a finire nella variabile — così sul foglio si
-   * compila tutto, e chi la richiama più in basso vede subito il numero.
+   * **qui**, dove lo si legge, e va a finire nella variabile. Un numero
+   * scritto a mano si riconosce dalla sottolineatura ocra — è il dato di
+   * partenza, quello su cui si possono mettere le mani; quello calcolato è
+   * inchiostro pieno e non si tocca.
    */
   const compilabile = bl.tipo === 'valore' && fonteEditabile;
-  const rendiModificabile = () =>
-    onAggiorna({
-      tipo: 'formula',
-      nome: b.nome,
-      espressione: b.espressione,
-      um: bl.um || b.umFonte,
-      appunto: bl.appunto || b.nota,
-    });
 
   const incolla = (dati: DataTransfer | null) => {
     const f = immagineDa(dati);
@@ -1642,10 +1802,13 @@ function BloccoCard({
 
   return (
     <div
-      className={`quad-blocco${b.pieno ? ' is-pieno' : ''}${bl.tipo === 'linea' ? ' is-linea' : ''}${
-        b.errore ? ' is-errore' : ''
-      }${variabile ? ' is-variabile' : ''}${bersaglio ? ' is-bersaglio' : ''}`}
-      style={{ '--span': colonne } as CSSProperties}
+      className={`quad-blocco${b.pieno && bl.tipo !== 'immagine' ? ' is-pieno' : ''}${
+        bl.tipo === 'immagine' ? ' is-immagine' : ''
+      }${bl.tipo === 'linea' ? ' is-linea' : ''}${attiva ? ' is-attiva' : ''}${
+        bersaglio ? ' is-bersaglio' : ''
+      }`}
+      data-riga={bl.id}
+      style={bl.tipo === 'immagine' ? ({ '--larghezza': `${bl.larghezza || 100}%` } as CSSProperties) : undefined}
       tabIndex={-1}
       onKeyDown={tasti}
       onDragOver={(e) => {
@@ -1658,109 +1821,29 @@ function BloccoCard({
         onDropPrima(e);
       }}
     >
-      {/* i comandi del blocco: niente etichette, solo quello che si fa — si
-          spostano, ci si infila una riga, si toglie. Compaiono al passaggio */}
-      <div className="quad-blocco-azioni">
-        <span
-          className="maniglia"
-          draggable
-          title="Trascina per spostarlo: lascialo sul blocco davanti al quale deve stare"
-          onDragStart={(e) => iniziaTrascinamento(e, { tipo: bl.tipo, fonte: bl.fonte, sposta: bl.id })}
-        >
-          <DotsSixVertical size={12} weight="bold" />
-        </span>
-        {b.collegato && (
-          <span className="link" title="Collegato alla sua fonte: si aggiorna da solo">
-            <LinkIcon size={11} />
-          </span>
-        )}
-        {b.provenienza && bl.tipo === 'import' && <span className="fonte">↩ {b.provenienza}</span>}
-        <span className="tasti">
-          {b.pieno ? (
-            bl.tipo !== 'linea' && (
-            <button
-              type="button"
-              className={`larghezza${colonne > 1 ? ' is-larga' : ''}`}
-              title={`Occupa ${colonne} ${colonne === 1 ? 'colonna' : 'colonne'} su ${COLONNE_FOGLIO} — premi per cambiare, fino a tenere la riga per sé`}
-              onClick={() => onAggiorna({ colonne: (colonneBlocco(bl) % COLONNE_FOGLIO) + 1 })}
-            >
-              <ArrowsOutLineHorizontal size={11} weight="bold" />
-              <span className="n">{colonne}</span>
-            </button>
-            )
-          ) : (
-            <>
-              <button
-                type="button"
-                disabled={bl.salto === 0}
-                title="Riportalo su di una casella (Ctrl+↑)"
-                onClick={() => onSalta(-1)}
-              >
-                <ArrowLineUp size={11} weight="bold" />
-              </button>
-              <button
-                type="button"
-                className={bl.salto ? 'is-acceso' : undefined}
-                title="Portalo più in basso di una casella: il posto prima resta libero (Ctrl+↓)"
-                onClick={() => onSalta(1)}
-              >
-                <ArrowLineDown size={11} weight="bold" />
-              </button>
-            </>
-          )}
-          <button
-            type="button"
-            className={notaAperta || bl.appunto ? 'is-acceso' : undefined}
-            aria-expanded={notaAperta}
-            title={bl.appunto ? `Nota: ${bl.appunto}` : 'Scrivi una nota su questo passaggio'}
-            onClick={() => setNotaAperta((v) => !v)}
-          >
-            <Info size={11} weight={bl.appunto ? 'fill' : 'regular'} />
-          </button>
-          {modificabile && (
-            <button
-              type="button"
-              title="Modifica la formula: la riga si stacca dalla sua fonte e diventa scrivibile qui"
-              onClick={rendiModificabile}
-            >
-              <PencilSimple size={11} />
-            </button>
-          )}
-          <button type="button" disabled={primo} title="Spostalo un passo prima" onClick={() => onScorri(-1)}>
-            <ArrowLeft size={11} weight="bold" />
-          </button>
-          <button type="button" disabled={ultimo} title="Spostalo un passo dopo" onClick={() => onScorri(1)}>
-            <ArrowRight size={11} weight="bold" />
-          </button>
-          <button type="button" title="Infila una formula subito dopo (Ctrl+Tab)" onClick={onInserisci}>
-            <Plus size={11} weight="bold" />
-          </button>
-          <button type="button" className="chiudi" title="Togli dal quaderno" onClick={onElimina}>
-            <X size={12} weight="bold" />
-          </button>
-        </span>
-      </div>
-
-      {/* ── nota ── */}
+      {/* ── nota: una barretta a margine e il testo, nessuna scatola ── */}
       {bl.tipo === 'nota' && (
-        <textarea
-          className="quad-nota"
-          value={bl.testo}
-          rows={2}
-          placeholder="Scrivi una nota…"
-          aria-label="Nota"
-          onChange={(e) => onAggiorna({ testo: e.target.value })}
-        />
+        <div className="quad-nota-box">
+          <CampoTesto
+            className="quad-nota"
+            value={bl.testo}
+            placeholder="Scrivi una nota…"
+            aria-label="Nota"
+            onChange={(testo) => onAggiorna({ testo })}
+          />
+        </div>
       )}
 
-      {/* ── la linea che divide il foglio in capitoli ── */}
+      {/* ── il capitolo: un segno, il titolo e una regola che sfuma ── */}
       {bl.tipo === 'linea' && (
         <div className="quad-divisore">
           <input
             className="quad-divisore-titolo"
             value={bl.testo}
-            placeholder="Titolo del capitolo — scrivi qui di che cosa si parla da qui in poi"
+            size={misuraCampo(bl.testo, 18)}
+            placeholder="Titolo del capitolo"
             aria-label="Titolo del capitolo"
+            onKeyDown={tastiCampo}
             onChange={(e) => onAggiorna({ testo: e.target.value })}
           />
         </div>
@@ -1795,10 +1878,11 @@ function BloccoCard({
               />
               <div className="quad-img-azioni">
                 <input
-                  className="input"
+                  className="input quad-img-didascalia"
                   value={bl.testo}
                   placeholder="Didascalia (facoltativa)"
                   aria-label="Didascalia dello schema"
+                  onKeyDown={tastiCampo}
                   onChange={(e) => onAggiorna({ testo: e.target.value })}
                 />
                 <input
@@ -1820,7 +1904,7 @@ function BloccoCard({
           ) : (
             <button type="button" className="quad-img-vuota" onClick={() => fileRef.current?.click()}>
               <ImageIcon size={22} />
-              <strong>Trascina qui uno screenshot o un disegno</strong>
+              <strong>Trascina qui uno schema o un disegno</strong>
               <span>oppure incollalo con Ctrl+V, o tocca per sceglierlo</span>
             </button>
           )}
@@ -1864,6 +1948,7 @@ function BloccoCard({
                 <input
                   className="input quad-in-nome"
                   value={bl.nome}
+                  size={misuraCampo(bl.nome, 1)}
                   placeholder="σ"
                   aria-label="Nome del risultato"
                   autoComplete="off"
@@ -1871,13 +1956,20 @@ function BloccoCard({
                   ref={(el) => {
                     nomeRef.current = el;
                   }}
+                  onKeyDown={tastiCampo}
                   onChange={(e) => onAggiorna({ nome: e.target.value })}
                 />
                 <span className="uguale">=</span>
                 <input
-                  className={`input quad-in-espr${b.errore ? ' is-error' : ''}`}
+                  /* un numero battuto a mano è un dato di partenza: prende
+                     l'ocra sottolineato, come la penna su un foglio. Appena
+                     ci si scrive un'operazione torna inchiostro: è un calcolo */
+                  className={`input quad-in-espr${definizione && bl.espressione.trim() ? ' is-dato' : ''}${
+                    b.errore ? ' is-error' : ''
+                  }`}
                   value={bl.espressione}
-                  placeholder="M/W · q*l^2/8"
+                  size={misuraCampo(bl.espressione, 16)}
+                  placeholder="scrivi la formula…"
                   aria-label="Formula"
                   autoComplete="off"
                   spellCheck={false}
@@ -1889,6 +1981,7 @@ function BloccoCard({
                   onFocus={(e) => {
                     campoRef.current = e.currentTarget;
                   }}
+                  onKeyDown={tastiCampo}
                   onChange={(e) => onAggiorna({ espressione: e.target.value })}
                 />
               </>
@@ -1901,6 +1994,7 @@ function BloccoCard({
                 <input
                   className={`input quad-in-valore${b.errore ? ' is-error' : ''}`}
                   value={b.espressione}
+                  size={misuraCampo(b.espressione, 4)}
                   placeholder="—"
                   inputMode="decimal"
                   aria-label={`Valore di ${b.nome || 'variabile'}`}
@@ -1914,6 +2008,7 @@ function BloccoCard({
                   onFocus={(e) => {
                     campoRef.current = e.currentTarget;
                   }}
+                  onKeyDown={tastiCampo}
                   onChange={(e) => onFonte({ espressione: e.target.value })}
                 />
               </>
@@ -1959,6 +2054,13 @@ function BloccoCard({
                   <UnitaBlocco b={b} onAggiorna={onAggiorna} />
                 </>
               )}
+              {/* da dove viene il numero: un import si cambia nella sua scheda,
+                  non qui — e a rileggere il foglio si vede subito quale */}
+              {b.provenienza && bl.tipo === 'import' && (
+                <span className="quad-fonte" title={`Ripreso dalla scheda ${b.provenienza}: si cambia lì`}>
+                  ↩ {b.provenienza}
+                </span>
+              )}
             </span>
           </div>
 
@@ -1972,20 +2074,21 @@ function BloccoCard({
         </div>
       )}
 
-      {/* la nota del passaggio: si scrive con la (i) aperta, si legge sempre —
-          anche nella stampa, che è il posto in cui serve davvero */}
+      {/* il commento della grandezza: **sotto** la formula, in grigio e più
+          piccolo. Si scrive con la ⓘ del pannello, si legge sempre — anche
+          nella stampa, che è il posto in cui serve davvero */}
       {notaAperta ? (
-        <textarea
+        <CampoTesto
           className="quad-appunto"
           value={bl.appunto}
-          rows={2}
           autoFocus
-          placeholder="Nota su questo passaggio: da dove viene il dato, che ipotesi si è fatta…"
-          aria-label="Nota del passaggio"
-          onChange={(e) => onAggiorna({ appunto: e.target.value })}
+          placeholder="Che cos'è, da dove viene il dato, che ipotesi si è fatta…"
+          aria-label="Commento della riga"
+          onChange={(appunto) => onAggiorna({ appunto })}
           onKeyDown={(e) => {
-            if (e.key === 'Escape') setNotaAperta(false);
+            if (e.key === 'Escape') onChiudiNota();
           }}
+          onBlur={onChiudiNota}
         />
       ) : (
         bl.appunto.trim() && <div className="quad-appunto-letto">{bl.appunto}</div>
@@ -2050,8 +2153,9 @@ function UnitaBlocco({
 /**
  * Uno schema sul foglio, con la sua misura. Uno screenshot arriva grande come
  * capita, ma su una relazione la dimensione è una scelta: si prende il bordo e
- * si tira, come in un documento di testo. La larghezza è in percentuale della
- * colonna, così vale anche nell'HTML esportato e nella stampa.
+ * si tira, come in un documento di testo. La larghezza è in percentuale del
+ * foglio — così due schemi stretti stanno affiancati sulla stessa riga, e la
+ * misura vale anche nell'HTML esportato e nella stampa.
  */
 function SchemaRidimensionabile({
   img,
@@ -2061,6 +2165,7 @@ function SchemaRidimensionabile({
 }: {
   img: string;
   didascalia: string;
+  /** Larghezza in percentuale del foglio: la mostra la quota mentre si tira. */
   larghezza: number;
   onLarghezza: (v: number) => void;
 }) {
@@ -2068,18 +2173,24 @@ function SchemaRidimensionabile({
   const [tira, setTira] = useState(false);
   const perc = larghezza || 100;
 
-  /** Da dove sta il dito alla percentuale di colonna occupata. */
+  /**
+   * Da dove sta il dito alla percentuale di **foglio** occupata: la misura si
+   * prende sulla riga delle figure, non sullo schema — se no si misurerebbe
+   * su una larghezza che sta cambiando mentre la si tira. Ed è la percentuale
+   * giusta anche nel file esportato, dove il riferimento è la pagina.
+   */
   const misura = (clientX: number) => {
     const el = box.current;
     if (!el) return;
-    const r = el.getBoundingClientRect();
-    if (r.width <= 0) return;
+    const riferimento = el.closest('.quad-blocchi') ?? el.parentElement;
+    const r = riferimento?.getBoundingClientRect();
+    if (!r || r.width <= 0) return;
     onLarghezza(larghezzaValida(((clientX - r.left) / r.width) * 100));
   };
 
   return (
     <div className="quad-img-box" ref={box}>
-      <div className={`quad-img-figura${tira ? ' is-tira' : ''}`} style={{ width: `${perc}%` }}>
+      <div className={`quad-img-figura${tira ? ' is-tira' : ''}`}>
         <img src={img} alt={didascalia || 'schema'} draggable={false} />
         <span
           className="quad-img-maniglia"

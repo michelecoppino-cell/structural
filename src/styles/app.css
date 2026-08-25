@@ -330,6 +330,14 @@ button {
   flex: none;
 }
 
+/* uno stacco fra due famiglie di comandi nella stessa barra: quello che si
+   scrive sul foglio di qua, quello che si fa del foglio di là */
+.tab-toolbar-sep {
+  width: 1px;
+  height: 18px;
+  background: var(--divider);
+}
+
 /* combinazione + orientamento della scheda Sollecitazioni: sempre una riga
    sola — né il menù né il selettore si comprimono, altrimenti l'orientamento
    va a capo su due righe invece di restare affiancato */
@@ -2605,9 +2613,14 @@ button.field-origin:hover {
 
 /* ══════════════════════ scheda Quaderno ══════════════════════ */
 
-/* Il quaderno è due cose accostate: a sinistra il foglio — carta bianca, come
-   un quaderno vero, e in stampa esce identico a come si vede — e a destra il
-   pannello di quello che ci si può mettere dentro. */
+/* Il quaderno è due cose accostate: a sinistra il foglio — la carta, che è già
+   il documento da stampare — e a destra il pannello di quello che ci si può
+   mettere dentro.
+
+   Il foglio non ha riquadri: la carta è l'unica superficie, e quello che ci sta
+   sopra è scritto, non incassato. Le righe di calcolo vanno a capo da sé, ognuna
+   larga quanto il suo contenuto, come su un quaderno vero — chi scrive decide
+   l'ordine, la carta decide dove finisce la riga. */
 
 .quad {
   display: flex;
@@ -2640,64 +2653,72 @@ button.field-origin:hover {
 /* ── il foglio ── */
 
 .quad-foglio {
-  /* la carta ha una tavolozza sua: è l'unico posto chiaro dell'app, perché
-     è già il documento — quello che si vede è quello che esce dalla stampante */
-  --carta: #fff;
-  --inchiostro: #14181f;
-  --inchiostro-2: #3f4655;
-  --inchiostro-3: #6b7382;
-  --riga: rgba(20, 24, 31, 0.09);
-  --segno: rgba(20, 24, 31, 0.16);
-  /* il semaforo dei rapporti di verifica, scelto per la carta bianca */
-  --esito-ok: #1f7a45;
-  --esito-limite: #9a6a11;
-  --esito-fuori: #b3261e;
+  /* il semaforo dei rapporti di verifica, letto sulla carta: chiaro solo
+     quando c'è qualcosa da dire — l'ocra al limite, il rosso oltre */
+  --esito-limite: var(--carta-ocra);
+  --esito-fuori: var(--carta-err);
 
-  width: min(100%, 210mm);
-  min-height: 297mm;
-  padding: 15mm 13mm;
+  position: relative;
+  width: min(100%, 1180px);
+  min-height: 260px;
+  padding: 30px 32px 36px;
   background: var(--carta);
   color: var(--inchiostro);
-  border-radius: var(--radius-md);
-  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.5), 0 12px 34px rgba(0, 0, 0, 0.45);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 10px 34px rgba(0, 0, 0, 0.45);
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 0;
 }
 
 /* i quadretti sono un fondo, non un contenuto: in stampa spariscono */
 .quad-foglio.is-quadretti {
-  background-image: linear-gradient(var(--riga) 1px, transparent 1px),
-    linear-gradient(90deg, var(--riga) 1px, transparent 1px);
-  background-size: 5mm 5mm;
-  background-position: -1px -1px;
+  background-image: linear-gradient(var(--carta-quadretti) 1px, transparent 1px),
+    linear-gradient(90deg, var(--carta-quadretti) 1px, transparent 1px);
+  background-size: 14px 14px;
 }
 
-/* i controlli dentro la carta si vestono di chiaro: un campo scuro su un
-   foglio bianco sarebbe una toppa */
-.quad-foglio .input {
-  min-height: 23px;
-  font-size: 11px;
+/* sulla carta chiara l'anello del browser è una scatola azzurra in mezzo a un
+   documento: l'ocra pieno dice la stessa cosa senza sporcare il foglio */
+.quad-foglio :focus-visible {
+  outline: 1px solid var(--color-accent);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* i campi del foglio non sono caselle: sono il testo del documento, e si
+   scrivono dove si leggono — niente fondo, niente cornice */
+.quad-foglio .input,
+.quad-foglio textarea,
+.quad-foglio input {
+  min-height: 0;
+  padding: 0;
   color: var(--inchiostro);
   caret-color: var(--color-accent-600);
-  background: rgba(20, 24, 31, 0.03);
-  border-color: var(--segno);
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  font-family: var(--font);
+  line-height: inherit;
+  box-shadow: none;
 }
 
-.quad-foglio .input:hover {
-  border-color: rgba(20, 24, 31, 0.35);
+.quad-foglio .input:hover,
+.quad-foglio .input:focus,
+.quad-foglio textarea:focus {
+  background: transparent;
+  border-color: transparent;
+  outline: none;
 }
 
-.quad-foglio .input:focus-visible {
-  border-color: var(--color-accent-600);
-}
-
-.quad-foglio .input::placeholder {
-  color: var(--inchiostro-3);
+.quad-foglio .input::placeholder,
+.quad-foglio textarea::placeholder {
+  color: var(--inchiostro-5);
 }
 
 .quad-foglio select.input {
-  background: rgba(20, 24, 31, 0.03);
+  appearance: none;
+  background: transparent;
 }
 
 .quad-foglio .btn {
@@ -2705,82 +2726,75 @@ button.field-origin:hover {
 }
 
 .quad-foglio .btn-secondary {
-  border-color: var(--segno);
+  border-color: var(--carta-segno);
 }
 
 .quad-foglio .btn-secondary:hover:not(:disabled) {
-  background: rgba(20, 24, 31, 0.05);
+  background: var(--carta-velo);
 }
 
 .quad-testa {
   display: flex;
-  align-items: flex-start;
+  align-items: baseline;
   justify-content: space-between;
   gap: 12px;
-  padding-bottom: 8px;
-  border-bottom: 2px solid var(--inchiostro-2);
+  margin-bottom: 14px;
 }
 
 .quad-titolo {
-  font-size: 16px;
-  font-weight: 500;
+  font-size: 15.5px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
 }
 
 .quad-meta,
 .quad-data {
-  font-size: 11px;
+  font-size: 11.5px;
   color: var(--inchiostro-3);
 }
 
-.quad-intestazione {
+/* la premessa: il capoverso con cui il foglio comincia — testo corrente, non
+   un campo, e sotto la riga che lo separa dal calcolo */
+.quad-foglio .quad-intestazione {
   width: 100%;
-  background: transparent;
-  border: 0;
-  border-bottom: 1px dashed var(--segno);
-  color: var(--inchiostro);
-  font-family: inherit;
-  font-size: 11.5px;
-  padding: 4px 0;
+  max-width: 74ch;
+  resize: none;
+  overflow: hidden;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--inchiostro-2);
+  margin-bottom: 22px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--carta-divisore);
 }
 
-.quad-intestazione:focus,
-.quad-nota-foglio:focus {
-  outline: none;
-  border-color: var(--color-accent-600);
-}
-
-.quad-rapidi {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-/* ── i blocchi: una griglia a tre colonne e una riga di passo ──
-      Le posizioni possibili sono le caselle di questa griglia. Una riga di
-      calcolo occupa **una riga sola**, alta quanto il testo che ci sta, e si
-      prende le colonne che le servono (`--span`): la larghezza la decide il
-      contenuto, non un comando. Note, schemi e capitoli prendono tutta la
-      riga di serie. Un blocco può saltare qualche casella per posarsi più in
-      basso: le caselle saltate restano lì, vuote (`.quad-vuoto`). */
+/* ── le righe del foglio ──
+      Non c'è più una griglia: le righe si mettono in fila e vanno a capo
+      quando lo spazio finisce, **ognuna larga quanto il suo contenuto**. Il
+      passo fra le righe è largo anche perché ci si alza dentro il pannello di
+      riga quando a destra non ci sta. */
 
 .quad-blocchi {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  align-items: start;
-  gap: 3px 6px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  column-gap: 44px;
+  row-gap: 26px;
+  margin-bottom: 24px;
 }
 
 .quad-blocco {
   position: relative;
-  grid-column: span var(--span, 1);
+  width: max-content;
+  max-width: 100%;
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 0;
-  padding: 1px 6px;
-  background: rgba(20, 24, 31, 0.02);
-  border: 1px solid var(--segno);
-  border-radius: var(--radius-md);
+  padding: 3px 6px;
+  margin: -3px -6px;
+  border-radius: var(--radius-sm);
+  border: 0;
+  background: transparent;
   break-inside: avoid;
 }
 
@@ -2788,161 +2802,11 @@ button.field-origin:hover {
   outline: none;
 }
 
-/* Le celle editabili contro quelle da calcolare.
-   Una riga che porta un numero **scritto da qualcuno** — una grandezza tirata
-   dal pannello, una definizione scritta qui — prende una velatura ocra; una
-   riga che il foglio calcola resta sulla carta bianca. È la stessa distinzione
-   che su un foglio a mano si fa cerchiando i dati di partenza, e serve a
-   rileggere il calcolo sapendo subito dove si può mettere le mani.
-   La velatura è volutamente sottile: si nota, non si guarda. */
-.quad-blocco.is-variabile {
-  background: color-mix(in srgb, var(--color-accent) 9%, transparent);
-  border-color: color-mix(in srgb, var(--color-accent) 30%, var(--segno));
-}
-
-/* anche il campo in cui si scrive il valore, dentro una riga così: è
-   letteralmente la cella in cui si batte il numero */
-.quad-blocco.is-variabile .quad-in-espr.input,
-.quad-blocco.is-variabile .quad-in-valore.input,
-.quad-blocco.is-variabile .quad-um-libera.input {
-  background: color-mix(in srgb, var(--color-accent) 7%, var(--carta));
-}
-
-.quad-blocco.is-pieno {
-  grid-column: span var(--span, 3);
-  gap: 3px;
-  padding: 5px 8px;
-}
-
-/* il divisore di capitolo: una riga orizzontale che taglia il foglio da parte
-   a parte e, subito sotto, il titolo di quello che comincia lì. È lo stacco
-   che su un foglio a mano si tira con la squadretta prima di cambiare
-   argomento — perciò il blocco non ha né bordo né fondo: si vede la riga */
-.quad-blocco.is-linea {
-  padding: 0;
-  background: transparent;
-  border: 0;
-  margin: 6px 0 2px;
-}
-
-.quad-divisore {
-  border-top: 1.5px solid var(--inchiostro-2);
-  padding-top: 3px;
-}
-
-.quad-divisore-titolo {
-  width: 100%;
-  padding: 1px 2px;
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: 0.01em;
-  color: var(--inchiostro);
-  background: transparent;
-  border: 0;
-  border-bottom: 1px solid transparent;
-}
-
-.quad-divisore-titolo::placeholder {
-  font-weight: 400;
-  color: var(--inchiostro-3);
-}
-
-.quad-divisore-titolo:focus {
-  outline: none;
-  border-bottom-color: var(--color-accent-600);
-}
-
-/* una casella lasciata libera: si vede appena, si preme per far risalire la
-   riga che segue e ci si può lasciar cadere il prossimo passaggio */
-.quad-vuoto {
-  min-height: 22px;
-  padding: 0;
-  background: transparent;
-  border: 1px dashed transparent;
-  border-radius: var(--radius-md);
-  cursor: pointer;
-}
-
-.quad-blocchi:hover .quad-vuoto {
-  border-color: var(--segno);
-}
-
-.quad-vuoto:hover {
-  border-color: var(--color-accent-400);
-  background: rgba(20, 24, 31, 0.02);
-}
-
-@media print {
-  .quad-vuoto {
-    border-color: transparent;
-    background: transparent;
-  }
-
-  /* i suggerimenti sono una domanda fatta a chi sta scrivendo il calcolo, non
-     una parte del documento: sulla carta non ci vanno */
-  .quad-suggerimenti {
-    display: none;
-  }
-}
-
-/* su cellulare il foglio si stringe e le colonne non hanno più senso: un
-   blocco per riga, larghezza scelta o no */
-@media (max-width: 899px) {
-  .quad-blocchi {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .quad-blocco,
-  .quad-blocco.is-pieno {
-    grid-column: 1 / -1;
-  }
-
-  /* niente caselle vuote dove c'è una colonna sola: sarebbero righe bianche */
-  .quad-vuoto {
-    display: none;
-  }
-}
-
-/* il comando delle colonne dice, con un numero, quanto è larga la riga */
-.quad-blocco-azioni .tasti .larghezza {
-  gap: 2px;
-}
-
-.quad-blocco-azioni .tasti .larghezza .n {
-  font-size: 9.5px;
-  font-variant-numeric: tabular-nums;
-}
-
-.quad-blocco-azioni .tasti .larghezza.is-larga,
-.quad-blocco-azioni .tasti .is-acceso {
-  color: var(--color-accent-700);
-}
-
-/* la nota del passaggio: piccola, sotto la riga, e in stampa resta */
-.quad-appunto {
-  width: 100%;
-  resize: vertical;
-  background: transparent;
-  border: 0;
-  border-top: 1px dashed var(--segno);
-  padding: 2px 0 0;
-  color: var(--inchiostro-2);
-  font-family: inherit;
-  font-size: 9.5px;
-}
-
-.quad-appunto:focus {
-  outline: none;
-  border-color: var(--color-accent-600);
-}
-
-/* la nota del passaggio: una riga grigina piccola, subito sotto la formula —
-   è l'unica cosa che ha il diritto di aggiungere una riga alla cella */
-.quad-appunto-letto {
-  font-size: 9.5px;
-  line-height: 1.3;
-  color: var(--inchiostro-3);
-  overflow-wrap: anywhere;
+/* la riga sotto il cursore (o con il focus dentro) si accende appena: è dove
+   si sta lavorando, e dove compare il pannello dei tre comandi */
+.quad-blocco:hover,
+.quad-blocco.is-attiva {
+  background: var(--carta-hover);
 }
 
 .quad-blocco:hover,
@@ -2950,111 +2814,99 @@ button.field-origin:hover {
   z-index: 2;
 }
 
-.quad-blocco.is-errore {
-  border-color: var(--err);
+/* i blocchi che valgono una riga intera: nota, capitolo, capitolo ripreso */
+.quad-blocco.is-pieno {
+  width: 100%;
+  flex-basis: 100%;
+}
+
+/* uno schema, invece, è largo quanto lo si è tirato: due schemi stretti stanno
+   affiancati sulla stessa riga, come su una relazione impaginata */
+.quad-blocco.is-immagine {
+  width: var(--larghezza, 100%);
+  flex-basis: auto;
+}
+
+.quad-blocco.is-linea {
+  margin-top: 10px;
 }
 
 /* il blocco davanti al quale si sta per lasciare qualcosa */
 .quad-blocco.is-bersaglio {
-  box-shadow: inset 3px 0 0 var(--color-accent-600);
-  border-color: var(--color-accent-400);
+  box-shadow: inset 2px 0 0 var(--color-accent-600);
+  background: var(--carta-hover);
 }
 
-/* i comandi del blocco: nessuna etichetta e nessuno spazio riservato — stanno
-   sospesi sul bordo alto della cella e compaiono al passaggio, così la riga di
-   calcolo è alta quanto il suo testo e basta */
-.quad-blocco-azioni {
+/* ── il pannello di riga ──
+      Uno solo, per tutto il foglio: si sposta sulla riga sotto il cursore.
+      Tre comandi e basta — la presa per spostarla, l'appunto, il cestino: le
+      frecce non servono più (l'ordine si trascina, la larghezza la decide il
+      contenuto) e nemmeno il «+» (la formula la infila il pulsante della
+      barra, o Ctrl+Tab). */
+
+.quad-pannello-riga {
   position: absolute;
-  top: -15px;
-  right: 4px;
-  z-index: 3;
-  display: flex;
+  top: 0;
+  left: 0;
+  z-index: 5;
+  display: inline-flex;
   align-items: center;
-  gap: 3px;
-  padding: 0 3px;
-  font-size: 10px;
-  background: var(--carta);
-  border: 1px solid var(--segno);
-  border-radius: 999px;
+  gap: 1px;
+  padding: 2px;
+  background: var(--carta-riga);
+  border: 1px solid var(--carta-segno);
+  border-radius: var(--radius-md);
+  box-shadow: 0 2px 8px rgba(27, 29, 41, 0.12);
   opacity: 0;
   pointer-events: none;
+  transition: opacity 0.12s ease;
 }
 
-.quad-blocco-azioni .maniglia {
-  display: inline-flex;
-  color: var(--inchiostro-3);
-  cursor: grab;
+.quad-pannello-riga.is-visibile {
+  opacity: 1;
+  pointer-events: auto;
 }
 
-.quad-blocco-azioni .maniglia:active {
-  cursor: grabbing;
-}
-
-.quad-blocco-azioni .link {
-  display: inline-flex;
-  color: var(--color-accent-600);
-}
-
-.quad-blocco-azioni .fonte {
-  color: var(--inchiostro-3);
-}
-
-.quad-blocco-azioni .tasti {
-  margin-left: auto;
+.quad-pannello-riga button,
+.quad-pannello-riga .maniglia {
   display: inline-flex;
   align-items: center;
-  gap: 2px;
-}
-
-.quad-blocco-azioni .tasti button {
-  display: inline-flex;
-  align-items: center;
-  padding: 2px;
-  color: var(--inchiostro-3);
+  justify-content: center;
+  min-width: 24px;
+  height: 24px;
+  padding: 0;
+  color: var(--inchiostro-5);
   background: transparent;
   border: 0;
   border-radius: 4px;
   cursor: pointer;
 }
 
-.quad-blocco-azioni .tasti button:hover:not(:disabled) {
-  color: var(--color-accent-700);
-  background: rgba(20, 24, 31, 0.05);
+.quad-pannello-riga .maniglia {
+  cursor: grab;
 }
 
-.quad-blocco-azioni .tasti button:disabled {
-  opacity: 0.3;
-  cursor: default;
+.quad-pannello-riga .maniglia:active {
+  cursor: grabbing;
 }
 
-.quad-blocco:hover .quad-blocco-azioni,
-.quad-blocco:focus-within .quad-blocco-azioni {
-  opacity: 1;
-  pointer-events: auto;
+.quad-pannello-riga button:hover,
+.quad-pannello-riga .maniglia:hover {
+  color: var(--inchiostro);
+  background: var(--carta-velo);
 }
 
-.quad-blocco-azioni .tasti .chiudi:hover {
-  color: var(--err);
-  background: var(--err-bg);
+.quad-pannello-riga .is-acceso {
+  color: var(--carta-ocra);
 }
 
-/* su cellulare non c'è passaggio del mouse: i comandi stanno sempre lì — e
-   siccome stanno sempre lì, la cella si tiene la striscia che gli serve invece
-   di lasciarli sopra a quella di prima */
-@media (hover: none) {
-  .quad-blocco-azioni {
-    top: 1px;
-    opacity: 1;
-    pointer-events: auto;
-  }
-
-  .quad-blocco {
-    padding-top: 18px;
-  }
+.quad-pannello-riga .chiudi:hover {
+  color: var(--carta-ocra);
+  background: color-mix(in srgb, var(--color-accent-600) 14%, transparent);
 }
 
 @media print {
-  .quad-blocco-azioni {
+  .quad-pannello-riga {
     display: none;
   }
 }
@@ -3064,22 +2916,19 @@ button.field-origin:hover {
 .quad-calcolo {
   display: flex;
   flex-direction: column;
-  gap: 1px;
   min-width: 0;
 }
 
-/* nome, formula e risultato su **una riga sola**, sempre: un passaggio è una
-   riga di quaderno, non un riquadro. Quando il testo cresce non va a capo —
-   è la cella che si allarga, prendendosi la colonna che le serve. La misura è
-   quella di un foglio scritto in Arial Narrow 11. */
+/* prima linea: nome, formula e risultato, allineati sulla base come una riga
+   scritta a mano. Non va a capo: è la riga intera che, semmai, va a capo */
 .quad-linea {
   display: flex;
-  align-items: center;
-  gap: 4px;
+  align-items: baseline;
+  gap: 5px;
   flex-wrap: nowrap;
   min-width: 0;
-  font-size: 11.5px;
-  line-height: 1.25;
+  font-size: 15.5px;
+  line-height: 1.35;
 }
 
 .quad-linea .nome {
@@ -3087,180 +2936,251 @@ button.field-origin:hover {
   white-space: nowrap;
 }
 
-.quad-linea .espr,
 .quad-linea .uguale {
-  font-family: var(--font-mono);
-  font-size: 10.5px;
-  color: var(--inchiostro-2);
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--inchiostro-4);
 }
 
-/* la cella in cui si scrive il valore di una variabile: sta sul foglio, non
-   nel pannello — l'elenco a destra dice che cosa esiste, il numero si batte
-   qui, dove lo si legge */
-.quad-in-valore.input {
-  flex: 1 1 auto;
-  width: 0;
-  min-width: 44px;
-  min-height: 22px;
-  padding: 1px 5px;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  font-variant-numeric: tabular-nums;
-}
-
-/* se proprio la formula non ci sta (una riga lunghissima in una cella sola)
-   si accorcia con i puntini: il testo intero resta nel suggerimento */
 .quad-linea .espr {
+  font-family: var(--font-mono-carta);
+  font-size: 15px;
+  color: var(--inchiostro);
   min-width: 0;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
 }
 
-/* il risultato sta in fondo alla stessa riga: non va mai a capo per conto suo,
-   a andare a capo è semmai la riga intera quando lo spazio finisce davvero */
-.quad-esito {
-  margin-left: auto;
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  flex-wrap: nowrap;
-  white-space: nowrap;
-  font-size: 12px;
+/* il numero scritto a mano si riconosce dalla sottolineatura ocra: è il dato
+   di partenza, quello su cui si possono mettere le mani. Il numero calcolato è
+   inchiostro pieno, e non si tocca */
+.quad-in-valore.input,
+.quad-in-espr.input,
+.quad-in-nome.input {
+  font-family: var(--font-mono-carta);
+  font-size: 15px;
+  min-width: 1ch;
+  width: auto;
+  field-sizing: content;
 }
 
-/* un rapporto di verifica letto in percento si legge dal colore prima che dal
-   numero: verde sotto l'80 %, giallo fino al 100, rosso oltre. È una pastiglia
-   piena — il colore si vede da lontano e di sbieco, come il bollino messo a
-   fianco della verifica, mentre il numero scritto in colore si perde fra gli
-   altri numeri della riga */
-.quad-esito.is-ok strong,
-.quad-esito.is-limite strong,
-.quad-esito.is-fuori strong {
-  padding: 1px 6px;
-  border-radius: 999px;
-  color: #fff;
-}
-
-.quad-esito.is-ok strong {
-  background: var(--esito-ok);
-}
-
-.quad-esito.is-limite strong {
-  background: var(--esito-limite);
-}
-
-.quad-esito.is-fuori strong {
-  background: var(--esito-fuori);
-}
-
-.quad-esito strong {
+.quad-in-valore.input,
+.quad-in-espr.input.is-dato {
+  font-size: 15.5px;
   font-weight: 600;
-  color: var(--color-accent-700);
+  color: var(--carta-ocra);
+  border-bottom: 1px dotted var(--carta-ocra-riga);
+  padding: 0 1px;
   font-variant-numeric: tabular-nums;
 }
 
-/* il selettore dell'unità: cambiarla converte il numero, quindi è un comando
-   di prima fila — non un'etichetta */
+.quad-in-nome.input {
+  font-family: var(--font);
+  font-size: 15.5px;
+  font-weight: 600;
+  color: var(--inchiostro);
+}
+
+.quad-in-espr.input.is-error {
+  color: var(--carta-err);
+}
+
+.quad-esito {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  flex-wrap: nowrap;
+  white-space: nowrap;
+}
+
+.quad-esito strong {
+  font-family: var(--font-mono-carta);
+  font-size: 15.5px;
+  font-weight: 600;
+  color: var(--inchiostro);
+  font-variant-numeric: tabular-nums;
+}
+
+/* un rapporto di verifica letto in percento si legge dal colore prima che dal
+   numero: al limite è ocra, oltre il 100 % è rosso. Sotto non c'è niente da
+   dire, e il numero resta inchiostro come tutti gli altri */
+.quad-esito.is-limite strong,
+.quad-esito.is-limite .quad-um,
+.quad-esito.is-limite .quad-um-libera {
+  color: var(--esito-limite);
+}
+
+.quad-esito.is-fuori strong,
+.quad-esito.is-fuori .quad-um,
+.quad-esito.is-fuori .quad-um-libera {
+  color: var(--esito-fuori);
+}
+
+/* l'unità: piccola, subito dopo il numero — cambiarla converte il valore,
+   quindi resta un comando, ma non si veste da tale finché non la si tocca */
 .quad-um.input,
 .quad-um-libera.input {
   width: auto;
-  min-width: 40px;
-  max-width: 78px;
-  min-height: 18px;
-  padding: 0 3px;
-  font-size: 10.5px;
-  font-family: var(--font-mono);
+  min-width: 2ch;
+  max-width: 12ch;
+  field-sizing: content;
+  font-size: 12.5px;
+  font-family: inherit;
   color: var(--inchiostro-2);
-  background: transparent;
-  border-color: transparent;
 }
 
-.quad-um.input:hover,
-.quad-um-libera.input:hover,
-.quad-um.input:focus-visible,
-.quad-um-libera.input:focus-visible {
-  border-color: var(--color-accent-600);
+/* da dove viene il numero: un import si legge qui ma si cambia nella sua
+   scheda, e il segno lo dice senza spiegarlo */
+.quad-fonte {
+  font-size: 11px;
+  color: var(--inchiostro-5);
 }
 
-.quad-in-nome.input {
-  flex: 0 1 52px;
-  width: 52px;
-  min-width: 32px;
-  min-height: 18px;
-  padding-block: 0;
-  padding-inline: 4px;
-  font-weight: 600;
-}
-
-.quad-in-espr.input {
-  /* la formula si stringe prima che il risultato vada a capo: la base è
-     piccola apposta, poi cresce con lo spazio che avanza */
-  flex: 1 1 48px;
-  min-width: 0;
-  min-height: 18px;
-  padding-block: 0;
-  font-family: var(--font-mono);
-  font-size: 10.5px;
+/* il campo dell'unità propone l'elenco, ma sulla carta non porta la freccetta
+   del menù a tendina: è un'unità di misura scritta, non un comando */
+.quad-foglio input::-webkit-calendar-picker-indicator {
+  display: none !important;
+  opacity: 0;
+  width: 0;
 }
 
 .quad-errore,
 .quad-manca {
   display: inline-flex;
-  align-items: center;
+  align-items: baseline;
   gap: 4px;
-  font-size: 11px;
-  color: var(--err);
+  font-size: 12.5px;
+  color: var(--carta-err);
 }
 
 .quad-manca {
-  color: var(--inchiostro-3);
+  color: var(--color-accent-600);
 }
 
 .quad-avviso {
-  font-size: 10.5px;
-  color: var(--warn);
+  font-size: 11.5px;
+  line-height: 1.5;
+  max-width: 44ch;
+  color: var(--color-accent-600);
 }
 
-.quad-nota-riga {
+/* ── seconda linea: il commento della grandezza ──
+      Va **sotto** la formula, non accanto: la riga di calcolo resta corta e si
+      legge, e il perché sta lì sotto in grigio per chi rilegge il foglio fra
+      sei mesi. Va a capo da sé e non sta mai sulla stessa linea del calcolo. */
+
+.quad-nota-riga,
+.quad-appunto-letto,
+.quad-foglio .quad-appunto {
   font-size: 9.5px;
-  line-height: 1.3;
+  line-height: 1.5;
   color: var(--inchiostro-3);
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
+  margin-top: 1px;
+  max-width: 44ch;
+  overflow-wrap: anywhere;
 }
 
-/* ── nota, schema, capitolo ── */
-
-.quad-nota,
-.quad-nota-foglio {
+.quad-appunto {
   width: 100%;
-  resize: vertical;
+  min-width: 24ch;
+  resize: none;
+  overflow: hidden;
+  font-family: inherit;
+}
+
+/* ── il capitolo ──
+      Un segno pieno, il titolo in maiuscoletto ocra e una regola che sfuma:
+      è lo stacco che su un foglio a mano si tira con la squadretta prima di
+      cambiare argomento. */
+
+.quad-divisore {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  margin-bottom: 16px;
+}
+
+.quad-divisore::before {
+  content: '';
+  flex: none;
+  width: 18px;
+  height: 1px;
+  background: var(--color-accent-600);
+}
+
+.quad-divisore::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(to right, rgba(27, 29, 41, 0.16), transparent);
+}
+
+.quad-foglio .quad-divisore-titolo {
+  flex: 0 1 auto;
+  font-family: var(--font);
+  width: auto;
+  min-width: 12ch;
+  field-sizing: content;
+  padding: 0;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--carta-ocra);
   background: transparent;
   border: 0;
-  color: var(--inchiostro);
+}
+
+.quad-divisore-titolo::placeholder {
+  font-weight: 400;
+  letter-spacing: 0.06em;
+  color: var(--inchiostro-5);
+}
+
+/* ── la nota a piena riga ──
+      Una barretta ocra a sinistra e il testo: nessuna scatola, come una nota
+      scritta a margine e poi rientrata nel discorso. */
+
+.quad-nota-box {
+  display: flex;
+  gap: 10px;
+  max-width: 74ch;
+  width: 100%;
+}
+
+.quad-nota-box::before {
+  content: '';
+  flex: none;
+  width: 2px;
+  background: color-mix(in srgb, var(--color-accent-600) 50%, transparent);
+  border-radius: 1px;
+}
+
+.quad-foglio .quad-nota,
+.quad-foglio .quad-nota-foglio {
+  width: 100%;
+  resize: none;
+  overflow: hidden;
+  background: transparent;
+  border: 0;
+  color: var(--inchiostro-2);
   font-family: inherit;
-  font-size: 11.5px;
-  padding: 2px 0;
-}
-
-.quad-nota {
-  border-bottom: 1px dashed var(--segno);
-}
-
-.quad-nota:focus {
-  outline: none;
-  border-color: var(--color-accent-600);
+  font-size: 13px;
+  line-height: 1.6;
+  padding: 0;
 }
 
 .quad-nota-foglio {
-  margin-top: auto;
-  border-top: 1px dashed var(--segno);
-  padding-top: 6px;
+  margin-top: 26px;
+  padding-top: 14px;
+  border-top: 1px solid var(--carta-divisore);
+  max-width: 74ch;
 }
 
-/* lo schema e la sua misura: si prende il bordo destro e si tira */
+/* ── lo schema: una figura, con la sua didascalia e la sua misura ── */
+
 .quad-img-box {
   width: 100%;
 }
@@ -3274,12 +3194,14 @@ button.field-origin:hover {
   display: block;
   width: 100%;
   height: auto;
-  border: 1px solid var(--segno);
-  border-radius: var(--radius-sm);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: var(--carta-velo);
 }
 
 .quad-img-figura.is-tira img {
-  border-color: var(--color-accent-600);
+  outline: 1px solid var(--color-accent-600);
+  outline-offset: 1px;
 }
 
 .quad-img-maniglia {
@@ -3303,7 +3225,7 @@ button.field-origin:hover {
   height: 34px;
   transform: translateY(-50%);
   border-radius: 3px;
-  background: var(--inchiostro-3);
+  background: var(--inchiostro-5);
   opacity: 0;
 }
 
@@ -3322,10 +3244,10 @@ button.field-origin:hover {
   right: 6px;
   bottom: 6px;
   padding: 1px 5px;
-  font-family: var(--font-mono);
+  font-family: var(--font-mono-carta);
   font-size: 10.5px;
-  color: #fff;
-  background: rgba(20, 24, 31, 0.75);
+  color: var(--carta);
+  background: rgba(27, 29, 41, 0.75);
   border-radius: 4px;
 }
 
@@ -3333,7 +3255,13 @@ button.field-origin:hover {
   display: flex;
   align-items: center;
   gap: 6px;
-  margin-top: 5px;
+  margin-top: 6px;
+}
+
+.quad-img-didascalia.input {
+  flex: 1 1 auto;
+  font-size: 11.5px;
+  color: var(--inchiostro-3);
 }
 
 .quad-img-misura.input {
@@ -3364,38 +3292,43 @@ button.field-origin:hover {
   min-height: 140px;
   padding: 16px;
   color: var(--inchiostro-3);
-  background: rgba(20, 24, 31, 0.02);
-  border: 1px dashed var(--segno);
+  background: var(--carta-velo);
+  border: 0;
   border-radius: var(--radius-md);
   cursor: pointer;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .quad-img-vuota strong {
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 500;
   color: var(--inchiostro-2);
 }
 
+/* ── un capitolo ripreso da un'altra scheda ── */
+
+.quad-cap {
+  width: 100%;
+}
+
 .quad-cap h2 {
-  font-size: 11.5px;
-  letter-spacing: 0.08em;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: var(--color-accent-700);
-  margin: 2px 0 6px;
-  padding-bottom: 3px;
-  border-bottom: 1px solid var(--segno);
+  color: var(--carta-ocra);
+  margin: 0 0 8px;
 }
 
 .quad-cap-blocco {
-  margin-bottom: 8px;
+  margin-bottom: 10px;
   break-inside: avoid;
 }
 
 .quad-cap-blocco h3 {
-  font-size: 11px;
+  font-size: 11.5px;
   color: var(--inchiostro-2);
-  margin: 6px 0 3px;
+  margin: 8px 0 3px;
   font-weight: 600;
 }
 
@@ -3406,28 +3339,54 @@ button.field-origin:hover {
 }
 
 .quad-cap-blocco li {
-  font-family: var(--font-mono);
-  font-size: 10.5px;
+  font-family: var(--font-mono-carta);
+  font-size: 12px;
   line-height: 1.5;
+  color: var(--inchiostro-2);
   overflow-wrap: anywhere;
+}
+
+/* ── su cellulare la carta si stringe: una riga per riga ── */
+
+@media (max-width: 640px) {
+  .quad-foglio {
+    padding: 18px 14px 22px;
+  }
+
+  .quad-foglio.is-quadretti {
+    background-size: 12px 12px;
+  }
+
+  .quad-blocchi {
+    column-gap: 24px;
+    row-gap: 20px;
+  }
+
+  .quad-blocco {
+    width: 100%;
+    flex-basis: 100%;
+  }
 }
 
 /* ── la zona di arrivo, sempre in fondo ── */
 
 .quad-drop {
+  margin-top: 18px;
   padding: 14px 16px;
   text-align: center;
-  font-size: 11.5px;
-  color: var(--inchiostro-3);
-  border: 1px dashed var(--segno);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--inchiostro-5);
+  border: 1px dashed var(--carta-divisore);
   border-radius: var(--radius-md);
 }
 
 .quad-piede {
+  margin-top: 22px;
+  padding-top: 10px;
   font-size: 10.5px;
   color: var(--inchiostro-3);
-  padding-top: 6px;
-  border-top: 1px solid var(--segno);
+  border-top: 1px solid var(--carta-divisore);
 }
 
 /* ── il pannello a destra ── */
@@ -3828,9 +3787,9 @@ button.field-origin:hover {
   .tab-toolbar,
   .quad-panel,
   .quad-unita,
-  .quad-rapidi,
   .quad-drop,
-  .quad-blocco-azioni,
+  .quad-suggerimenti,
+  .quad-pannello-riga,
   .toast {
     display: none !important;
   }
@@ -3860,9 +3819,12 @@ button.field-origin:hover {
   .quad-foglio.is-quadretti {
     width: auto;
     min-height: auto;
+    padding: 0;
     border-radius: 0;
     box-shadow: none;
     background-image: none;
+    /* la carta vera è bianca: la tinta del foglio è un fatto dello schermo */
+    background-color: #fff;
   }
 
   /* i comandi si stampano come testo: niente cornici, niente freccette, e i
@@ -3895,10 +3857,18 @@ button.field-origin:hover {
     border-color: transparent;
   }
 
-  .quad-blocco {
-    border-color: transparent;
+  /* sulla carta stampata non c'è cursore: niente riga accesa, e il passo fra
+     le righe si stringe — la carta costa */
+  .quad-blocco,
+  .quad-blocco:hover,
+  .quad-blocco.is-attiva {
     background: transparent;
-    padding: 2px 0;
+  }
+
+  .quad-blocchi {
+    column-gap: 30px;
+    row-gap: 14px;
+    margin-bottom: 16px;
   }
 }
 
@@ -3915,22 +3885,6 @@ button.field-origin:hover {
     padding: 8px 0 16px;
     border-left: 0;
     border-top: 1px solid var(--divider);
-  }
-}
-
-@media (max-width: 640px) {
-  .quad-foglio {
-    min-height: 0;
-    padding: 14px 12px;
-  }
-
-  .quad-foglio.is-quadretti {
-    background-size: 4mm 4mm;
-  }
-
-  .quad-blocco {
-    flex-basis: 100%;
-    min-width: 0;
   }
 }
 
@@ -3951,8 +3905,9 @@ button.field-origin:hover {
 
 /* ── le variabili che una formula chiede e che nessuno ha ancora definito ──
    Non è un errore: è la domanda «questa cos'è?», con accanto il posto per
-   rispondere. Sta sulla carta, sopra i blocchi, e se ne va appena le si
-   risponde (o la si scaccia). */
+   rispondere. Non sta sulla carta — il foglio è il documento, e una domanda
+   fatta a chi scrive non è un contenuto: sta sopra, sulla cornice, e se ne va
+   appena le si risponde (o la si scaccia). */
 .quad-suggerimenti {
   position: relative;
   display: flex;
@@ -3968,7 +3923,7 @@ button.field-origin:hover {
   margin: 0;
   font-size: 11.5px;
   line-height: 1.45;
-  color: var(--inchiostro-2);
+  color: var(--text-2);
 }
 
 .quad-suggerimenti-righe {
@@ -3987,7 +3942,7 @@ button.field-origin:hover {
   min-width: 22px;
   font-weight: 600;
   font-size: 12.5px;
-  color: var(--inchiostro);
+  color: var(--text);
 }
 
 .quad-suggerimento .input {
@@ -4003,7 +3958,7 @@ button.field-origin:hover {
   right: 5px;
   display: inline-flex;
   padding: 3px;
-  color: var(--inchiostro-3);
+  color: var(--text-muted);
   background: transparent;
   border: 0;
   border-radius: var(--radius-sm);
@@ -4011,6 +3966,6 @@ button.field-origin:hover {
 }
 
 .quad-suggerimenti-chiudi:hover {
-  color: var(--inchiostro);
-  background: rgba(20, 24, 31, 0.07);
+  color: var(--text);
+  background: var(--hover);
 }

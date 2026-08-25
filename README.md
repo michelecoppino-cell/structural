@@ -395,10 +395,15 @@ Tabella editabile (categoria, descrizione, u.m., quantità, prezzo unitario), to
 e torta di incidenza per macrocategoria.
 
 ### 5. Quaderno
-Un **foglio bianco a quadretti** su cui il calcolo si scrive nell'ordine in cui lo si pensa, e
+Un **foglio di carta a quadretti** su cui il calcolo si scrive nell'ordine in cui lo si pensa, e
 che è già il documento da stampare: la scheda tiene insieme quello che prima erano la
 *Calcolatrice* e l'*Esporta*. Il riferimento è SMath Studio — foglio libero, non un elenco di
 righe rigide.
+
+La carta è l'**unica superficie chiara** dell'app e resta l'unica superficie del foglio: i
+blocchi non hanno né fondo né bordo, si accendono solo sotto il cursore. Quello che si aggiunge
+al foglio si sceglie dalla **barra dei comandi** — *Nota*, *Formula*, *Schema*, *Capitolo* — e
+non da pulsanti stampati sulla carta: un documento non porta i propri comandi.
 
 Due colonne: a sinistra il **foglio**, a destra il **pannello** di quello che ci si può mettere
 dentro. Scorrono per conto loro, così si tiene il foglio sotto gli occhi mentre si cerca una
@@ -406,17 +411,21 @@ grandezza in fondo al pannello.
 
 **Il foglio.** Porta in testa il **titolo del progetto** e la data — commessa, località e
 revisione restano sull'HTML esportato, che è il documento da consegnare; sul foglio di lavoro
-erano una riga di dati già scritti altrove — una **riga di premessa** e una **nota a piè di
-pagina**, e in mezzo i blocchi, numerati come i passaggi di un calcolo a mano. Si aggiungono dove servono — in coda o fra due blocchi già
-scritti — si **riordinano** (maniglia, frecce o trascinamento) e si eliminano con la ×.
+erano una riga di dati già scritti altrove — una **premessa** e una **nota a piè di pagina**, e
+in mezzo i blocchi, numerati come i passaggi di un calcolo a mano nel testo copiato e
+nell'HTML. Si aggiungono dove servono — in coda o dopo la riga su cui si sta scrivendo — si
+**riordinano** (trascinamento o `Alt+↑` / `Alt+↓`) e si eliminano con la ×.
 
-I blocchi stanno su una **griglia a tre colonne** con il passo di una riga: sono quelle le
-posizioni possibili. Una riga di calcolo occupa **una riga sola** — nome, formula e risultato
-non vanno mai a capo — e si prende **le colonne che le servono**: la larghezza non si sceglie,
-la decide il contenuto, così una formula lunga si allarga e una corta non tiene una colonna
-vuota. Se la riga ha una nota, quella va **sotto, in grigetto piccolo**. Note, schemi e
-capitoli restano a riga intera, con il loro comando 1-2-3. Il corpo del testo è quello di un
-foglio scritto in Arial Narrow 11.
+Niente più griglia: le righe si mettono **in fila e vanno a capo** quando lo spazio finisce, e
+**ognuna è larga quanto il suo contenuto**. Una riga di calcolo sta su **una linea sola** —
+nome, formula e risultato non vanno mai a capo — e se ha un commento quello va **sotto, in
+grigio e più piccolo**, così la formula resta corta e si legge. Note, capitoli e capitoli
+ripresi da altre schede si prendono la riga intera; due schemi stretti stanno affiancati.
+
+Il **numero scritto a mano** si riconosce dalla sottolineatura ocra — è il dato di partenza,
+quello su cui si possono mettere le mani; quello **calcolato** è inchiostro pieno. Un rapporto
+di verifica letto in percento resta inchiostro sotto l'80 %, diventa ocra fino al 100 e rosso
+oltre: il colore compare solo quando c'è qualcosa da dire.
 
 **Definizione o formula, lo capisce da sé.** Una riga in cui non c'è nessuna operazione — un
 numero e basta (`0,30`, `-3`, `1e3`, `50%`) — è la **definizione di una grandezza**, e si legge
@@ -426,21 +435,27 @@ un'operazione — un segno, una funzione, il richiamo di un'altra grandezza — 
 copiato e nell'HTML esportato, e lo decide `senzaOperazioni()` leggendo davvero l'espressione,
 non a occhio con una regex (`src/calc/calcolatrice.ts`).
 
-Una formula nuova si propone nel **primo posto libero** — in coda, o subito dopo il blocco da
-cui si è partiti — e nasce con il cursore sul **nome**: una riga si scrive nell'ordine in cui
-si legge, prima come si chiama il risultato e poi come lo si calcola, e il Tab porta dall'uno
-all'altro. Se il posto non va bene la si **porta più in
-basso** con le due frecce del blocco (o `Ctrl+↓` e `Ctrl+↑`): le caselle saltate restano lì,
-vuote, e si premono per farla risalire o ci si lascia cadere il passaggio successivo. Da una
-cella, **`Ctrl+Tab` infila una formula subito dopo**: si scrive un passaggio e si va al
-prossimo senza staccare le mani dalla tastiera.
+Una formula nuova entra **subito dopo la riga toccata per ultima** e nasce con il cursore sul
+**nome**: una riga si scrive nell'ordine in cui si legge, prima come si chiama il risultato e
+poi come lo si calcola, e il Tab porta dall'uno all'altro. Da una riga, **`Ctrl+Tab` infila una
+formula subito dopo**: si scrive un passaggio e si va al prossimo senza staccare le mani dalla
+tastiera. Nei campi del foglio **invio conferma e chiude**, **shift+invio** va a capo dentro il
+campo.
 
-Ogni blocco porta due comandi in più: la **(i)** apre la sua **nota** — il perché del
-passaggio, che a rileggere il foglio fra sei mesi è l'unica cosa che non si ricostruisce, e
-che finisce anche nel testo copiato e nell'HTML esportato — e la **matita** prende in mano una
-riga già scritta: una formula preimpostata, una grandezza o un import diventano una formula
-scrivibile lì, con lo stesso nome, la stessa espressione e la stessa unità. Si stacca dalla
-fonte — è il prezzo per poterla correggere — e da lì in avanti è testo che si edita.
+**Il pannello di riga.** Uno solo per tutto il foglio, non uno per blocco: compare sulla riga
+sotto il cursore (o con il focus dentro) e si posa a destra della riga, o si alza sopra il suo
+bordo destro quando a destra non c'è spazio. Porta **tre comandi** — la **presa** per spostare
+la riga trascinandola, la **ⓘ** che apre il **commento** della grandezza (il perché del
+passaggio, che a rileggere il foglio fra sei mesi è l'unica cosa che non si ricostruisce, e che
+finisce anche nel testo copiato e nell'HTML esportato) e la **×** che la toglie — più la
+**matita**, dove c'è una riga già scritta da riprendere in mano: una formula preimpostata, una
+grandezza o un import diventano una formula scrivibile lì, con lo stesso nome, la stessa
+espressione e la stessa unità. Si stacca dalla fonte — è il prezzo per poterla correggere — e
+da lì in avanti è testo che si edita.
+
+Le frecce di ordine e di larghezza non ci sono più: l'ordine si cambia trascinando (o con
+`Alt+↑` / `Alt+↓`) e la larghezza la decide il contenuto. Anche il «+» è sparito: a infilare
+una formula dopo la riga scelta ci pensano il pulsante *Formula* della barra e `Ctrl+Tab`.
 
 **Il pannello**, sei sezioni ad accordion **chiuse di serie** — quello che si guarda è il
 foglio, il pannello si apre quando serve prendere qualcosa da lì; tutto quello che sta dentro
@@ -475,26 +490,28 @@ prima di lei**, nell'ordine in cui la formula le nomina. Dove si va a prenderle,
 Una grandezza che c'è ma è **senza unità** non blocca niente e viene detta lo stesso: il numero
 girerebbe senza scala, e accorgersene dopo costa più che leggerlo adesso.
 
-**Celle editabili e celle da calcolare.** Una riga che porta un numero *scritto da qualcuno* —
-una grandezza tirata dal pannello, una definizione scritta a mano come `b = 0,30 m` — ha una
-velatura **ocra trasparente**; una riga che il foglio *calcola* resta sulla carta bianca. Lo
-stesso vale nel pannello, dove il campo del valore di ogni grandezza ha la stessa velatura. È
-la distinzione che a mano si fa cerchiando i dati di partenza: rileggendo un calcolo, sapere
-dove si può mettere le mani è la prima cosa che si cerca. Il valore che arriva da un'altra
-scheda non è ocra — quello si cambia dove è nato.
+**Numeri scritti e numeri calcolati.** Un numero *scritto da qualcuno* — una grandezza tirata
+dal pannello, una definizione scritta a mano come `b = 0,30 m` — è **ocra, sottolineato di
+puntini**; un numero che il foglio *calcola* è inchiostro pieno. Nel pannello il campo del
+valore di ogni grandezza porta la stessa velatura ocra. È la distinzione che a mano si fa
+cerchiando i dati di partenza: rileggendo un calcolo, sapere dove si può mettere le mani è la
+prima cosa che si cerca. Il valore che arriva da un'altra scheda non è ocra — quello si cambia
+dove è nato, e la riga lo dice con il segno `↩` della scheda di provenienza.
 
 **Collegamento live.** Un blocco nato da una grandezza, da una formula o da un import non salva
 un valore proprio: salva **da dove viene** e lo ricalcola. Si corregge `b` nel pannello e tutto
-quello che ne discende si aggiorna da sé, senza toccare il foglio (icona della catena sul
-blocco). Salvano un contenuto proprio solo la **nota** e lo **schema**.
+quello che ne discende si aggiorna da sé, senza toccare il foglio. Salvano un contenuto proprio
+solo la **nota** e lo **schema**.
 
 **Blocchi che si scrivono lì.**
 - *Formula*: nome, espressione e unità dentro il blocco. Vede le grandezze del pannello **e i
   blocchi che la precedono**, quindi si scrive `A = b·h` e poi `σ = M/W`, come a mano.
 - *Nota*: testo libero a larghezza piena.
-- *Screenshot*: uno schema disegnato a mano o preso da un altro programma — si trascina, si
-  incolla con Ctrl+V (anche direttamente sul foglio) o si sceglie da file. L'immagine viene
-  ridotta a 1400 px e tenuta dentro il progetto, quindi finisce anche nell'HTML esportato.
+- *Schema*: un disegno fatto a mano o preso da un altro programma — si trascina, si incolla
+  con Ctrl+V (anche direttamente sul foglio) o si sceglie da file. L'immagine viene ridotta a
+  1400 px e tenuta dentro il progetto, quindi finisce anche nell'HTML esportato. La misura si
+  tira dal bordo destro ed è in **percentuale del foglio**: due schemi stretti stanno
+  affiancati sulla stessa riga.
 
 **Il risultato si legge con una cifra dopo la virgola**: un'area di 0,0855 mq si scrive
 0,1 mq, perché le cifre in più non dicono niente di più di quello che il dato di partenza sa.
@@ -503,9 +520,9 @@ enormi e i piccolissimi, in notazione scientifica, e quelli che si azzererebbero
 le loro due cifre significative (`formattaRisultato()` in `src/calc/calcolatrice.ts`).
 
 **Il semaforo degli sfruttamenti.** Un risultato letto in percento — un rapporto di verifica —
-si colora da sé: **verde** sotto l'80 %, **giallo** fino al 100, **rosso** oltre. È una
-pastiglia piena con il numero in bianco, non un numero colorato: si vede da lontano e di
-sbieco, che è come si guarda un foglio di verifiche.
+si colora da sé: **inchiostro** sotto l'80 %, **ocra** fino al 100, **rosso** oltre, numero e
+unità insieme. Sotto l'80 % non c'è niente da dire, e sulla carta il colore che compare è già
+un avviso: le pastiglie piene erano un riquadro in mezzo a un documento.
 
 Sintassi delle espressioni: `+ − × ÷ ^`, parentesi, `%` come «per cento», virgola o punto
 decimale, argomenti separati da `;`, funzioni (`sqrt`, `min`, `max`, `round`, `ln`, `log`,
