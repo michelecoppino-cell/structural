@@ -1089,8 +1089,10 @@ export default function Quaderno() {
               blocco il <strong>numero si converte</strong> — 0,8 MPa diventano 8,16 kg/cmq. Il
               prodotto e il rapporto fra grandezze con nome ricavano l’unità da soli, e i valori
               girano in unità base (m, N), così mescolare cm, MPa e cm⁴ nella stessa formula non
-              sbaglia i conti. Attenzione: qui il <strong>kg è un kgf</strong> (1 kg = 9,80665 N),
-              come in kg/cmq e kg/mc.
+              sbaglia i conti. Un numero scritto a mano dentro una <strong>somma</strong> si legge
+              nell’unità dell’altro addendo — con qd in kN/mq, <code>qd-500</code> toglie 500
+              kN/mq — mentre nel prodotto resta un coefficiente (<code>1,5·q</code>). Attenzione:
+              qui il <strong>kg è un kgf</strong> (1 kg = 9,80665 N), come in kg/cmq e kg/mc.
             </p>
             <div className="calc-unita-aggiungi">
               <input

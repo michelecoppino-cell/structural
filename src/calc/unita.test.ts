@@ -186,6 +186,60 @@ describe('unità ricavata dall’operazione', () => {
   });
 });
 
+describe('un numero dentro una somma prende l’unità dell’altro addendo', () => {
+  const val = (src: string, unita: Record<string, string>, vars: Record<string, number>) => {
+    const dim: Record<string, ReturnType<typeof dimUnita>> = {};
+    for (const [k, v] of Object.entries(unita)) dim[k] = dimUnita(v);
+    const e = valutaConUnita(src, vars, dim, unita);
+    return e.ok ? e.valore : null;
+  };
+
+  it('la differenza legge il numero nell’unità della grandezza', () => {
+    // qd = 4,2 kN/mq: `qd-500` toglie 500 kN/mq, non 500 N/mq
+    expect(val('qd-500', { qd: 'kN/mq' }, { qd: 4200 })).toBeCloseTo(4200 - 500_000, 6);
+    expect(val('500+qd', { qd: 'kN/mq' }, { qd: 4200 })).toBeCloseTo(500_000 + 4200, 6);
+    // l'unità è quella con cui la grandezza si legge, non la sua forma
+    expect(val('σ-50', { σ: 'kg/cmq' }, { σ: 8e6 })).toBeCloseTo(8e6 - 50 * 98066.5, 3);
+  });
+
+  it('vale anche per un numero composto e per una somma in catena', () => {
+    expect(val('qd-2*250', { qd: 'kN/mq' }, { qd: 4200 })).toBeCloseTo(4200 - 500_000, 6);
+    expect(val('qd-500-200', { qd: 'kN/mq' }, { qd: 4200 })).toBeCloseTo(4200 - 700_000, 6);
+  });
+
+  it('senza unità scritta si usa quella che il foglio proporrebbe', () => {
+    // la forma è un carico: l'unità automatica è kN/mq
+    expect(val('qd-500', {}, { qd: 4200 })).toBe(4200 - 500);
+    const dim = { qd: dimUnita('kN/mq') };
+    const e = valutaConUnita('qd-500', { qd: 4200 }, dim);
+    expect(e.ok && e.valore).toBeCloseTo(4200 - 500_000, 6);
+  });
+
+  it('il prodotto, il rapporto e il per cento restano come sono', () => {
+    expect(val('1,5*q', { q: 'kN/m' }, { q: 10_000 })).toBe(15_000);
+    expect(val('q/2', { q: 'kN/m' }, { q: 10_000 })).toBe(5_000);
+    // 10% è un numero con la sua scala, non un numero nudo
+    expect(val('q-10%', { q: 'kN/m' }, { q: 10_000 })).toBeCloseTo(10_000 - 0.1, 9);
+    // fra numeri puri non c'è nessuna unità da prendere
+    expect(val('500-200', {}, {})).toBe(300);
+    // e una grandezza senza unità è un numero puro anche lei
+    expect(val('k-500', { k: '' }, { k: 1000 })).toBe(500);
+  });
+
+  it('nella sequenza salvata la regola vale fra le voci', () => {
+    const voce = (nome: string, espressione: string, um = ''): VoceCalcolo => ({
+      id: nome,
+      nome,
+      espressione,
+      nota: '',
+      um,
+    });
+    const r = ricalcola([voce('qd', '4,2', 'kN/mq'), voce('C', 'qd-0,5', 'kN/mq')]);
+    expect(r[1].valore).toBeCloseTo(3.7, 6);
+    expect(r[1].umEffettiva).toBe('kN/mq');
+  });
+});
+
 describe('unità nella sequenza salvata', () => {
   const voce = (nome: string, espressione: string, um = ''): VoceCalcolo => ({
     id: nome,

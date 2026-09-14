@@ -560,6 +560,10 @@ girano **sempre in unità base**.
   converte niente e il blocco resta sull'unità calcolata.
 - **Un dato scritto a mano è un'altra cosa**: se l'espressione è un numero, l'unità dice in che
   unità è scritto *quel* numero (30 in cm sono 0,30 m) invece di convertirlo.
+- **Un numero dentro una somma prende l'unità di quello che gli sta a fianco**: con qd in
+  kN/mq, `qd-500` toglie **500 kN/mq**, perché scrivendo a mano l'unità si ripete una volta
+  sola, in fondo alla riga. Vale solo per `+` e `-`; nel prodotto un numero nudo resta un
+  coefficiente (`1,5*q`) e il «per cento» la sua scala ce l'ha già.
 - **Il kg è un kgf** (1 kg = 9,80665 N): nel predimensionamento kg/mc è un peso di volume e
   kg/cmq una tensione, così 2500 kg/mc fanno 24,5 kN/mc come sui manuali. Per le masse questa
   scheda non serve.
