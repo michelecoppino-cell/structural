@@ -34,6 +34,7 @@ import {
   valutaConUnita,
   variabili,
   unitaVariabili,
+  umVariabili,
   type Preimpostata,
   type VoceCalcolata,
   type VoceCalcolo,
@@ -256,6 +257,7 @@ export function ricalcolaQuaderno(
 ): BloccoCalcolato[] {
   const vars = variabili(voci);
   const unita = unitaVariabili(voci);
+  const umVar = umVariabili(voci);
 
   return blocchi.map((blocco, i) => {
     const passo = String(i + 1).padStart(2, '0');
@@ -338,7 +340,7 @@ export function ricalcolaQuaderno(
       if (mancanti.length) {
         // niente errore: mancano dei dati, non è sbagliata
       } else {
-        const esito = valutaConUnita(espressione, vars, unita);
+        const esito = valutaConUnita(espressione, vars, unita, umVar, elenco);
         if (esito.ok) {
           valore = esito.valore;
           dim = esito.dim;
@@ -358,6 +360,7 @@ export function ricalcolaQuaderno(
     if (registrabile && letto) {
       vars[nome] = letto.valoreBase;
       unita[nome] = letto.dim ?? {};
+      umVar[nome] = letto.um;
     }
 
     /**

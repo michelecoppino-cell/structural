@@ -30,6 +30,17 @@
  * mm — e cambiare l'unità con cui si vuole leggere un risultato **converte il
  * numero** invece di cambiargli solo l'etichetta.
  *
+ * ### Un numero dentro una somma è scritto nell'unità di quello che gli sta a fianco
+ *
+ * `C = qd-500` con qd in kN/mq toglie **500 kN/mq**: un numero scritto a mano
+ * accanto a un `+` o a un `-` prende l'unità dell'altro addendo, come quando
+ * si scrive a mano e l'unità si ripete una volta sola, in fondo alla riga.
+ * Senza questa regola il numero nudo varrebbe unità base — 500 N/mq invece di
+ * 500 kN/mq — e la riga tornerebbe un risultato plausibile ma sbagliato di
+ * mille volte, senza dire niente. Vale solo per la somma e la differenza: nel
+ * prodotto e nel rapporto un numero nudo è un coefficiente (`1,5·q`), e il
+ * «per cento» un'unità ce l'ha già.
+ *
  * L'unità scritta a mano ha due ruoli, secondo che l'operazione un'unità
  * l'abbia già o no:
  *  - se l'espressione non porta unità (un numero, o grandezze senza unità) è
@@ -45,6 +56,7 @@ import {
   daBase,
   dimUnita,
   divDim,
+  fattoreUnita,
   leggiUnita,
   mulDim,
   powDim,
@@ -379,21 +391,91 @@ class Parser {
 
 /* ─────────────────────────── valore dell'albero ─────────────────────────── */
 
-function valoreDi(n: Nodo, vars: Record<string, number>): number {
+/**
+ * Quello che serve a capire in che unità è scritto un numero buttato dentro
+ * una somma: la forma delle grandezze richiamate, l'unità con cui ognuna si
+ * legge sul foglio e l'elenco delle unità proposte.
+ */
+export interface Lettura {
+  unita: Record<string, Dim>;
+  /** Unità con cui la grandezza si legge: quella che si vede a fianco al numero. */
+  um: Record<string, string>;
+  elenco: string[];
+}
+
+const SENZA_LETTURA: Lettura = { unita: {}, um: {}, elenco: UNITA_DEFAULT };
+
+/**
+ * Un pezzo di espressione fatto di soli numeri: nessun nome richiamato e
+ * nessun «per cento», che un'unità ce l'ha già. È il `500` di `qd-500` — un
+ * numero **scritto a mano**, e quindi scritto in un'unità di misura.
+ */
+function numeroScritto(n: Nodo): boolean {
+  switch (n.t) {
+    case 'num':
+      return true;
+    case 'var':
+    case 'pct':
+      return false;
+    case 'neg':
+      return numeroScritto(n.a);
+    case 'fn':
+      return n.args.every(numeroScritto);
+    case 'bin':
+      return numeroScritto(n.a) && numeroScritto(n.b);
+  }
+}
+
+/**
+ * Unità con cui si legge il valore di un pezzo di espressione: quella scritta
+ * sulla grandezza, se è una grandezza e l'unità le torna, altrimenti quella
+ * che il foglio proporrebbe da sé per quella forma e quel numero. Vuota
+ * quando il pezzo non porta unità.
+ */
+function unitaDiLettura(n: Nodo, valore: number, vars: Record<string, number>, ctx: Lettura): string {
+  const dim = dimDi(n, vars, ctx.unita);
+  if (!dim || adimensionale(dim)) return '';
+  if (n.t === 'var') {
+    const scritta = ctx.um[n.nome]?.trim();
+    if (scritta && ugualiDim(dimUnita(scritta), dim)) return scritta;
+  }
+  return scriviUnita(dim, ctx.elenco, valore);
+}
+
+/**
+ * La scala del numero scritto a mano dentro una somma: **l'unità è quella
+ * dell'altro addendo**. In `C = qd-500`, con qd in kN/mq, quel 500 è 500
+ * kN/mq — perché è così che si scrive un calcolo a mano, senza ripetere
+ * l'unità a ogni numero. Senza questa regola il numero nudo varrebbe unità
+ * base (N/mq) e la differenza sarebbe muta e sbagliata di mille volte.
+ */
+function scalaDelNumero(sorella: Nodo, valoreSorella: number, vars: Record<string, number>, ctx: Lettura): number {
+  const um = unitaDiLettura(sorella, valoreSorella, vars, ctx);
+  return um ? fattoreUnita(um) : 1;
+}
+
+function valoreDi(n: Nodo, vars: Record<string, number>, ctx: Lettura = SENZA_LETTURA): number {
   switch (n.t) {
     case 'num':
       return n.v;
     case 'var':
       return vars[n.nome];
     case 'neg':
-      return -valoreDi(n.a, vars);
+      return -valoreDi(n.a, vars, ctx);
     case 'pct':
-      return valoreDi(n.a, vars) / 100;
+      return valoreDi(n.a, vars, ctx) / 100;
     case 'fn':
-      return FUNZIONI[n.nome].f(...n.args.map((a) => valoreDi(a, vars)));
+      return FUNZIONI[n.nome].f(...n.args.map((a) => valoreDi(a, vars, ctx)));
     case 'bin': {
-      const a = valoreDi(n.a, vars);
-      const b = valoreDi(n.b, vars);
+      let a = valoreDi(n.a, vars, ctx);
+      let b = valoreDi(n.b, vars, ctx);
+      // somma e differenza: il numero scritto a mano prende l'unità dell'altro
+      if (n.op === '+' || n.op === '-') {
+        const na = numeroScritto(n.a);
+        const nb = numeroScritto(n.b);
+        if (na && !nb) a *= scalaDelNumero(n.b, b, vars, ctx);
+        else if (nb && !na) b *= scalaDelNumero(n.a, a, vars, ctx);
+      }
       switch (n.op) {
         case '+':
           return a + b;
@@ -511,17 +593,24 @@ export function valuta(espressione: string, vars: Record<string, number> = {}): 
  * Valuta l'espressione e, insieme, ne ricava l'unità di misura dalle unità
  * delle operazioni richiamate per nome: `b*h` in metri dà mq, `area*gCLS` con
  * gCLS in kN/mc dà kN/m.
+ *
+ * Le unità con cui le grandezze si leggono (`um`) servono all'altra metà del
+ * mestiere: dare la scala ai numeri scritti a mano dentro una somma, così
+ * `qd-500` con qd in kN/mq toglie 500 kN/mq e non 500 N/mq.
  */
 export function valutaConUnita(
   espressione: string,
   vars: Record<string, number> = {},
   unita: Record<string, Dim> = {},
+  /** Unità con cui ogni grandezza si legge: dà la scala ai numeri scritti in una somma. */
+  um: Record<string, string> = {},
+  elenco: string[] = UNITA_DEFAULT,
 ): EsitoUnita {
   const src = espressione.trim();
   if (!src) return { ok: false, errore: 'espressione vuota' };
   try {
     const albero = new Parser(tokenizza(src), vars).analizza();
-    const valore = valoreDi(albero, vars);
+    const valore = valoreDi(albero, vars, { unita, um, elenco });
     if (!Number.isFinite(valore)) return { ok: false, errore: 'risultato non finito (divisione per zero?)' };
     const dim = dimDi(albero, vars, unita);
     const rapporto = !!dim && adimensionale(dim) && conUnita(albero, unita);
@@ -957,11 +1046,12 @@ export interface VoceCalcolata extends VoceCalcolo {
 export function ricalcola(voci: VoceCalcolo[], elenco: string[] = UNITA_DEFAULT): VoceCalcolata[] {
   const vars: Record<string, number> = {};
   const unita: Record<string, Dim> = {};
+  const um: Record<string, string> = {};
   const usati = new Set<string>();
 
   return voci.map((v) => {
     const vuota = !v.espressione.trim();
-    const esito = vuota ? null : valutaConUnita(v.espressione, vars, unita);
+    const esito = vuota ? null : valutaConUnita(v.espressione, vars, unita, um, elenco);
     const nome = v.nome.trim();
     const nomeValido =
       !!nome && nomeAmmesso(nome) && !usati.has(nome) && !(nome in COSTANTI) && !(nome.toLowerCase() in FUNZIONI);
@@ -972,12 +1062,14 @@ export function ricalcola(voci: VoceCalcolo[], elenco: string[] = UNITA_DEFAULT)
     if (letto && nomeValido) {
       vars[nome] = letto.valoreBase;
       unita[nome] = letto.dim ?? {};
+      um[nome] = letto.um;
       usati.add(nome);
     }
     // `ans` è sempre l'ultimo risultato utile della sequenza
     if (letto) {
       vars.ans = letto.valoreBase;
       unita.ans = letto.dim ?? {};
+      um.ans = letto.um;
     }
 
     return {
@@ -1012,6 +1104,19 @@ export function unitaVariabili(voci: VoceCalcolata[]): Record<string, Dim> {
   }
   const ultima = [...voci].reverse().find((v) => Number.isFinite(v.valoreBase));
   if (ultima) out.ans = ultima.dim ?? dimUnita(ultima.umEffettiva);
+  return out;
+}
+
+/**
+ * Unità con cui le variabili disponibili a valle si leggono sul foglio
+ * (nome → «kN/mq»): è la scala che prendono i numeri scritti a mano in una
+ * somma con quella grandezza.
+ */
+export function umVariabili(voci: VoceCalcolata[]): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const v of voci) if (v.nomeValido && Number.isFinite(v.valoreBase)) out[v.nome.trim()] = v.umEffettiva;
+  const ultima = [...voci].reverse().find((v) => Number.isFinite(v.valoreBase));
+  if (ultima) out.ans = ultima.umEffettiva;
   return out;
 }
 

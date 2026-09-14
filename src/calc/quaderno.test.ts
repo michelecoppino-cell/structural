@@ -465,6 +465,39 @@ describe('una formula preimpostata si porta dietro le sue grandezze', () => {
   });
 });
 
+describe('un numero scritto in una formula del foglio', () => {
+  it('prende l’unità della grandezza da cui si toglie', () => {
+    // F = 30 kN su un interasse di 2 m, con il coefficiente: qd = 3,75 kN/mq
+    const voci = [voce('F', '30', 'kN'), voce('i', '2', 'm')];
+    const [, , qd, c] = ricalcolaQuaderno(
+      [
+        nuovoBlocco('valore', { fonte: 'v-F' }),
+        nuovoBlocco('valore', { fonte: 'v-i' }),
+        nuovoBlocco('formula', { nome: 'qd', espressione: 'F/i/i/1.5' }),
+        nuovoBlocco('formula', { nome: 'C', espressione: 'qd-0,5' }),
+      ],
+      sorgenti(voci),
+    );
+    expect(qd.um).toBe('kN/mq');
+    expect(qd.valore).toBeCloseTo(5, 6);
+    // 0,5 è 0,5 kN/mq come qd, non 0,5 N/mq
+    expect(c.um).toBe('kN/mq');
+    expect(c.valore).toBeCloseTo(4.5, 6);
+  });
+
+  it('un coefficiente moltiplicativo resta un numero puro', () => {
+    const [, m] = ricalcolaQuaderno(
+      [
+        nuovoBlocco('valore', { fonte: 'v-q' }),
+        nuovoBlocco('formula', { nome: 'qd', espressione: '1,5*q' }),
+      ],
+      sorgenti(TRAVE),
+    );
+    expect(m.valore).toBeCloseTo(18, 6);
+    expect(m.um).toBe('kN/m');
+  });
+});
+
 describe('celle editabili e celle da calcolare', () => {
   const q = (blocchi: BloccoQuaderno[], voci = TRAVE) => ricalcolaQuaderno(blocchi, sorgenti(voci));
 
