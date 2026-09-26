@@ -721,8 +721,11 @@ scheda in `src/tabs/Base.tsx`.
 
 #### Claude nella Base
 Il connettore della **Mente digitale** (repository `mente-digitale`) ha un secondo indirizzo,
-`/base/mcp`, con tre strumenti: `base_indice` (cercare e filtrare), `base_leggi` (una scheda
-intera) e `base_scrivi` (crearne una, aggiungere in fondo, cambiare lo stato o riscriverla).
+`/base/mcp`, con due strumenti: `base` (l'indice — cercare, filtrare, le schede da ripassare —
+oppure una scheda intera) e `base_scrivi` (crearne una da un modello, aggiungere in fondo o in
+fondo a una sezione, cambiare i campi dell'intestazione, o riscriverla con conferma, mettendo la
+versione di prima in `_archivio/`). Le cartelle che cominciano con `_`, tranne `_modelli/`,
+sono di servizio: l'app non le mostra.
 Legge e scrive la stessa cartella con lo stesso formato: una scheda scritta da Claude compare
 qui al prossimo aggiornamento, e viceversa. È un connettore a parte da quello della voce —
 lì l'elenco degli strumenti è corto apposta, e studiare si fa seduti. Come si aggiunge:

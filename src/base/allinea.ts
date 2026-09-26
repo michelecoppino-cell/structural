@@ -14,6 +14,13 @@ export interface InCopia {
 const eMarkdown = (p: string) => /\.md$/i.test(p);
 
 /**
+ * Le cartelle che cominciano con `_` sono di servizio — `_archivio/`, dove il
+ * connettore mette la versione di prima di una scheda riscritta, o una cartella
+ * di allegati — e non si scaricano. I modelli sì: servono a «Nuova scheda».
+ */
+export const diServizio = (p: string): boolean => p.startsWith('_') && p.split('/')[0] !== '_modelli';
+
+/**
  * Allinea la copia con la cartella: scarica i file nuovi o cambiati, butta
  * quelli che non ci sono più. È puro rispetto alla copia che riceve, e per
  * questo si prova senza rete (vedi `base.test.ts`).
@@ -23,7 +30,7 @@ export async function allinea(
   elenca: () => Promise<{ percorso: string; etag: string; modificato: string; scarico: string }[]>,
   scarica: (percorso: string, scarico: string) => Promise<string>,
 ): Promise<{ voci: InCopia[]; scaricate: number }> {
-  const remoti = (await elenca()).filter((f) => eMarkdown(f.percorso));
+  const remoti = (await elenca()).filter((f) => eMarkdown(f.percorso) && !diServizio(f.percorso));
   const perPercorso = new Map(copia.map((v) => [v.percorso, v]));
   let scaricate = 0;
   const voci: InCopia[] = [];

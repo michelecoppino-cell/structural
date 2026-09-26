@@ -290,7 +290,7 @@ describe('allineamento con OneDrive', () => {
     { percorso: 'via.md', etag: '1', modificata: '', testo: 'sparita' },
   ];
 
-  it('riscarica solo quello che è cambiato e butta quello che non c’è più', async () => {
+  it('riscarica solo quello che è cambiato, butta quello che non c’è più, salta l’archivio', async () => {
     const scaricati: string[] = [];
     const { voci, scaricate } = await allinea(
       copia,
@@ -298,12 +298,14 @@ describe('allineamento con OneDrive', () => {
         { percorso: 'a.md', etag: '1', modificato: '', scarico: '' },
         { percorso: 'b.md', etag: '7', modificato: 'ieri', scarico: '' },
         { percorso: 'foto.png', etag: '1', modificato: '', scarico: '' },
+        { percorso: '_archivio/a--20260926-1000.md', etag: '1', modificato: '', scarico: '' },
+        { percorso: '_modelli/sintesi.md', etag: '1', modificato: '', scarico: '' },
       ],
       async (p) => (scaricati.push(p), `testo di ${p}`),
     );
-    expect(scaricati).toEqual(['b.md']);
-    expect(scaricate).toBe(1);
-    expect(voci.map((v) => v.percorso)).toEqual(['a.md', 'b.md']);
+    expect(scaricati).toEqual(['b.md', '_modelli/sintesi.md']);
+    expect(scaricate).toBe(2);
+    expect(voci.map((v) => v.percorso)).toEqual(['a.md', 'b.md', '_modelli/sintesi.md']);
     expect(voci[0].testo).toBe('A');
   });
 });
