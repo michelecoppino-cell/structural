@@ -268,8 +268,12 @@ export async function scriviTesto(
   { etag, nuovo }: { etag?: string; nuovo?: boolean } = {},
 ): Promise<{ etag: string; modificato: string }> {
   await assicuraCartelle(rel);
-  const condizione: Record<string, string> = etag ? { 'If-Match': etag } : nuovo ? { 'If-None-Match': '*' } : {};
-  const r = await chiama(`${percorsoGraph(rel)}:/content`, {
+  // «solo se non c'è» si dice con conflictBehavior=fail, che risponde 409: è la
+  // forma documentata per un upload, e non dipende da come Graph legge un
+  // If-None-Match
+  const condizione: Record<string, string> = etag ? { 'If-Match': etag } : {};
+  const coda = nuovo ? '?@microsoft.graph.conflictBehavior=fail' : '';
+  const r = await chiama(`${percorsoGraph(rel)}:/content${coda}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'text/markdown; charset=utf-8', ...condizione },
     body: testo,
