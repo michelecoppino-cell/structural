@@ -6,7 +6,9 @@ testo pronti per la relazione di calcolo — e, accanto, la **Base tecnica**: le
 studio e di lavoro, in Markdown su OneDrive, che crescono scrivendo file e non codice.
 
 App single-page, nessun backend: lo stato vive nel browser (`localStorage`) e si sposta tra
-dispositivi con Esporta / Importa JSON. È **installabile** su cellulare e su PC, con icona
+dispositivi con Esporta / Importa JSON.
+All'apertura si entra con l'account Microsoft (come nella mente-digitale): senza accesso l'app
+non si apre, e la stessa chiave serve a libreria personale e Base tecnica su OneDrive. È **installabile** su cellulare e su PC, con icona
 propria, e funziona anche senza rete.
 
 ---
