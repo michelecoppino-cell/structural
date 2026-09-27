@@ -1,10 +1,10 @@
 /**
- * Accesso Microsoft, il minimo indispensabile per tenere un file su OneDrive.
+ * Accesso Microsoft: la porta d'ingresso dell'app e la chiave di OneDrive.
  *
- * Chi apre il sito non è obbligato a niente: l'app resta quella di sempre,
- * tutta in locale. L'accesso serve solo a chi vuole la libreria sincronizzata,
- * e ognuno entra con il **proprio** account — il sito è pubblico, i dati no:
- * senza il tuo account Microsoft il tuo OneDrive non è raggiungibile da qui.
+ * Come nella mente-digitale, senza un account collegato l'app non si apre: il
+ * primo schermo è «Accedi con Microsoft» (vedi `Cancello`). Ognuno entra con il
+ * **proprio** account — il sito è pubblico, i dati no: senza il tuo account
+ * Microsoft il tuo OneDrive non è raggiungibile da qui.
  *
  * Il token non passa da nessun server: il browser parla direttamente con
  * Microsoft e con Graph.
@@ -69,6 +69,18 @@ export async function logout(): Promise<void> {
   const app = await initAuth();
   const acc = account();
   if (acc) await app.clearCache({ account: acc });
+  for (const fn of alCambioAccount) fn();
+}
+
+const alCambioAccount = new Set<() => void>();
+
+/**
+ * Avvisa quando l'account se ne va da questo dispositivo: il cancello
+ * d'ingresso si richiude subito, senza aspettare di ricaricare la pagina.
+ */
+export function suCambioAccount(fn: () => void): () => void {
+  alCambioAccount.add(fn);
+  return () => alCambioAccount.delete(fn);
 }
 
 /**
