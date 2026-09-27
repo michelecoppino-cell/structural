@@ -1,7 +1,7 @@
 {
   "name": "Predimensionamento strutturale — NTC2018",
   "short_name": "Strutturale",
-  "description": "Predimensionamento, verifiche NTC2018, quaderno di calcolo e indice della normativa — strumento personale.",
+  "description": "Predimensionamento, verifiche NTC2018, quaderno di calcolo, indice della normativa e base tecnica — strumento personale.",
   "id": "/",
   "start_url": "/",
   "scope": "/",
@@ -20,6 +20,7 @@
   ],
   "shortcuts": [
     { "name": "Quaderno", "short_name": "Quaderno", "url": "/?scheda=quaderno" },
-    { "name": "Libreria", "short_name": "Libreria", "url": "/?scheda=normativa" }
+    { "name": "Libreria", "short_name": "Libreria", "url": "/?scheda=normativa" },
+    { "name": "Base tecnica", "short_name": "Base", "url": "/?scheda=base" }
   ]
 }

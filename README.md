@@ -2,7 +2,8 @@
 
 Web app ad uso personale (desktop e mobile) per il **predimensionamento strutturale** e le
 verifiche di base secondo **NTC2018 (DM 17/01/2018)**, con esportazione in JSON e blocchi di
-testo pronti per la relazione di calcolo.
+testo pronti per la relazione di calcolo — e, accanto, la **Base tecnica**: le schede di
+studio e di lavoro, in Markdown su OneDrive, che crescono scrivendo file e non codice.
 
 App single-page, nessun backend: lo stato vive nel browser (`localStorage`) e si sposta tra
 dispositivi con Esporta / Importa JSON. È **installabile** su cellulare e su PC, con icona
@@ -656,6 +657,80 @@ Le tabelle stanno in `src/data/` — `armature.ts`, `bulloni.ts`, `materiali.ts`
 `profili-acciaio.ts` — e sono le stesse che alimentano le verifiche e le tendine del
 Quaderno: un valore si corregge in un posto solo.
 
+### 7. Base tecnica
+La **base di conoscenza**: schede di studio, riassunti, procedure, lezioni apprese da
+commessa, schede di disciplina per il coordinamento — tutto quello che non è calcolo di
+questa trave ma è quello che si sa. Sta nel gruppo **Conoscenza** della barra, insieme alla
+Libreria.
+
+Il principio è uno: **un argomento nuovo è un file nuovo, non codice nuovo**. Le schede sono
+file Markdown nella cartella `strutturale/base/` del OneDrive — la stessa dell'app — e si
+scrivono da qui, da qualunque editor (OneDrive web, Obsidian aperto su quella cartella, VS
+Code) o **da Claude**, con il connettore «Base tecnica» della Mente digitale (vedi sotto).
+
+```markdown
+---
+titolo: Portanza dei pali trivellati
+area: geotecnica          # lo scaffale: nasce scrivendolo
+tipo: sintesi             # sintesi, riassunto, procedura, lezione, disciplina… o uno tuo
+stato: da-studiare        # da-studiare → in-corso → consolidata
+tag: [fondazioni, pali]
+norme: [NTC 2018 §6.4.3]
+ripasso: 2026-09-26
+---
+# Portanza dei pali trivellati
+…
+```
+
+- **Aree, tipi, stati e tag non sono scritti nel codice**: le tendine dei filtri contano
+  quelli che trovano nelle schede, come le categorie della Libreria norme. Un campo che
+  l'app non conosce (`fonte`, `commessa`…) resta nel file e si vede in testa alla scheda.
+- **Ricerca** su titolo, etichette e testo, con l'estratto intorno alla parola trovata; il
+  titolo pesa di più. Filtri per stato (a bottoni, con il conteggio), area, tipo e tag.
+- **`[[collegamenti]]`**: a un'altra scheda, per titolo o nome del file; oppure a una norma
+  della **Libreria** — `[[NTC 2018 §4.1.2.3]]` apre il documento la cui sigla apre il
+  testo (spazi e punti non contano) e, se nell'indice scritto a mano c'è quel capitolo,
+  dice a che pagina sta. In fondo a ogni scheda, **chi ne parla**.
+- **Blocchi ` ```calcolo `**: righe di Quaderno dentro un appunto — `nome = espressione
+  [unità]  # nota`, una riga che comincia con `#` è un titoletto — calcolate con lo stesso
+  motore, unità comprese. «Porta nel Quaderno» le mette in fondo al foglio come formule,
+  sotto una linea col titolo della scheda.
+- **Caselle** `- [ ]` che si spuntano toccandole, **riquadri** `> [!attenzione]`,
+  `> [!sintesi]`, `> [!nota]`, tabelle, elenchi annidati. Il Markdown lo legge
+  `src/base/markdown.ts` e lo disegna React: nessun testo di una scheda diventa HTML.
+- **Stato di studio e ripasso** si cambiano dalla scheda aperta con un tocco: è una
+  scrittura sul file, che cambia solo quella riga dell'intestazione.
+- **Modelli**: le schede-tipo stanno in `strutturale/base/_modelli/`, e «Nuova scheda»
+  propone quelle che trova lì. La prima volta, «Prepara la Base» ci scrive sintesi,
+  riassunto, procedura, lezione e disciplina, più una scheda che spiega come funziona;
+  da lì sono file tuoi. I segnaposto `{{titolo}}` e `{{data}}` si riempiono da soli.
+- **Modifica**: testo a sinistra e anteprima a destra (sotto i 1200 px si passa dall'uno
+  all'altra), `Ctrl+S` salva.
+
+**OneDrive è la verità, non il locale.** Le schede le scrivono anche altri (un editor sul
+computer, Claude), quindi qui non c'è la fusione a tre vie della libreria: ogni file porta
+il suo **ETag**, si riscarica solo quello che è cambiato, e si scrive sopra solo la versione
+letta — se è cambiata altrove il salvataggio si ferma, lo dice e lascia il testo dov'è. Una
+copia resta in `localStorage` per leggere senza rete; senza OneDrive collegato la Base si
+legge ma non si scrive. Da qui **non si cancella** niente: si cancella da OneDrive, dove resta
+anche la cronologia delle versioni.
+
+Il codice sta in `src/base/` — `schede.ts` (intestazione, ricerca, collegamenti, caselle),
+`markdown.ts`, `calcolo.ts`, `allinea.ts` e `archivio.ts` (OneDrive), `modelli.ts` — e la
+scheda in `src/tabs/Base.tsx`.
+
+#### Claude nella Base
+Il connettore della **Mente digitale** (repository `mente-digitale`) ha un secondo indirizzo,
+`/base/mcp`, con due strumenti: `base` (l'indice — cercare, filtrare, le schede da ripassare —
+oppure una scheda intera) e `base_scrivi` (crearne una da un modello, aggiungere in fondo o in
+fondo a una sezione, cambiare i campi dell'intestazione, o riscriverla con conferma, mettendo la
+versione di prima in `_archivio/`). Le cartelle che cominciano con `_`, tranne `_modelli/`,
+sono di servizio: l'app non le mostra.
+Legge e scrive la stessa cartella con lo stesso formato: una scheda scritta da Claude compare
+qui al prossimo aggiornamento, e viceversa. È un connettore a parte da quello della voce —
+lì l'elenco degli strumenti è corto apposta, e studiare si fa seduti. Come si aggiunge:
+`docs/base-tecnica.md` nel repository della Mente digitale.
+
 ### Comune a tutte le schede
 - **(i)**: apre in un colpo tutti i pannelli di dettaglio della scheda — formule con i numeri
   sostituiti, coefficienti e riferimenti; nel Quaderno apre le **spiegazioni** su come si
@@ -859,10 +934,18 @@ src/
     parametri-sismici.ts  FILE GENERATO: ag/F0/TC* per comune e per TR
   components/      pattern di UI riusabili e diagrammi SVG
   tabs/            una scheda per file
+  base/            la Base tecnica: schede Markdown su OneDrive
+    schede.ts      intestazione, ricerca e filtri, collegamenti, caselle, modelli
+    markdown.ts    il Markdown delle schede in blocchi (niente HTML)
+    Markdown.tsx   il disegno dei blocchi, compreso il blocco `calcolo`
+    calcolo.ts     righe di Quaderno dentro una scheda
+    allinea.ts     copia locale e cartella remota: cosa riscaricare, per ETag
+    archivio.ts    la cartella su OneDrive, letta e scritta dalla scheda
+    modelli.ts     i modelli di partenza, scritti una volta sola
   cloud/           libreria personale e sincronizzazione OneDrive (facoltativa)
     libreria.ts    forma del file e fusione a tre vie fra dispositivo e OneDrive
     auth.ts        accesso Microsoft (MSAL, authorization code + PKCE)
-    onedrive.ts    il pezzetto di Graph che serve: leggi/scrivi un JSON
+    onedrive.ts    il pezzetto di Graph che serve: un JSON della libreria, i file di testo della Base
     useSincronia.ts  quando si sincronizza, e cosa succede quando fallisce
   state/           stato dell'app (useReducer + context, persistenza locale)
   styles/          token del design system e fogli di stile

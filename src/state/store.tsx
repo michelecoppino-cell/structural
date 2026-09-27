@@ -64,7 +64,7 @@ import { VOCI_COSTO_DEFAULT } from '../data/prezzario';
 import { leggiNormative, type LinkUtente } from '../data/normative';
 import { LIBRERIA_VERSION, leggiLibreria, type Libreria } from '../cloud/libreria';
 
-export type TabId = 'azioni' | 'sollecitazioni' | 'verifiche' | 'costi' | 'quaderno' | 'normativa';
+export type TabId = 'azioni' | 'sollecitazioni' | 'verifiche' | 'costi' | 'quaderno' | 'normativa' | 'base';
 /** Capitoli di altre schede che si possono tirare dentro il quaderno. */
 export type CapitoloId = 'azioni' | 'sollecitazioni' | 'verifiche' | 'calcolatrice' | 'costi';
 export type MaterialeId = 'cls' | 'acciaio' | 'legno' | 'muratura';
@@ -245,6 +245,7 @@ export const STATO_INIZIALE: AppState = {
       costi: false,
       quaderno: false,
       normativa: false,
+      base: false,
     },
     verifica: 'taglio-non-armato',
   },
@@ -546,7 +547,7 @@ export function svuotaMemoria(): void {
   }
 }
 
-const TAB_VALIDE: TabId[] = ['azioni', 'sollecitazioni', 'verifiche', 'costi', 'quaderno', 'normativa'];
+const TAB_VALIDE: TabId[] = ['azioni', 'sollecitazioni', 'verifiche', 'costi', 'quaderno', 'normativa', 'base'];
 
 /**
  * Schede di ieri: la Calcolatrice e l'Esporta sono diventate il Quaderno, e

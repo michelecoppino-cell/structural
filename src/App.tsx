@@ -14,6 +14,7 @@ import {
   NotebookIcon,
   Trash,
   ArrowsClockwise,
+  Brain,
 } from '@phosphor-icons/react';
 import { useStore, type TabId } from './state/store';
 import { migra, svuotaMemoria } from './state/store';
@@ -27,6 +28,7 @@ import Verifiche from './tabs/Verifiche';
 import Costi from './tabs/Costi';
 import Quaderno from './tabs/Quaderno';
 import Libreria from './tabs/Libreria';
+import Base from './tabs/Base';
 
 const TABS: { id: TabId; label: string; icon: React.ReactNode; sub: string }[] = [
   { id: 'azioni', label: 'Azioni', icon: <CloudSun size={17} />, sub: '5 gruppi · NTC2018 cap. 3' },
@@ -55,7 +57,16 @@ const TABS: { id: TabId; label: string; icon: React.ReactNode; sub: string }[] =
     icon: <Books size={17} />,
     sub: 'Norme: NTC2018 e Circolare 2019 · Utili: armature, profili, bulloni',
   },
+  {
+    id: 'base',
+    label: 'Base',
+    icon: <Brain size={17} />,
+    sub: 'Base tecnica: schede di studio, procedure e lezioni apprese, in Markdown su OneDrive',
+  },
 ];
+
+/** Schede senza «Copia» né (i): non hanno un blocco di relazione né formule da aprire. */
+const SENZA_RELAZIONE: TabId[] = ['normativa', 'base'];
 
 export default function App() {
   const { state, dispatch } = useStore();
@@ -213,7 +224,7 @@ export default function App() {
 
           {/* comandi della scheda: stanno quassù per non rubare altezza al
               contenuto, che su cellulare è tutto quello che c'è */}
-          {state.tab !== 'normativa' && (
+          {!SENZA_RELAZIONE.includes(state.tab) && (
             <button
               type="button"
               className="btn btn-secondary btn-icon"
@@ -229,7 +240,7 @@ export default function App() {
               <Info size={15} weight={state.ui.allDetails[state.tab] ? 'fill' : 'regular'} />
             </button>
           )}
-          {state.tab !== 'normativa' && (
+          {!SENZA_RELAZIONE.includes(state.tab) && (
             <button
               type="button"
               className="btn btn-primary btn-copia"
@@ -246,7 +257,13 @@ export default function App() {
       <div className="app-body">
         <nav className="side-nav" aria-label="Sezioni del progetto">
           <div className="nav-group-label">Progetto</div>
-          {TABS.map((t) => (
+          {TABS.map((t) => [
+            // la Libreria e la Base non sono della commessa: sono quello che si sa
+            t.id === 'normativa' && (
+              <div key="gruppo-conoscenza" className="nav-group-label nav-group-label-2">
+                Conoscenza
+              </div>
+            ),
             <button
               key={t.id}
               type="button"
@@ -262,8 +279,8 @@ export default function App() {
                   {ko.length === 0 ? '✓' : ko.length}
                 </span>
               )}
-            </button>
-          ))}
+            </button>,
+          ])}
           <div className="nav-foot" title={ko.map((e) => e.label).join(', ')}>
             {ko.length === 0 ? (
               <>
@@ -297,6 +314,7 @@ export default function App() {
             {state.tab === 'costi' && <Costi />}
             {state.tab === 'quaderno' && <Quaderno />}
             {state.tab === 'normativa' && <Libreria sincronia={sincronia} />}
+            {state.tab === 'base' && <Base sincronia={sincronia} />}
           </SlotProvider>
         </main>
       </div>

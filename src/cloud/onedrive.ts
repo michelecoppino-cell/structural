@@ -168,3 +168,118 @@ export async function scriviJson(file: string, dati: unknown): Promise<void> {
   });
   if (!r.ok) throw await erroreDa(r);
 }
+
+/* ───────────────────────── file di testo della Base ───────────────────────── */
+//
+// La Base tecnica non è un JSON dell'app: è una cartella di file Markdown che
+// si aprono anche con un altro editor (OneDrive web, Obsidian, VS Code) e che
+// ci scrive anche Claude, dal connettore. Per questo le regole qui sono
+// diverse da quelle della libreria: niente fusione a tre vie — un testo non si
+// fonde — ma l'**ETag**: si scrive sopra solo la versione che si è letta, e se
+// qualcun altro l'ha cambiata nel frattempo la scrittura si ferma e lo dice.
+
+/** Un file di una cartella, con quello che serve a sapere se è cambiato. */
+export interface FileRemoto {
+  /** Percorso relativo alla cartella chiesta, con le sottocartelle (`_modelli/sintesi.md`). */
+  percorso: string;
+  etag: string;
+  modificato: string;
+  /** Indirizzo di scarico già autorizzato, se Graph l'ha dato. */
+  scarico: string;
+}
+
+/** La modifica è stata fatta altrove dopo che l'avevamo letta. */
+export class ModificatoAltrove extends Error {
+  constructor(percorso: string) {
+    super(`${percorso} è stato modificato altrove dopo l'ultima lettura: ricarica la Base prima di salvare.`);
+    this.name = 'ModificatoAltrove';
+  }
+}
+
+/** Il percorso Graph di un file o di una cartella dentro quella dell'app. */
+const percorsoGraph = (rel: string) =>
+  `/me/drive/root:/${[CARTELLA, ...rel.split('/').filter(Boolean)].map(encodeURIComponent).join('/')}`;
+
+/**
+ * I file di una cartella dentro quella dell'app, sottocartelle comprese fino a
+ * `profondita` livelli. Una cartella che non esiste è una cartella vuota, non
+ * un errore: la Base, la prima volta, non c'è ancora.
+ */
+export async function elencaFile(cartella: string, profondita = 3): Promise<FileRemoto[]> {
+  const out: FileRemoto[] = [];
+  const visita = async (rel: string, livello: number) => {
+    let url: string | null = `${percorsoGraph(rel)}:/children?$top=200`;
+    while (url) {
+      const r = await chiama(url.replace('https://graph.microsoft.com/v1.0', ''));
+      if (r.status === 404) return;
+      if (!r.ok) throw await erroreDa(r);
+      const d = (await r.json()) as { value?: Record<string, unknown>[]; '@odata.nextLink'?: string };
+      for (const v of d.value ?? []) {
+        const nome = String(v.name ?? '');
+        const figlio = rel ? `${rel}/${nome}` : nome;
+        if (v.folder) {
+          if (livello < profondita) await visita(figlio, livello + 1);
+        } else if (v.file) {
+          out.push({
+            percorso: figlio.slice(cartella.length + 1),
+            etag: String(v.eTag ?? ''),
+            modificato: String(v.lastModifiedDateTime ?? ''),
+            scarico: String(v['@microsoft.graph.downloadUrl'] ?? ''),
+          });
+        }
+      }
+      url = d['@odata.nextLink'] ?? null;
+    }
+  };
+  await visita(cartella, 1);
+  return out;
+}
+
+/** Il contenuto di un file di testo; `scarico` evita una chiamata se c'è già. */
+export async function leggiTesto(rel: string, scarico = ''): Promise<string> {
+  const r = scarico ? await fetchEsterno(scarico) : await chiama(`${percorsoGraph(rel)}:/content`);
+  if (!r.ok) throw await erroreDa(r);
+  return r.text();
+}
+
+/** Crea le cartelle di un percorso, una per una: il 409 «esiste già» è la norma. */
+async function assicuraCartelle(rel: string): Promise<void> {
+  await creaCartella();
+  const pezzi = rel.split('/').filter(Boolean).slice(0, -1);
+  for (let k = 0; k < pezzi.length; k++) {
+    const genitore = pezzi.slice(0, k).join('/');
+    const r = await chiama(`${percorsoGraph(genitore)}:/children`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: pezzi[k], folder: {}, '@microsoft.graph.conflictBehavior': 'fail' }),
+    });
+    if (!r.ok && r.status !== 409) throw await erroreDa(r);
+  }
+}
+
+/**
+ * Scrive un file di testo. Con `etag` scrive solo sopra quella versione; con
+ * `nuovo` solo se il file non c'è ancora — due modi di non cancellare il
+ * lavoro fatto altrove. Restituisce il nuovo ETag.
+ */
+export async function scriviTesto(
+  rel: string,
+  testo: string,
+  { etag, nuovo }: { etag?: string; nuovo?: boolean } = {},
+): Promise<{ etag: string; modificato: string }> {
+  await assicuraCartelle(rel);
+  // «solo se non c'è» si dice con conflictBehavior=fail, che risponde 409: è la
+  // forma documentata per un upload, e non dipende da come Graph legge un
+  // If-None-Match
+  const condizione: Record<string, string> = etag ? { 'If-Match': etag } : {};
+  const coda = nuovo ? '?@microsoft.graph.conflictBehavior=fail' : '';
+  const r = await chiama(`${percorsoGraph(rel)}:/content${coda}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'text/markdown; charset=utf-8', ...condizione },
+    body: testo,
+  });
+  if (r.status === 412 || (nuovo && r.status === 409)) throw new ModificatoAltrove(rel);
+  if (!r.ok) throw await erroreDa(r);
+  const info = (await r.json()) as Record<string, unknown>;
+  return { etag: String(info.eTag ?? ''), modificato: String(info.lastModifiedDateTime ?? '') };
+}
