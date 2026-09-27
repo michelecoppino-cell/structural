@@ -22,6 +22,7 @@ export type Inline =
   | { t: 'barrato'; c: Inline[] }
   | { t: 'link'; url: string; c: Inline[] }
   | { t: 'wiki'; bersaglio: string; etichetta: string }
+  | { t: 'immagine'; src: string; alt: string }
   | { t: 'acapo' };
 
 export interface VoceElenco {
@@ -36,6 +37,8 @@ export interface VoceElenco {
 export type Blocco =
   | { t: 'titolo'; livello: number; c: Inline[] }
   | { t: 'paragrafo'; c: Inline[] }
+  /** Un'immagine da sola sulla sua riga: si disegna larga, con la didascalia sotto. */
+  | { t: 'figura'; src: string; alt: string }
   | { t: 'elenco'; ordinato: boolean; inizio: number; voci: VoceElenco[] }
   | { t: 'codice'; lingua: string; testo: string }
   | { t: 'citazione'; figli: Blocco[] }
@@ -76,6 +79,32 @@ export function inline(s: string): Inline[] {
         out.push({ t: 'codice', v: s.slice(i + 1, fine) });
         i = fine + 1;
         continue;
+      }
+    }
+
+    // un'immagine: `![didascalia](percorso)`, o come la scrive Obsidian `![[file.png]]`
+    if (s.startsWith('![[', i)) {
+      const fine = s.indexOf(']]', i + 3);
+      const dentro = fine > i ? s.slice(i + 3, fine) : '';
+      const [file, alt] = dentro.split('|');
+      if (fine > i && RE_FILE_IMMAGINE.test(file.trim())) {
+        svuota();
+        out.push({ t: 'immagine', src: percorsoImmagine(file.trim()), alt: (alt ?? '').trim() });
+        i = fine + 2;
+        continue;
+      }
+    }
+    if (c === '!' && s[i + 1] === '[') {
+      const chiusa = cercaChiusura(s, i + 1, '[', ']');
+      if (chiusa > 0 && s[chiusa + 1] === '(') {
+        const fineUrl = s.indexOf(')', chiusa + 2);
+        if (fineUrl > 0) {
+          svuota();
+          const src = s.slice(chiusa + 2, fineUrl).trim().replace(/^<|>$/g, '');
+          out.push({ t: 'immagine', src: percorsoImmagine(src), alt: s.slice(i + 2, chiusa) });
+          i = fineUrl + 1;
+          continue;
+        }
       }
     }
 
@@ -161,6 +190,26 @@ export function inline(s: string): Inline[] {
   }
   svuota();
   return out;
+}
+
+const RE_FILE_IMMAGINE = /\.(png|jpe?g|gif|webp|svg|bmp)$/i;
+
+/**
+ * Dove sta un'immagine, rispetto alla cartella della Base. Un nome di file
+ * nudo (`grafico.png`, come lo scrive Obsidian) sta negli allegati; un
+ * indirizzo web resta com'è; `./` in testa non conta.
+ */
+export function percorsoImmagine(src: string): string {
+  const s = src.trim();
+  if (/^https?:\/\//i.test(s)) return s;
+  let decodificato = s;
+  try {
+    decodificato = decodeURI(s); // `grafico%20taglio.png`, come lo scrivono gli editor
+  } catch {
+    // un % che non è una codifica: il nome resta com'è
+  }
+  const pulito = decodificato.replace(/^\.\//, '').replace(/^\/+/, '');
+  return pulito.includes('/') ? pulito : `_allegati/${pulito}`;
 }
 
 /** La parentesi che chiude quella in `da`, tenendo conto di quelle annidate. */
@@ -297,7 +346,10 @@ function leggiBlocchi(righe: string[], conta: Contatore): Blocco[] {
       para.push(righe[i++]);
     }
     if (!para.length) para.push(righe[i++]); // una riga che nessuno ha voluto: resta testo
-    out.push({ t: 'paragrafo', c: inlineRighe(para) });
+    const c = inlineRighe(para);
+    const sola = c.filter((x) => !(x.t === 'testo' && !x.v.trim()));
+    if (sola.length === 1 && sola[0].t === 'immagine') out.push({ t: 'figura', src: sola[0].src, alt: sola[0].alt });
+    else out.push({ t: 'paragrafo', c });
   }
   return out;
 }
@@ -406,6 +458,8 @@ export function testoPiano(c: Inline[]): string {
           return x.v;
         case 'wiki':
           return x.etichetta;
+        case 'immagine':
+          return x.alt;
         case 'acapo':
           return ' ';
         default:

@@ -707,7 +707,21 @@ ripasso: 2026-09-26
   riassunto, procedura, lezione e disciplina, più una scheda che spiega come funziona;
   da lì sono file tuoi. I segnaposto `{{titolo}}` e `{{data}}` si riempiono da soli.
 - **Modifica**: testo a sinistra e anteprima a destra (sotto i 1200 px si passa dall'uno
-  all'altra), `Ctrl+S` salva.
+  all'altra), `Ctrl+S` salva. Sopra il testo una **barra di pulsanti** scrive i segni al
+  posto di chi scrive: l'**intestazione** come modulo (area e tipo con i valori già usati,
+  stato a tendina, tag, norme, data di ripasso), titoli, grassetto e corsivo (`Ctrl+B`,
+  `Ctrl+I`), elenchi, caselle, **collegamenti** a una scheda o a una norma della Libreria
+  scelti da un elenco con ricerca (la selezione diventa l'etichetta), blocco di calcolo,
+  tabella, riquadri, linea e immagine. Le trasformazioni stanno in `src/base/editor.ts`,
+  pure e provate: un secondo tocco su grassetto o elenco toglie quello che il primo ha messo.
+- **Immagini**: grafici e screenshot si **incollano** (`Ctrl+V`), si trascinano sul testo o si
+  scelgono col pulsante. Si riducono a 1800 px di lato e si salvano in WebP (se pesa meno
+  dell'originale) in `strutturale/base/_allegati/`, con il nome della scheda e l'ora; nel
+  testo resta `![didascalia](_allegati/…)`. Si legge anche la forma di Obsidian,
+  `![[grafico.png]]`. Si mostrano scaricandole con l'accesso a OneDrive, e una copia resta
+  nella cache del browser per rivederle senza rete. Un'immagine con un indirizzo web resta un
+  link: la CSP non lascia caricare niente da host sconosciuti. Una figura da sola sulla sua
+  riga ha fondo bianco e didascalia sotto.
 
 **OneDrive è la verità, non il locale.** Le schede le scrivono anche altri (un editor sul
 computer, Claude), quindi qui non c'è la fusione a tre vie della libreria: ogni file porta
@@ -939,7 +953,10 @@ src/
   base/            la Base tecnica: schede Markdown su OneDrive
     schede.ts      intestazione, ricerca e filtri, collegamenti, caselle, modelli
     markdown.ts    il Markdown delle schede in blocchi (niente HTML)
-    Markdown.tsx   il disegno dei blocchi, compreso il blocco `calcolo`
+    Markdown.tsx   il disegno dei blocchi, compreso il blocco `calcolo` e le immagini
+    editor.ts      i pulsanti dell'editor come trasformazioni di testo e selezione
+    BarraEditor.tsx  la barra dei pulsanti, l'intestazione come modulo, le scelte da elenco
+    immagini.ts    compressione, caricamento in _allegati/ e copia nella cache del browser
     calcolo.ts     righe di Quaderno dentro una scheda
     allinea.ts     copia locale e cartella remota: cosa riscaricare, per ETag
     archivio.ts    la cartella su OneDrive, letta e scritta dalla scheda
