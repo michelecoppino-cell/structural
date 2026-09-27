@@ -212,6 +212,18 @@ V = q*l/2 [kN]     # taglio all'appoggio
 
 Con «Porta nel Quaderno» le righe diventano formule del foglio di calcolo.
 
+## Immagini
+Grafici, schemi, screenshot: in modifica si **incollano** (Ctrl+V dopo uno screenshot),
+si **trascinano** sul testo o si scelgono col pulsante dell'immagine. Finiscono in
+**_allegati/**, ridotte e compresse, e nel testo resta una riga come
+\`![Diagramma del momento](_allegati/…webp)\`: quello fra parentesi quadre è la didascalia.
+
+## I pulsanti
+Sopra il testo c'è una barra: intestazione (area, tipo, stato, tag, norme, ripasso come
+campi di un modulo), titoli, grassetto, elenchi, caselle, collegamenti a schede e norme
+scelti da un elenco, blocco di calcolo, tabella, riquadri, linea, immagine. Il testo
+resta Markdown: i pulsanti scrivono i segni al posto tuo.
+
 ## Caselle e riquadri
 - [x] le caselle si spuntano toccandole, e il file si aggiorna
 - [ ] i riquadri si scrivono con \`> [!attenzione]\`, \`> [!nota]\`, \`> [!sintesi]\`

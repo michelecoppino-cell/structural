@@ -283,3 +283,38 @@ export async function scriviTesto(
   const info = (await r.json()) as Record<string, unknown>;
   return { etag: String(info.eTag ?? ''), modificato: String(info.lastModifiedDateTime ?? '') };
 }
+
+/* ───────────────────────── immagini della Base ───────────────────────── */
+//
+// Le immagini delle schede sono file veri nella cartella degli allegati, non
+// dati dentro il testo: una scheda con tre screenshot incollati in base64
+// sarebbe un file da cinque mega che nessun editor apre più volentieri, e che
+// si riscaricherebbe intero a ogni virgola corretta.
+
+/** Il contenuto di un file come `Blob`, dall'indirizzo di scarico. */
+export async function leggiBinario(rel: string): Promise<Blob> {
+  const meta = await chiama(percorsoGraph(rel));
+  if (!meta.ok) throw await erroreDa(meta);
+  const info = (await meta.json()) as Record<string, unknown>;
+  const scarico = info['@microsoft.graph.downloadUrl'];
+  const r =
+    typeof scarico === 'string' && scarico ? await fetchEsterno(scarico) : await chiama(`${percorsoGraph(rel)}:/content`);
+  if (!r.ok) throw await erroreDa(r);
+  return r.blob();
+}
+
+/**
+ * Carica un file (sotto i 4 MB: oltre Graph vuole una sessione a pezzi, e
+ * un'immagine compressa per una scheda non ci arriva). Non scrive mai sopra un
+ * file che c'è già: il nome lo sceglie chi chiama, con l'ora dentro.
+ */
+export async function scriviBinario(rel: string, dati: Blob): Promise<void> {
+  if (dati.size > 4 * 1024 * 1024) throw new Error("L'immagine supera i 4 MB anche compressa: riducila e riprova.");
+  await assicuraCartelle(rel);
+  const r = await chiama(`${percorsoGraph(rel)}:/content?@microsoft.graph.conflictBehavior=fail`, {
+    method: 'PUT',
+    headers: { 'Content-Type': dati.type || 'application/octet-stream' },
+    body: dati,
+  });
+  if (!r.ok) throw await erroreDa(r);
+}

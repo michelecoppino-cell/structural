@@ -5,14 +5,25 @@
  * fuori (un altro editor, Claude dal connettore), e qui dentro resta testo.
  * I link passano da `urlSicuro`, come quelli della Libreria.
  */
-import { useMemo, useState } from 'react';
-import { ArrowSquareOut, BookOpenText, Calculator, Check, NotebookIcon, Warning, Info, Lightbulb } from '@phosphor-icons/react';
+import { useEffect, useMemo, useState } from 'react';
+import {
+  ArrowSquareOut,
+  BookOpenText,
+  Calculator,
+  Check,
+  ImageBroken,
+  NotebookIcon,
+  Warning,
+  Info,
+  Lightbulb,
+} from '@phosphor-icons/react';
 import { useStore } from '../state/store';
 import { urlSicuro } from '../data/normative';
 import { formattaIn, haOperazioni } from '../calc/calcolatrice';
 import { nuovoBlocco } from '../calc/quaderno';
 import { apriLink } from '../cloud/apriLink';
 import { calcolaBlocco, leggiCalcolo } from './calcolo';
+import { indirizzoImmagine } from './immagini';
 import type { Blocco, Inline, VoceElenco } from './markdown';
 import type { Destinazione } from './schede';
 
@@ -23,6 +34,70 @@ export interface ContestoScheda {
   onCasella?: (n: number) => void;
   /** Titolo della scheda: diventa il capitolo del Quaderno quando ci si porta un calcolo. */
   titolo: string;
+}
+
+/* ─────────────────────────── immagini ─────────────────────────── */
+
+/**
+ * Un'immagine della Base: un file privato su OneDrive, che si scarica con
+ * l'accesso e si mostra da un indirizzo `blob:`. Un'immagine presa dal web
+ * invece resta un link: la pagina non carica niente da host che non conosce
+ * (la CSP lo vieta, ed è giusto così — un'immagine esterna in un appunto è
+ * anche un modo di sapere quando lo si apre).
+ */
+export function Immagine({ src, alt, figura }: { src: string; alt: string; figura?: boolean }) {
+  const esterna = /^https?:\/\//i.test(src);
+  const [url, setUrl] = useState('');
+  const [errore, setErrore] = useState(false);
+
+  useEffect(() => {
+    if (esterna) return;
+    let vivo = true;
+    setErrore(false);
+    indirizzoImmagine(src).then(
+      (u) => vivo && setUrl(u),
+      () => vivo && setErrore(true),
+    );
+    return () => {
+      vivo = false;
+    };
+  }, [src, esterna]);
+
+  if (esterna) {
+    const sicuro = urlSicuro(src);
+    return sicuro ? (
+      <a className="link-esterno" href={sicuro} target="_blank" rel="noopener noreferrer">
+        {alt || 'immagine sul web'}
+        <ArrowSquareOut size={11} />
+      </a>
+    ) : null;
+  }
+  if (errore) {
+    return (
+      <span className="base-img-assente" title={src}>
+        <ImageBroken size={14} />
+        {alt || src.replace(/^.*\//, '')} — non raggiungibile
+      </span>
+    );
+  }
+  const img = url ? (
+    <img
+      className={figura ? 'base-img is-figura' : 'base-img'}
+      src={url}
+      alt={alt}
+      title="Apri a grandezza piena"
+      onClick={() => window.open(url, '_blank', 'noopener')}
+    />
+  ) : (
+    <span className="base-img-attesa">{alt || 'immagine'}…</span>
+  );
+  if (!figura) return img;
+  return (
+    <figure className="base-figura">
+      {img}
+      {alt && <figcaption>{alt}</figcaption>}
+    </figure>
+  );
 }
 
 /* ─────────────────────────── in linea ─────────────────────────── */
@@ -82,6 +157,8 @@ export function InlineR({ c, ctx }: { c: Inline[]; ctx: ContestoScheda }) {
             );
           case 'acapo':
             return <br key={k} />;
+          case 'immagine':
+            return <Immagine key={k} src={x.src} alt={x.alt} />;
           case 'wiki':
             return <Collegamento key={k} bersaglio={x.bersaglio} etichetta={x.etichetta} ctx={ctx} />;
           case 'link': {
@@ -229,6 +306,8 @@ function BloccoR({ b, ctx }: { b: Blocco; ctx: ContestoScheda }) {
       );
     case 'linea':
       return <hr className="rule" />;
+    case 'figura':
+      return <Immagine src={b.src} alt={b.alt} figura />;
     case 'codice':
       if (b.lingua === 'calcolo') return <BloccoCalcolo testo={b.testo} ctx={ctx} />;
       return (

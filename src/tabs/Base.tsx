@@ -7,7 +7,7 @@
  * la **scheda** aperta, e la **modifica** del suo testo. Aree, tipi e stati
  * non sono scritti qui: sono quelli che si trovano nelle schede.
  */
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowLeft,
   ArrowsClockwise,
@@ -31,6 +31,10 @@ import { ModificatoAltrove } from '../cloud/onedrive';
 import { useBase, type Base as ArchivioBase } from '../base/archivio';
 import { blocchi, testoPiano } from '../base/markdown';
 import { Blocchi, type ContestoScheda } from '../base/Markdown';
+import BarraEditor, { applica, scorciatoia } from '../base/BarraEditor';
+import { allega } from '../base/immagini';
+import { inserisciBlocco, segnoImmagine } from '../base/editor';
+import type { LinkUtente } from '../data/normative';
 import { FILE_INIZIALI, SCHEDA_VUOTA } from '../base/modelli';
 import {
   cerca,
@@ -358,6 +362,10 @@ function Modifica({
   onSalva,
   onAnnulla,
   salvando,
+  schede,
+  norme,
+  collegato,
+  onErrore,
 }: {
   vista: Extract<Vista, { tipo: 'modifica' }>;
   ctx: ContestoScheda;
@@ -365,8 +373,37 @@ function Modifica({
   onSalva: () => void;
   onAnnulla: () => void;
   salvando: boolean;
+  schede: Scheda[];
+  norme: LinkUtente[];
+  /** Senza OneDrive le immagini non hanno dove andare: il pulsante non c'è. */
+  collegato: boolean;
+  onErrore: (m: string) => void;
 }) {
   const [anteprima, setAnteprima] = useState(false);
+  const area = useRef<HTMLTextAreaElement>(null);
+  const onImmagine = collegato ? (f: File) => allega(f, vista.percorso) : undefined;
+
+  /** Uno screenshot incollato o un file trascinato sul testo: si carica e si scrive al cursore. */
+  const incolla = async (files: File[]) => {
+    const immagini = files.filter((f) => f.type.startsWith('image/'));
+    if (!immagini.length || !onImmagine) return false;
+    const t = area.current;
+    let testo = vista.testo;
+    let da = t?.selectionStart ?? testo.length;
+    let a = t?.selectionEnd ?? da;
+    try {
+      for (const f of immagini) {
+        const p = await onImmagine(f);
+        const m = inserisciBlocco(testo, da, a, segnoImmagine(p));
+        testo = m.testo;
+        da = a = m.a;
+      }
+      applica(t, { testo, da, a }, onTesto);
+    } catch (e) {
+      onErrore(e instanceof Error ? e.message : String(e));
+    }
+    return true;
+  };
   const scheda = useMemo(() => leggiScheda(vista.percorso, vista.testo), [vista.percorso, vista.testo]);
   const albero = useMemo(() => blocchi(scheda.corpo), [scheda.corpo]);
 
@@ -395,19 +432,51 @@ function Modifica({
         </button>
       </div>
       <div className={`base-modifica-corpo${anteprima ? ' is-anteprima' : ''}`}>
-        <textarea
-          className="input base-editor"
-          value={vista.testo}
-          spellCheck
-          aria-label="Testo della scheda in Markdown"
-          onChange={(e) => onTesto(e.target.value)}
-          onKeyDown={(e) => {
-            if ((e.ctrlKey || e.metaKey) && e.key === 's') {
-              e.preventDefault();
-              onSalva();
-            }
-          }}
-        />
+        <div className="base-editor-colonna">
+          <BarraEditor
+            area={area}
+            testo={vista.testo}
+            percorso={vista.percorso}
+            onTesto={onTesto}
+            schede={schede}
+            norme={norme}
+            onImmagine={onImmagine}
+            onErrore={onErrore}
+          />
+          <textarea
+            ref={area}
+            className="input base-editor"
+            value={vista.testo}
+            spellCheck
+            aria-label="Testo della scheda in Markdown"
+            onChange={(e) => onTesto(e.target.value)}
+            onKeyDown={(e) => {
+              if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+                e.preventDefault();
+                onSalva();
+                return;
+              }
+              scorciatoia(e, vista.testo, onTesto);
+            }}
+            onPaste={(e) => {
+              const files = Array.from(e.clipboardData.files);
+              if (files.some((f) => f.type.startsWith('image/')) && onImmagine) {
+                e.preventDefault();
+                void incolla(files);
+              }
+            }}
+            onDragOver={(e) => {
+              if (onImmagine && e.dataTransfer.types.includes('Files')) e.preventDefault();
+            }}
+            onDrop={(e) => {
+              const files = Array.from(e.dataTransfer.files);
+              if (files.some((f) => f.type.startsWith('image/')) && onImmagine) {
+                e.preventDefault();
+                void incolla(files);
+              }
+            }}
+          />
+        </div>
         <div className="panel base-anteprima">
           <div className="panel-body base-testo">
             <h1 className="base-anteprima-titolo">{scheda.titolo}</h1>
@@ -720,6 +789,10 @@ export default function Base({ sincronia }: { sincronia: ReturnType<typeof useSi
           }}
           onSalva={() => void salvaModifica()}
           onAnnulla={esci}
+          schede={base.schede}
+          norme={state.normative}
+          collegato={collegato && base.stato !== 'scaduta'}
+          onErrore={setAvviso}
         />
       )}
     </div>
