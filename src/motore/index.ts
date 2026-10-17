@@ -44,7 +44,7 @@ import {
   testoFoglio,
   testoRelazione,
 } from '../calc/relazione';
-import { documentoHtml, documentoTesto, nomeFile } from '../calc/esportazione';
+import { documentoHtml, documentoTesto, nomeFile, nomeFileProgetto } from '../calc/esportazione';
 import {
   formattaIn,
   nomiMancanti,
@@ -70,7 +70,7 @@ import { SCHEMI_FRECCIA } from '../calc/verifiche';
 import { CONDIZIONI_CARICO } from '../calc/instabilita';
 import { SCHEMI_VINCOLI } from '../calc/libera-inflessione';
 
-export { SCHEMA_VERSION, CAPITOLI, nomeFile, documentoHtml, documentoTesto, leggiLibreria };
+export { SCHEMA_VERSION, CAPITOLI, nomeFile, nomeFileProgetto, documentoHtml, documentoTesto, leggiLibreria };
 export type { AppState, Libreria };
 
 /* ───────────────────────────── aprire un progetto ───────────────────────────── */

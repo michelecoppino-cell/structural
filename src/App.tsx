@@ -20,6 +20,7 @@ import { useStore, type TabId } from './state/store';
 import { migra, svuotaMemoria } from './state/store';
 import { testoRelazione, esitiVerifiche } from './calc/relazione';
 import { salvaConNome } from './calc/salvataggio';
+import { nomeFileProgetto } from './calc/esportazione';
 import { SlotProvider } from './components/ComandiScheda';
 import { useSincronia } from './cloud/useSincronia';
 import SalvaInCommessa from './components/SalvaInCommessa';
@@ -92,12 +93,7 @@ export default function App() {
    * cui il progetto si archivia — commessa e revisione — ma resta una
    * proposta: la commessa vera ha le sue cartelle e i suoi nomi.
    */
-  const nomeEsportazione = () => {
-    const p = state.progetto;
-    return `${`${p.commessa || 'commessa'}-rev${p.revisione || '0'}`
-      .replace(/[^\p{L}\p{N}_.-]+/gu, '-')
-      .replace(/-+/g, '-')}.json`;
-  };
+  const nomeEsportazione = () => nomeFileProgetto(state.progetto);
 
   const esporta = async () => {
     const esito = await salvaConNome({

@@ -8,6 +8,7 @@ import {
   foglio,
   jsonProgetto,
   modifica,
+  nomeFileProgetto,
   numeriChiave,
   progettoNuovo,
   relazione,
@@ -148,5 +149,12 @@ describe('riepilogo', () => {
     expect(r.sito).toContain('Fagagna');
     expect(r.numeri.some((n) => n.nome === 'Mmax')).toBe(true);
     expect(r.esiti.length).toBeGreaterThan(0);
+  });
+});
+
+describe('il nome del file', () => {
+  it('è quello di «Esporta JSON»: commessa e revisione', () => {
+    const p = { ...progettoNuovo().progetto, commessa: '23 Cigliani', revisione: '1' };
+    expect(nomeFileProgetto(p)).toBe('23-Cigliani-rev1.json');
   });
 });
