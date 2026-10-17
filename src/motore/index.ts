@@ -224,16 +224,21 @@ export const OPZIONI: Record<string, Record<string, string[]>> = {
  * nessuna: `null`, e chi chiama lo dice.
  */
 function voceDi(valore: string, elenco: string[]): string | null {
-  if (elenco.includes(valore)) return valore;
+  const c = candidate(valore, elenco);
+  return c.length === 1 ? c[0] : null;
+}
+
+/** Le voci che un valore può indicare: una sola è una risposta, più di una una domanda. */
+function candidate(valore: string, elenco: string[]): string[] {
+  if (elenco.includes(valore)) return [valore];
   const n = normalizza(valore);
   const uguali = elenco.filter((v) => normalizza(v) === n);
-  if (uguali.length === 1) return uguali[0];
-  if (!n) return null;
-  const testa = elenco.filter((v) => {
+  if (uguali.length) return uguali;
+  if (!n) return [];
+  return elenco.filter((v) => {
     const nv = normalizza(v);
     return nv.startsWith(n) && /^[\s—–-]/.test(nv.slice(n.length));
   });
-  return testa.length === 1 ? testa[0] : null;
 }
 
 /* ─────────────────────────────── i comuni ─────────────────────────────── */
@@ -356,7 +361,12 @@ export function modifica(state: AppState, dati: Record<string, unknown>): EsitoM
         if (elenco) {
           const voce = voceDi(nuovo as string, elenco);
           if (voce === null) {
-            errori.push(`${nome}: «${nuovo}» non è fra ${elenco.filter(Boolean).join(' | ')}`);
+            const piu = candidate(nuovo as string, elenco);
+            errori.push(
+              piu.length > 1
+                ? `${nome}: «${nuovo}» può essere ${piu.join(' | ')} — scrivila per intero`
+                : `${nome}: «${nuovo}» non è fra ${elenco.filter(Boolean).join(' | ')}`,
+            );
             continue;
           }
           nuovo = voce;

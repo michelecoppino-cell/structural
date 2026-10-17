@@ -70,6 +70,11 @@ describe('modificare', () => {
     expect(prima.azioni.suolo).toBe(STATO_INIZIALE.azioni.suolo);
   });
 
+  it('una sigla che indica più voci si chiede per intero', () => {
+    // «I» è sia la zona Alpina sia la Mediterranea
+    expect(() => modifica(progettoNuovo(), { azioni: { zneve: 'I' } })).toThrow(/può essere I — Alpina \| I — Mediterranea/);
+  });
+
   it('controlla la taglia contro il tipo di profilo', () => {
     expect(() => modifica(progettoNuovo(), { 'verifiche.acciaio': { tipoProfilo: 'HEA', profilo: 'IPE 200' } })).toThrow(
       /taglia HEA/,
