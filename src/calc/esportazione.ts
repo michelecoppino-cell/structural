@@ -12,7 +12,7 @@
  * lavoro, non a leggerlo. Questo serve a leggerlo.
  */
 
-import type { AppState } from '../state/store';
+import type { AppState } from '../state/stato';
 import { foglioQuaderno, intestazione, testoFoglio, type Capitolo } from './relazione';
 
 /** I capitoli tirati dentro il quaderno, nell'ordine in cui stanno sul foglio. */

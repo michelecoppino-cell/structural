@@ -7,8 +7,8 @@
  * sola sorgente, così le due strade non raccontano numeri diversi.
  */
 
-import type { AppState, CapitoloId, TabId } from '../state/store';
-import { inputVerifiche } from '../state/store';
+import type { AppState, CapitoloId, TabId } from '../state/stato';
+import { inputVerifiche } from '../state/stato';
 import { calcolaAzioni, num } from './azioni';
 import { COMBINAZIONI, calcolaSollecitazioni } from './sollecitazioni';
 import { SCHEMI_BY_ID } from './trave';

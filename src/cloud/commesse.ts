@@ -5,7 +5,7 @@
  */
 import { normalizza } from '../base/schede';
 import type { CartellaRemota } from './onedrive';
-import type { Progetto } from '../state/store';
+import type { Progetto } from '../state/stato';
 
 /** Il numero in testa al nome (`23 - Cigliani` → 23), se c'è. */
 const numero = (nome: string): number | null => {
