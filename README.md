@@ -60,6 +60,7 @@ Altri comandi:
 | `npm run build` | Build di produzione in `dist/` |
 | `npm run preview` | Serve la build di produzione |
 | `node scripts/genera-icone.mjs` | Rigenera le icone PNG dell'app installabile |
+| `npm run motore` | Impacchetta il motore di calcolo in `dist-motore/motore-strutturale.mjs`, per il connettore della Mente digitale |
 
 La versione di Node è fissata in `.nvmrc` (Node 22): la leggono sia `nvm` in locale sia
 Cloudflare in fase di build, così l'ambiente è lo stesso ovunque.
@@ -747,6 +748,17 @@ qui al prossimo aggiornamento, e viceversa. È un connettore a parte da quello d
 lì l'elenco degli strumenti è corto apposta, e studiare si fa seduti. Come si aggiunge:
 `docs/base-tecnica.md` nel repository della Mente digitale.
 
+Dallo stesso connettore si arriva anche al **resto dell'app**, con il motore di calcolo vero:
+`calcola` (righe di Quaderno, unità comprese, con le costanti della libreria), `strutturale`
+(il JSON di una commessa salvato con *Salva in commessa*: riepilogo, dati e risultati di una
+scheda, il Quaderno, il testo della relazione, la libreria; oppure un calcolo di prova senza
+commessa — «il sisma a Tolmezzo su suolo B») e `strutturale_scrivi` (cambiare dei dati,
+aggiungere righe al Quaderno, creare il JSON di una commessa, esportare la relazione in HTML
+nella cartella dei calcoli). Il motore è lo stesso codice di queste schede, impacchettato con
+`npm run motore` da `src/motore/index.ts`: niente formule riscritte dall'altra parte, quindi
+gli stessi numeri. Quello che `src/motore/` aggiunge è la guardia sui dati in ingresso — una
+scelta che non è in elenco si rifiuta invece di diventare in silenzio quella di serie.
+
 ### Comune a tutte le schede
 - **(i)**: apre in un colpo tutti i pannelli di dettaglio della scheda — formule con i numeri
   sostituiti, coefficienti e riferimenti; nel Quaderno apre le **spiegazioni** su come si
@@ -761,6 +773,12 @@ lì l'elenco degli strumenti è corto apposta, e studiare si fa seduti. Come si 
   nei download. Lo stato si salva in
   `localStorage` con un ritardo di 300 ms, così scrivere in un campo non costa una
   serializzazione per carattere.
+- **Salva in commessa**: lo stesso JSON, scritto direttamente su OneDrive nella cartella dei
+  calcoli della commessa — `Lavoro personale/20. Commesse personali/<commessa>/11-Calcolo/`
+  (i due pezzi stanno in `src/cloud/config.ts`). Le commesse si scelgono da un elenco, dalla
+  più recente; se il nome del progetto ne indica una sola, è proposta in testa, e la cartella
+  scelta resta nel progetto per la volta dopo. Un file con lo stesso nome si sovrascrive solo
+  dopo conferma. Funziona anche dal telefono, dove il «Salva con nome» non arriva su OneDrive.
 - **Svuota tutto**: cancella il salvataggio automatico — quello che alla riapertura ripropone
   i campi già compilati — e riporta ogni scheda ai valori iniziali. È l'unico comando che
   perde dati: chiede conferma e ricorda di usare prima *Esporta JSON* per conservare il
@@ -966,7 +984,10 @@ src/
     auth.ts        accesso Microsoft (MSAL, authorization code + PKCE)
     onedrive.ts    il pezzetto di Graph che serve: un JSON della libreria, i file di testo della Base
     useSincronia.ts  quando si sincronizza, e cosa succede quando fallisce
-  state/           stato dell'app (useReducer + context, persistenza locale)
+  state/           stato dell'app
+    stato.ts       com'è fatto un progetto, la migrazione, `calcola` — senza React
+    store.tsx      il provider, il salvataggio in localStorage e gli hook
+  motore/          il motore visto da fuori, per il connettore della Mente digitale
   styles/          token del design system e fogli di stile
 ```
 

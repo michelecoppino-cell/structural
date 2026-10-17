@@ -1,0 +1,654 @@
+/**
+ * Lo stato dell'app senza React: com'è fatto un progetto, come si migra un
+ * JSON di una versione precedente, e i calcoli che ne discendono.
+ *
+ * Stava tutto in `store.tsx`, insieme al provider. Separato perché lo stesso
+ * progetto lo apre anche chi React non ce l'ha: il motore impacchettato per il
+ * connettore della Mente digitale (`src/motore/`), che legge il JSON salvato
+ * nella cartella della commessa e deve dare gli stessi numeri dell'app — cosa
+ * che riesce solo se le regole sono queste, e non una copia.
+ */
+
+import { AZIONI_DEFAULT, calcolaAzioni, type InputAzioni, type RisultatiAzioni } from '../calc/azioni';
+import {
+  SOLLECITAZIONI_DEFAULT,
+  calcolaSollecitazioni,
+  type InputSollecitazioni,
+  type RisultatiSollecitazioni,
+} from '../calc/sollecitazioni';
+import {
+  ACCIAIO_SEZIONE_DEFAULT,
+  DEFORMAZIONE_DEFAULT,
+  FLESSIONE_CA_DEFAULT,
+  TAGLIO_ARMATO_DEFAULT,
+  TAGLIO_NON_ARMATO_DEFAULT,
+  verificaAcciaioSezione,
+  verificaDeformazione,
+  verificaFlessioneCA,
+  verificaTaglioArmato,
+  verificaTaglioNonArmato,
+  type InputAcciaioSezione,
+  type InputDeformazione,
+  type InputFlessioneCA,
+  type InputTaglioArmato,
+  type InputTaglioNonArmato,
+  type RisultatiAcciaioSezione,
+  type RisultatiDeformazione,
+  type RisultatiFlessioneCA,
+  type RisultatiTaglioArmato,
+  type RisultatiTaglioNonArmato,
+} from '../calc/verifiche';
+import {
+  STABILITA_DEFAULT,
+  verificaInstabilitaLT,
+  verificaInstabilitaPunta,
+  verificaPressoflessione,
+  type InputStabilita,
+  type RisultatiInstabilitaLT,
+  type RisultatiInstabilitaPunta,
+  type RisultatiPressoflessione,
+} from '../calc/instabilita';
+import {
+  PREIMPOSTATE_DEFAULT,
+  RINOMINATE,
+  SELEZIONI_DEFAULT,
+  VOCI_DEFAULT,
+  normalizzaVoci,
+  rinominaInEspressione,
+  svuotaCompilabili,
+  type Preimpostata,
+  type Selezioni,
+  type VoceCalcolo,
+} from '../calc/calcolatrice';
+import { UNITA_DEFAULT, normalizzaElenco } from '../calc/unita';
+import { normalizzaBlocchi, nuovoBlocco, type BloccoQuaderno } from '../calc/quaderno';
+import { VOCI_COSTO_DEFAULT } from '../data/prezzario';
+import { leggiNormative, type LinkUtente } from '../data/normative';
+import { LIBRERIA_VERSION, leggiLibreria, type Libreria } from '../cloud/libreria';
+
+
+export type TabId = 'azioni' | 'sollecitazioni' | 'verifiche' | 'costi' | 'quaderno' | 'normativa' | 'base';
+/** Capitoli di altre schede che si possono tirare dentro il quaderno. */
+export type CapitoloId = 'azioni' | 'sollecitazioni' | 'verifiche' | 'calcolatrice' | 'costi';
+export type MaterialeId = 'cls' | 'acciaio' | 'legno' | 'muratura';
+
+export interface VoceCosto {
+  id: string;
+  categoria: string;
+  /**
+   * Codice della voce del prezzario da cui viene il prezzo (es. «11.6.CP1.01»).
+   * È il campo che rende la stima verificabile: chi la rilegge apre il
+   * prezzario a quel codice e ritrova lo stesso numero. Vuoto = prezzo messo a
+   * mano, senza una voce di prezzario dietro.
+   */
+  codice: string;
+  descrizione: string;
+  um: string;
+  quantita: string;
+  prezzo: string;
+}
+
+export interface Progetto {
+  nome: string;
+  commessa: string;
+  localita: string;
+  revisione: string;
+  /** Cartella della commessa su OneDrive (`23 - Cigliani`), scelta salvandoci il JSON. */
+  cartella?: string;
+}
+
+export interface AppState {
+  /** Versione dello schema, per la migrazione dei JSON importati. */
+  schemaVersion: number;
+  progetto: Progetto;
+  tab: TabId;
+  azioni: InputAzioni;
+  sollecitazioni: InputSollecitazioni;
+  verifiche: {
+    materiale: MaterialeId;
+    taglioNonArmato: InputTaglioNonArmato;
+    taglioArmato: InputTaglioArmato;
+    flessioneCA: InputFlessioneCA;
+    acciaio: InputAcciaioSezione;
+    /** Dati delle verifiche di stabilità della membratura in acciaio. */
+    stabilita: InputStabilita;
+    /** Controllo di deformabilità della trave in acciaio (SLE). */
+    deformazione: InputDeformazione;
+    /** VEd delle verifiche allineato al taglio calcolato in Sollecitazioni. */
+    collegaSollecitazioni: boolean;
+  };
+  costi: VoceCosto[];
+  calcolatrice: StatoCalcolatrice;
+  quaderno: StatoQuaderno;
+  /** Norme e link aggiunti a mano nella scheda Normativa. */
+  normative: LinkUtente[];
+  /**
+   * La libreria com'era all'ultima sincronizzazione riuscita con OneDrive:
+   * l'arbitro della fusione a tre vie. Sta **dentro lo stato**, e non in una
+   * chiave di localStorage per conto suo, per una ragione che è costata dei
+   * dati: se la fotografia sopravvive a un azzeramento della libreria vera,
+   * al giro successivo racconta una storia falsa — «queste voci c'erano e ora
+   * non ci sono più» — e la fusione le cancella da OneDrive, cioè anche
+   * dall'altro dispositivo, dove non le aveva toccate nessuno. Tenendole nello
+   * stesso contenitore, o si salvano tutt'e due o non si salva nessuna delle
+   * due: senza fotografia la fusione somma, che è l'errore innocuo.
+   */
+  libreriaBase: Libreria | null;
+  ui: {
+    open: Record<string, boolean>;
+    exp: Record<string, boolean>;
+    allDetails: Record<TabId, boolean>;
+    /** Verifica visibile nella scheda Verifiche (una per volta). */
+    verifica: string;
+  };
+}
+
+export interface StatoCalcolatrice {
+  /** Espressione in corso di scrittura. */
+  espressione: string;
+  /** Nome, nota e unità con cui verrà salvata l'operazione. */
+  nome: string;
+  nota: string;
+  um: string;
+  /** Operazioni salvate, in ordine: ognuna vede le variabili delle precedenti. */
+  voci: VoceCalcolo[];
+  /** Formule pronte all'uso, scritte sui nomi delle grandezze qui sopra. */
+  preimpostate: Preimpostata[];
+  /** Id delle formule preimpostate scelte: sono quelle che vanno nel riepilogo. */
+  preScelte: string[];
+  /** Unità di misura proposte: si scrivono a mano ma devono stare qui dentro. */
+  unita: string[];
+  /** Scelte a tendina (CLS, acciaio, ferro, bullone) da cui nascono le fisse. */
+  selezioni: Selezioni;
+  /** Tastierino a video: su cellulare c'è sempre, su desktop è a richiesta. */
+  tastierino: boolean;
+}
+
+/**
+ * Il foglio del Quaderno: i blocchi in ordine, più le due righe libere in
+ * testa e a piè di pagina. I capitoli ripresi dalle altre schede non sono più
+ * una spunta a parte — sono blocchi come gli altri, e stanno dove li si mette.
+ */
+export interface StatoQuaderno {
+  /** Blocchi del foglio, nell'ordine in cui sono stati aggiunti. */
+  blocchi: BloccoQuaderno[];
+  /** Riga di testo libera in testa al foglio (oggetto, riferimento, data). */
+  intestazione: string;
+  /** Nota a piè di foglio, scritta a mano. */
+  nota: string;
+  /** Sfondo a quadretti del foglio, come la carta da calcolo. */
+  quadretti: boolean;
+}
+
+export const SCHEMA_VERSION = 8;
+
+export const STATO_INIZIALE: AppState = {
+  schemaVersion: SCHEMA_VERSION,
+  progetto: {
+    nome: 'Nuova commessa',
+    commessa: `${new Date().getFullYear()}-001`,
+    localita: `${AZIONI_DEFAULT.comune} (${AZIONI_DEFAULT.prov})`,
+    revisione: '0',
+  },
+  tab: 'azioni',
+  azioni: AZIONI_DEFAULT,
+  sollecitazioni: SOLLECITAZIONI_DEFAULT,
+  verifiche: {
+    materiale: 'cls',
+    taglioNonArmato: TAGLIO_NON_ARMATO_DEFAULT,
+    taglioArmato: TAGLIO_ARMATO_DEFAULT,
+    flessioneCA: FLESSIONE_CA_DEFAULT,
+    acciaio: ACCIAIO_SEZIONE_DEFAULT,
+    stabilita: STABILITA_DEFAULT,
+    deformazione: DEFORMAZIONE_DEFAULT,
+    collegaSollecitazioni: true,
+  },
+  costi: VOCI_COSTO_DEFAULT.map((v) => ({ ...v })),
+  calcolatrice: {
+    espressione: '',
+    nome: '',
+    nota: '',
+    um: '',
+    voci: VOCI_DEFAULT,
+    preimpostate: PREIMPOSTATE_DEFAULT,
+    preScelte: [],
+    unita: UNITA_DEFAULT,
+    selezioni: SELEZIONI_DEFAULT,
+    tastierino: false,
+  },
+  // il quaderno parte bianco: quello che ci va dentro lo si tira dal pannello
+  quaderno: {
+    blocchi: [],
+    intestazione: '',
+    nota: '',
+    quadretti: true,
+  },
+  normative: [],
+  libreriaBase: null,
+  ui: {
+    open: {
+      sisma: true,
+      vari: true,
+      'soll-risultati': true,
+      'soll-inerzia': true,
+      // le sezioni del pannello del quaderno: chiuse di serie — il foglio è
+      // quello che si guarda, il pannello si apre quando serve prendere
+      // qualcosa da lì
+      'q-compilare': false,
+      'q-fisse': false,
+      'q-libreria': false,
+      'q-formule': false,
+      'q-import': false,
+      'q-capitoli': false,
+      'q-tastierino': false,
+    },
+    exp: {},
+    allDetails: {
+      azioni: false,
+      sollecitazioni: false,
+      verifiche: false,
+      costi: false,
+      quaderno: false,
+      normativa: false,
+      base: false,
+    },
+    verifica: 'taglio-non-armato',
+  },
+};
+
+export type Action =
+  | { type: 'tab'; tab: TabId }
+  | { type: 'progetto'; patch: Partial<Progetto> }
+  | { type: 'azioni'; patch: Partial<InputAzioni> }
+  | { type: 'sollecitazioni'; patch: Partial<InputSollecitazioni> }
+  | { type: 'verifiche'; patch: Partial<AppState['verifiche']> }
+  | { type: 'taglioNonArmato'; patch: Partial<InputTaglioNonArmato> }
+  | { type: 'taglioArmato'; patch: Partial<InputTaglioArmato> }
+  | { type: 'flessioneCA'; patch: Partial<InputFlessioneCA> }
+  | { type: 'acciaioSezione'; patch: Partial<InputAcciaioSezione> }
+  | { type: 'stabilita'; patch: Partial<InputStabilita> }
+  | { type: 'deformazione'; patch: Partial<InputDeformazione> }
+  | { type: 'costi'; voci: VoceCosto[] }
+  | { type: 'calcolatrice'; patch: Partial<StatoCalcolatrice> }
+  | { type: 'quaderno'; patch: Partial<StatoQuaderno> }
+  | { type: 'normative'; voci: LinkUtente[] }
+  | { type: 'libreria'; lib: Libreria; base?: Libreria | null }
+  | { type: 'toggleOpen'; id: string }
+  | { type: 'toggleExp'; id: string }
+  | { type: 'toggleAllDetails'; tab: TabId }
+  | { type: 'verificaAttiva'; id: string }
+  | { type: 'carica'; stato: AppState }
+  | { type: 'reset' };
+
+export function reducer(state: AppState, action: Action): AppState {
+  switch (action.type) {
+    case 'tab':
+      return { ...state, tab: action.tab };
+    case 'progetto':
+      return { ...state, progetto: { ...state.progetto, ...action.patch } };
+    case 'azioni':
+      return { ...state, azioni: { ...state.azioni, ...action.patch } };
+    case 'sollecitazioni':
+      return { ...state, sollecitazioni: { ...state.sollecitazioni, ...action.patch } };
+    case 'verifiche':
+      return { ...state, verifiche: { ...state.verifiche, ...action.patch } };
+    case 'taglioNonArmato':
+      return {
+        ...state,
+        verifiche: {
+          ...state.verifiche,
+          taglioNonArmato: { ...state.verifiche.taglioNonArmato, ...action.patch },
+        },
+      };
+    case 'taglioArmato':
+      return {
+        ...state,
+        verifiche: {
+          ...state.verifiche,
+          taglioArmato: { ...state.verifiche.taglioArmato, ...action.patch },
+        },
+      };
+    case 'flessioneCA':
+      return {
+        ...state,
+        verifiche: {
+          ...state.verifiche,
+          flessioneCA: { ...state.verifiche.flessioneCA, ...action.patch },
+        },
+      };
+    case 'acciaioSezione':
+      return {
+        ...state,
+        verifiche: {
+          ...state.verifiche,
+          acciaio: { ...state.verifiche.acciaio, ...action.patch },
+        },
+      };
+    case 'stabilita':
+      return {
+        ...state,
+        verifiche: {
+          ...state.verifiche,
+          stabilita: { ...state.verifiche.stabilita, ...action.patch },
+        },
+      };
+    case 'deformazione':
+      return {
+        ...state,
+        verifiche: {
+          ...state.verifiche,
+          deformazione: { ...state.verifiche.deformazione, ...action.patch },
+        },
+      };
+    case 'costi':
+      return { ...state, costi: action.voci };
+    case 'calcolatrice':
+      return { ...state, calcolatrice: { ...state.calcolatrice, ...action.patch } };
+    case 'quaderno':
+      return { ...state, quaderno: { ...state.quaderno, ...action.patch } };
+    case 'normative':
+      return { ...state, normative: action.voci };
+    case 'libreria':
+      // libreria e fotografia si muovono insieme, in un solo passaggio: è la
+      // condizione che rende impossibile che una sopravviva all'altra
+      return {
+        ...applicaLibreria(state, action.lib),
+        libreriaBase: action.base === undefined ? state.libreriaBase : action.base,
+      };
+    case 'toggleOpen':
+      return {
+        ...state,
+        ui: { ...state.ui, open: { ...state.ui.open, [action.id]: !state.ui.open[action.id] } },
+      };
+    case 'toggleExp':
+      return {
+        ...state,
+        ui: { ...state.ui, exp: { ...state.ui.exp, [action.id]: !state.ui.exp[action.id] } },
+      };
+    case 'toggleAllDetails':
+      return {
+        ...state,
+        ui: {
+          ...state.ui,
+          allDetails: { ...state.ui.allDetails, [action.tab]: !state.ui.allDetails[action.tab] },
+        },
+      };
+    case 'verificaAttiva':
+      return { ...state, ui: { ...state.ui, verifica: action.id } };
+    case 'carica':
+      return migra(action.stato);
+    case 'reset':
+      // «Svuota tutto» azzera la commessa, non la libreria personale: le norme
+      // aggiunte a mano, le unità, le formule preimpostate e le grandezze con
+      // cui sono scritte sono di chi usa l'app, non del progetto, e ributtarle
+      // via a ogni foglio bianco significherebbe riscriverle ogni volta. Delle
+      // grandezze da compilare torna l'elenco, non i numeri: quelli erano del
+      // calcolo che si è appena chiuso.
+      return {
+        ...applicaLibreria(STATO_INIZIALE, estraiLibreria(state)),
+        libreriaBase: state.libreriaBase,
+      };
+  }
+}
+
+/* ───────────────────────────── libreria personale ───────────────────────────── */
+
+/**
+ * Le cose che nell'app appartengono a chi la usa e non alla commessa: le
+ * norme aggiunte a mano, le unità di misura proposte, le formule preimpostate
+ * e le grandezze con cui si scrivono. Vivono dentro `AppState` come tutto il
+ * resto — nell'uso quotidiano sono campi come gli altri — ma escono di qui per
+ * due strade che il resto dello stato non ha: sopravvivono a «Svuota tutto» e vanno nel file su
+ * OneDrive, che è quello che le fa ritrovare sul telefono in cantiere.
+ */
+export function estraiLibreria(state: AppState): Libreria {
+  return {
+    schemaVersion: LIBRERIA_VERSION,
+    aggiornato: '',
+    normative: state.normative,
+    unita: state.calcolatrice.unita,
+    preimpostate: state.calcolatrice.preimpostate,
+    // Delle grandezze da compilare la libreria porta l'**intestazione** — come
+    // si chiamano, in che unità si scrivono, cosa sono — non il numero: `b`
+    // esiste su tutti i dispositivi, ma quanto vale è di questa trave e di
+    // questa commessa. Le costanti invece il numero se lo tengono: un peso di
+    // volume è lo stesso ovunque, ed è proprio per non riscriverlo che sta lì.
+    grandezze: svuotaCompilabili(state.calcolatrice.voci),
+  };
+}
+
+/**
+ * Rimette una libreria dentro lo stato, senza toccare nient'altro.
+ *
+ * Le grandezze sono l'unico punto in cui l'operazione non è una copia secca:
+ * l'elenco (quali grandezze esistono, come si chiamano, in che unità) arriva
+ * dalla libreria, ma il **valore già scritto qui** resta dov'è. Sostituirlo
+ * con il vuoto della libreria vorrebbe dire vedersi svuotare la base della
+ * trave a metà calcolo, appena l'altro dispositivo si fa vivo.
+ *
+ * Una libreria senza grandezze — un file scritto da una versione precedente —
+ * lascia semplicemente quelle che ci sono: non è un elenco vuoto, è un elenco
+ * che non è stato detto.
+ */
+export function applicaLibreria(state: AppState, lib: Libreria): AppState {
+  const valori = new Map(state.calcolatrice.voci.map((v) => [v.id, v.espressione]));
+  return {
+    ...state,
+    normative: lib.normative,
+    calcolatrice: {
+      ...state.calcolatrice,
+      unita: normalizzaElenco(lib.unita.length ? lib.unita : state.calcolatrice.unita),
+      preimpostate: lib.preimpostate,
+      voci: lib.grandezze.length
+        ? lib.grandezze.map((g) =>
+            g.tipo === 'compilabile' ? { ...g, espressione: valori.get(g.id) ?? g.espressione } : g,
+          )
+        : state.calcolatrice.voci,
+    },
+  };
+}
+
+/**
+ * Fonde uno stato importato con quello di default: i campi assenti
+ * (perché salvati da una versione precedente) tornano al valore iniziale.
+ */
+export function migra(raw: Partial<AppState>): AppState {
+  const base = STATO_INIZIALE;
+  // Lo stato di apertura dei pannelli è parte del layout, non dei dati: se il
+  // salvataggio viene da una versione precedente si riparte dai default nuovi.
+  const aperture = raw.schemaVersion === SCHEMA_VERSION ? raw.ui?.open : undefined;
+  return {
+    schemaVersion: SCHEMA_VERSION,
+    progetto: { ...base.progetto, ...raw.progetto },
+    tab: TAB_VALIDE.find((t) => t === raw.tab) ?? tabRinominata(raw.tab) ?? base.tab,
+    azioni: { ...base.azioni, ...raw.azioni },
+    sollecitazioni: {
+      ...base.sollecitazioni,
+      ...raw.sollecitazioni,
+      attive: { ...base.sollecitazioni.attive, ...raw.sollecitazioni?.attive },
+    },
+    verifiche: {
+      ...base.verifiche,
+      ...raw.verifiche,
+      taglioNonArmato: { ...base.verifiche.taglioNonArmato, ...raw.verifiche?.taglioNonArmato },
+      taglioArmato: { ...base.verifiche.taglioArmato, ...raw.verifiche?.taglioArmato },
+      flessioneCA: { ...base.verifiche.flessioneCA, ...raw.verifiche?.flessioneCA },
+      acciaio: { ...base.verifiche.acciaio, ...raw.verifiche?.acciaio },
+      stabilita: { ...base.verifiche.stabilita, ...raw.verifiche?.stabilita },
+      deformazione: { ...base.verifiche.deformazione, ...raw.verifiche?.deformazione },
+    },
+    // i file salvati prima del campo `codice` non ce l'hanno: si riempie vuoto,
+    // che è esattamente quello che vuol dire («prezzo senza voce di prezzario»)
+    costi:
+      Array.isArray(raw.costi) && raw.costi.length
+        ? raw.costi.map((v) => ({ ...v, codice: typeof v.codice === 'string' ? v.codice : '' }))
+        : base.costi,
+    calcolatrice: {
+      ...base.calcolatrice,
+      ...raw.calcolatrice,
+      // le operazioni salvate sono dati di commessa: si tengono tutte quelle
+      // del file, comprese le liste vuote (l'utente può averle cancellate)
+      voci: raw.calcolatrice
+        ? normalizzaVoci(Array.isArray(raw.calcolatrice.voci) ? raw.calcolatrice.voci : [])
+        : base.calcolatrice.voci,
+      // anche le formule preimpostate sono dati di commessa: si tengono quelle
+      // del file, comprese le liste vuote; i file di prima non ne hanno e
+      // ripartono da quelle di serie
+      preimpostate: Array.isArray(raw.calcolatrice?.preimpostate)
+        ? raw.calcolatrice.preimpostate.map((v, i) => ({
+            id: v?.id || `pre-${i}`,
+            nome: v?.nome ?? '',
+            // anche le formule salvate parlano dei γ con il nome vecchio
+            espressione: rinominaInEspressione(v?.espressione ?? '', RINOMINATE),
+            nota: v?.nota ?? '',
+            um: v?.um ?? '',
+          }))
+        : base.calcolatrice.preimpostate,
+      // le formule scelte sono dati di commessa: si tengono quelle del file,
+      // liste vuote comprese; i file di prima non ne hanno e partono da nessuna
+      preScelte: Array.isArray(raw.calcolatrice?.preScelte)
+        ? raw.calcolatrice.preScelte.filter((id): id is string => typeof id === 'string')
+        : [],
+      // l'elenco delle unità è una preferenza: se il file non ne porta uno
+      // valido si riparte da quello di serie
+      unita: normalizzaElenco(
+        Array.isArray(raw.calcolatrice?.unita) && raw.calcolatrice.unita.length
+          ? raw.calcolatrice.unita
+          : base.calcolatrice.unita,
+      ),
+      // le scelte a tendina sono dati di commessa: i file di prima non le
+      // hanno e ripartono da quelle di serie
+      selezioni: { ...base.calcolatrice.selezioni, ...raw.calcolatrice?.selezioni },
+    },
+    quaderno: quadernoMigrato(raw, base.quaderno),
+    // l'indirizzo passa da urlSicuro: un file arrivato da fuori non deve poter
+    // mettere uno schema eseguibile (`javascript:`) dentro un link dell'app
+    libreriaBase: raw.libreriaBase ? leggiLibreria(raw.libreriaBase) : null,
+    normative: leggiNormative(raw.normative),
+    ui: {
+      ...base.ui,
+      ...raw.ui,
+      open: { ...base.ui.open, ...aperture },
+      allDetails: { ...base.ui.allDetails, ...raw.ui?.allDetails },
+      verifica: raw.ui?.verifica || base.ui.verifica,
+    },
+  };
+}
+
+
+export const TAB_VALIDE: TabId[] = ['azioni', 'sollecitazioni', 'verifiche', 'costi', 'quaderno', 'normativa', 'base'];
+
+/**
+ * Schede di ieri: la Calcolatrice e l'Esporta sono diventate il Quaderno, e
+ * chi arriva da un salvataggio, da un segnalibro o da una scorciatoia
+ * dell'app installata deve trovarsi lì, non sulla prima scheda.
+ */
+const TAB_RINOMINATE: Record<string, TabId> = { calcolatrice: 'quaderno', esporta: 'quaderno' };
+
+export function tabRinominata(id: string | undefined): TabId | undefined {
+  return id ? TAB_RINOMINATE[id] : undefined;
+}
+
+/**
+ * Il quaderno di un salvataggio precedente. I file di prima non hanno blocchi:
+ * portano le spunte della vecchia scheda Esporta, e quelle diventano i primi
+ * blocchi del foglio — così un progetto riaperto esporta ancora i suoi
+ * capitoli, nell'ordine in cui li mostrava l'app.
+ */
+function quadernoMigrato(raw: Partial<AppState>, base: StatoQuaderno): StatoQuaderno {
+  const q = raw.quaderno;
+  const vecchia = (raw as { esportazione?: { capitoli?: Record<string, boolean>; intestazione?: string; nota?: string; quadretti?: boolean } })
+    .esportazione;
+
+  if (q) {
+    return {
+      blocchi: normalizzaBlocchi(Array.isArray(q.blocchi) ? q.blocchi : []),
+      intestazione: q.intestazione ?? '',
+      nota: q.nota ?? '',
+      quadretti: q.quadretti ?? base.quadretti,
+    };
+  }
+
+  const spunte = vecchia?.capitoli ?? {};
+  const blocchi = CAPITOLI_ORDINE.filter((id) => spunte[id]).map((id) => nuovoBlocco('capitolo', { fonte: id }));
+  return {
+    blocchi,
+    intestazione: vecchia?.intestazione ?? '',
+    nota: vecchia?.nota ?? '',
+    quadretti: vecchia?.quadretti ?? base.quadretti,
+  };
+}
+
+/** Ordine in cui i capitoli compaiono nell'app: lo usa anche la migrazione. */
+const CAPITOLI_ORDINE: CapitoloId[] = ['azioni', 'sollecitazioni', 'verifiche', 'calcolatrice', 'costi'];
+
+
+/**
+ * Risultati del motore di calcolo, computati una volta sola per modifica dello
+ * stato e condivisi da tutte le schede: senza questo, ogni render di App,
+ * Sollecitazioni e Verifiche risolveva daccapo la trave.
+ */
+export interface Calcoli {
+  azioni: RisultatiAzioni;
+  sollecitazioni: RisultatiSollecitazioni;
+  taglioNonArmato: RisultatiTaglioNonArmato;
+  taglioArmato: RisultatiTaglioArmato;
+  flessioneCA: RisultatiFlessioneCA;
+  acciaio: RisultatiAcciaioSezione;
+  instabilitaLT: RisultatiInstabilitaLT;
+  instabilitaPunta: RisultatiInstabilitaPunta;
+  pressoflessione: RisultatiPressoflessione;
+  deformazione: RisultatiDeformazione;
+  /** Taglio massimo in valore assoluto dalle Sollecitazioni (kN). */
+  VEdSollecitazioni: number;
+}
+
+/**
+ * Input effettivi delle verifiche: con il collegamento attivo il VEd è quello
+ * calcolato in Sollecitazioni, altrimenti quello scritto a mano.
+ */
+export function inputVerifiche(state: AppState, VEdSollecitazioni: number) {
+  const VEd = VEdSollecitazioni.toFixed(1);
+  const collega = state.verifiche.collegaSollecitazioni;
+  return {
+    taglioNonArmato: collega
+      ? { ...state.verifiche.taglioNonArmato, VEd }
+      : state.verifiche.taglioNonArmato,
+    taglioArmato: collega ? { ...state.verifiche.taglioArmato, VEd } : state.verifiche.taglioArmato,
+    // anche la sezione in acciaio prende il VEd dal collegamento: la scheda lo
+    // mostrava già nel campo e nella tabella, ma l'esito restava sul numero
+    // scritto a mano, cioè diceva una cosa e ne verificava un'altra
+    acciaio: collega ? { ...state.verifiche.acciaio, VEd } : state.verifiche.acciaio,
+  };
+}
+
+
+/**
+ * Tutti i risultati del motore per uno stato: quello che le schede mostrano.
+ * Lo usa il provider (una volta per modifica, condiviso fra le schede) e chi
+ * apre un progetto fuori dall'app — una sola strada, così i numeri sono gli
+ * stessi.
+ */
+export function calcola(state: AppState): Calcoli {
+  const azioni = calcolaAzioni(state.azioni);
+  const sollecitazioni = calcolaSollecitazioni(state.sollecitazioni, azioni);
+  const VEdSollecitazioni = Math.abs(sollecitazioni.trave.VmaxAbs.val);
+  const inp = inputVerifiche(state, VEdSollecitazioni);
+  const { acciaio: sezione, stabilita, deformazione } = state.verifiche;
+  const instabilitaLT = verificaInstabilitaLT(sezione, stabilita);
+  const instabilitaPunta = verificaInstabilitaPunta(sezione, stabilita);
+  return {
+    azioni,
+    sollecitazioni,
+    taglioNonArmato: verificaTaglioNonArmato(inp.taglioNonArmato),
+    taglioArmato: verificaTaglioArmato(inp.taglioArmato),
+    flessioneCA: verificaFlessioneCA(state.verifiche.flessioneCA),
+    acciaio: verificaAcciaioSezione(inp.acciaio),
+    instabilitaLT,
+    instabilitaPunta,
+    // la verifica combinata riusa i due risultati di sopra invece di rifarli
+    pressoflessione: verificaPressoflessione(sezione, stabilita, instabilitaLT, instabilitaPunta),
+    deformazione: verificaDeformazione(sezione, deformazione),
+    VEdSollecitazioni,
+  };
+}

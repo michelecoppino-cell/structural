@@ -20,8 +20,10 @@ import { useStore, type TabId } from './state/store';
 import { migra, svuotaMemoria } from './state/store';
 import { testoRelazione, esitiVerifiche } from './calc/relazione';
 import { salvaConNome } from './calc/salvataggio';
+import { nomeFileProgetto } from './calc/esportazione';
 import { SlotProvider } from './components/ComandiScheda';
 import { useSincronia } from './cloud/useSincronia';
+import SalvaInCommessa from './components/SalvaInCommessa';
 import Azioni from './tabs/Azioni';
 import Sollecitazioni from './tabs/Sollecitazioni';
 import Verifiche from './tabs/Verifiche';
@@ -91,13 +93,11 @@ export default function App() {
    * cui il progetto si archivia — commessa e revisione — ma resta una
    * proposta: la commessa vera ha le sue cartelle e i suoi nomi.
    */
+  const nomeEsportazione = () => nomeFileProgetto(state.progetto);
+
   const esporta = async () => {
-    const p = state.progetto;
-    const proposto = `${p.commessa || 'commessa'}-rev${p.revisione || '0'}`
-      .replace(/[^\p{L}\p{N}_.-]+/gu, '-')
-      .replace(/-+/g, '-');
     const esito = await salvaConNome({
-      nome: `${proposto}.json`,
+      nome: nomeEsportazione(),
       tipo: 'application/json',
       descrizione: 'Progetto del predimensionatore',
       estensioni: ['.json'],
@@ -201,6 +201,15 @@ export default function App() {
             <DownloadSimple size={14} />
             <span>Esporta JSON</span>
           </button>
+          <SalvaInCommessa
+            progetto={state.progetto}
+            nomeFile={nomeEsportazione()}
+            contenuto={(cartella) => JSON.stringify({ ...state, progetto: { ...state.progetto, cartella } }, null, 2)}
+            onSalvato={(cartella, percorso) => {
+              dispatch({ type: 'progetto', patch: { cartella } });
+              flash(`Salvato in ${percorso}`);
+            }}
+          />
           {(sincronia.stato === 'in-pari' || sincronia.stato === 'in-corso' || sincronia.stato === 'errore') && (
             <button
               type="button"

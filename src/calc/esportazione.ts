@@ -12,7 +12,7 @@
  * lavoro, non a leggerlo. Questo serve a leggerlo.
  */
 
-import type { AppState } from '../state/store';
+import type { AppState, Progetto } from '../state/stato';
 import { foglioQuaderno, intestazione, testoFoglio, type Capitolo } from './relazione';
 
 /** I capitoli tirati dentro il quaderno, nell'ordine in cui stanno sul foglio. */
@@ -25,6 +25,18 @@ export function nomeFile(state: AppState): string {
   const p = state.progetto;
   const grezzo = `${p.commessa || 'commessa'}-${p.nome || 'relazione'}-rev${p.revisione || '0'}`;
   return grezzo.replace(/[^\p{L}\p{N}_.-]+/gu, '-').replace(/-+/g, '-');
+}
+
+/**
+ * Nome del JSON del progetto: commessa e revisione (`2026-001-rev0.json`). È
+ * quello che propone «Esporta JSON» e quello con cui «Salva in commessa» — e il
+ * connettore della Mente digitale, che lo crea da una chat — lo scrivono nella
+ * cartella dei calcoli: una regola sola, così i due non fanno due file.
+ */
+export function nomeFileProgetto(p: Progetto): string {
+  return `${`${p.commessa || 'commessa'}-rev${p.revisione || '0'}`
+    .replace(/[^\p{L}\p{N}_.-]+/gu, '-')
+    .replace(/-+/g, '-')}.json`;
 }
 
 /** Data di oggi in forma italiana, per il piede del foglio. */

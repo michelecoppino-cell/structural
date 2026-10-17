@@ -68,3 +68,11 @@ export const CARTELLA = 'strutturale';
 
 /** Il file unico della libreria personale. */
 export const FILE_LIBRERIA = 'strutturale-libreria.json';
+
+/**
+ * Dove stanno le commesse sul OneDrive: una cartella per commessa
+ * (`23 - Cigliani`), e dentro quella dei calcoli, dove va il JSON del progetto.
+ * Percorsi dalla radice del OneDrive, con `/`.
+ */
+export const CARTELLA_COMMESSE = 'Lavoro personale/20. Commesse personali';
+export const SOTTOCARTELLA_CALCOLO = '11-Calcolo';

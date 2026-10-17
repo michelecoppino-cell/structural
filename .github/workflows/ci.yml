@@ -32,3 +32,8 @@ jobs:
         run: npm test
       - name: Build
         run: npm run build
+      # il motore impacchettato per il connettore della Mente digitale: se non
+      # si costruisce più (un import di React finito dentro `src/motore/`), lo
+      # si scopre qui e non quando lo si ricopia dall'altra parte
+      - name: Motore per il connettore
+        run: npm run motore
