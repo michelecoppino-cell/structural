@@ -49,6 +49,13 @@ describe('modificare', () => {
     expect(cambi.map((c) => c.campo)).toContain('azioni.comune');
   });
 
+  it('dice che quota e zone non seguono il comune, a meno di scriverle', () => {
+    const solo = modifica(progettoNuovo(), { azioni: { comune: 'Tolmezzo' } });
+    expect(solo.avvisi[0]).toMatch(/quota as = 177 m.*zona neve.*zona vento/);
+    const tutto = modifica(progettoNuovo(), { azioni: { comune: 'Tolmezzo', as: '323', zneve: 'I — Alpina', zvento: '1' } });
+    expect(tutto.avvisi).toEqual([]);
+  });
+
   it('un comune che ha omonimi chiede la provincia invece di sceglierne uno', () => {
     // «Castro» c'è sia in provincia di Bergamo sia di Lecce
     expect(() => modifica(progettoNuovo(), { azioni: { comune: 'Castro' } })).toThrow(/aggiungi «prov»/);

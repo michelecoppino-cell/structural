@@ -268,6 +268,8 @@ export interface Cambio {
 export interface EsitoModifica {
   stato: AppState;
   cambi: Cambio[];
+  /** Quello che la modifica non ha toccato e che chi la legge si aspetterebbe cambiato. */
+  avvisi: string[];
 }
 
 const comeTesto = (v: unknown) => (typeof v === 'string' ? v : JSON.stringify(v));
@@ -418,7 +420,26 @@ export function modifica(state: AppState, dati: Record<string, unknown>): EsitoM
   }
 
   if (errori.length) throw new Error(`Niente cambiato, perché:\n- ${errori.join('\n- ')}`);
-  return { stato, cambi };
+
+  // Nella scheda il comune porta con sé regione, provincia e località, e
+  // nient'altro: la quota e le zone di neve e di vento sono campi a parte, e lì
+  // stanno sotto gli occhi. Da una chat no — «il sisma a Tolmezzo» lascerebbe
+  // la quota di Fagagna nel carico neve senza che nessuno la veda.
+  const avvisi: string[] = [];
+  if (cambi.some((c) => c.campo === 'azioni.comune')) {
+    const fermi = [
+      ['as', `quota as = ${stato.azioni.as} m`],
+      ['zneve', `zona neve ${stato.azioni.zneve}`],
+      ['zvento', `zona vento ${stato.azioni.zvento}`],
+    ].filter(([k]) => !(k in ((dati.azioni as Record<string, unknown>) ?? {})));
+    if (fermi.length) {
+      avvisi.push(
+        `Il comune non cambia ${fermi.map(([, t]) => t).join(', ')}: sono rimasti quelli di prima. ` +
+          'Se servono per neve e vento, vanno scritti.',
+      );
+    }
+  }
+  return { stato, cambi, avvisi };
 }
 
 /** Il valore delle grandezze del pannello, per nome. */
