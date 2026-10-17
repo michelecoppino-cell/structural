@@ -761,6 +761,12 @@ lì l'elenco degli strumenti è corto apposta, e studiare si fa seduti. Come si 
   nei download. Lo stato si salva in
   `localStorage` con un ritardo di 300 ms, così scrivere in un campo non costa una
   serializzazione per carattere.
+- **Salva in commessa**: lo stesso JSON, scritto direttamente su OneDrive nella cartella dei
+  calcoli della commessa — `Lavoro personale/20. Commesse personali/<commessa>/11-Calcolo/`
+  (i due pezzi stanno in `src/cloud/config.ts`). Le commesse si scelgono da un elenco, dalla
+  più recente; se il nome del progetto ne indica una sola, è proposta in testa, e la cartella
+  scelta resta nel progetto per la volta dopo. Un file con lo stesso nome si sovrascrive solo
+  dopo conferma. Funziona anche dal telefono, dove il «Salva con nome» non arriva su OneDrive.
 - **Svuota tutto**: cancella il salvataggio automatico — quello che alla riapertura ripropone
   i campi già compilati — e riporta ogni scheda ai valori iniziali. È l'unico comando che
   perde dati: chiede conferma e ricorda di usare prima *Esporta JSON* per conservare il

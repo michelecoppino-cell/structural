@@ -318,3 +318,67 @@ export async function scriviBinario(rel: string, dati: Blob): Promise<void> {
   });
   if (!r.ok) throw await erroreDa(r);
 }
+
+/* ───────────────────────── cartelle delle commesse ───────────────────────── */
+//
+// Qui i percorsi partono dalla radice del OneDrive, non dalla cartella
+// dell'app: il JSON di un progetto va accanto agli altri calcoli della
+// commessa, dove lo si ritrova anche senza l'app.
+
+/** Il percorso Graph di un elemento, dalla radice del OneDrive. */
+const percorsoRadice = (rel: string) =>
+  `/me/drive/root:/${rel.split('/').filter(Boolean).map(encodeURIComponent).join('/')}`;
+
+/** Una sottocartella, con l'ultima modifica. */
+export interface CartellaRemota {
+  nome: string;
+  modificato: string;
+}
+
+/** Le sottocartelle di una cartella; `null` se la cartella non esiste. */
+export async function elencaCartelle(rel: string): Promise<CartellaRemota[] | null> {
+  const out: CartellaRemota[] = [];
+  let url: string | null = `${percorsoRadice(rel)}:/children?$top=200&$select=name,folder,lastModifiedDateTime`;
+  while (url) {
+    const r = await chiama(url.replace(GRAPH, ''));
+    if (r.status === 404) return null;
+    if (!r.ok) throw await erroreDa(r);
+    const d = (await r.json()) as { value?: Record<string, unknown>[]; '@odata.nextLink'?: string };
+    for (const v of d.value ?? []) {
+      if (v.folder) out.push({ nome: String(v.name ?? ''), modificato: String(v.lastModifiedDateTime ?? '') });
+    }
+    url = d['@odata.nextLink'] ?? null;
+  }
+  return out;
+}
+
+/**
+ * Scrive un file in `cartella` (dalla radice), creando l'ultima cartella se
+ * manca — quella sopra deve esserci: è la commessa, e non la si inventa da qui.
+ * Senza `sovrascrivi` un file che c'è già non si tocca e torna `esiste`.
+ */
+export async function scriviInCartella(
+  cartella: string,
+  nome: string,
+  contenuto: string,
+  tipo: string,
+  { sovrascrivi = false } = {},
+): Promise<'scritto' | 'esiste'> {
+  const pezzi = cartella.split('/').filter(Boolean);
+  const r0 = await chiama(`${percorsoRadice(pezzi.slice(0, -1).join('/'))}:/children`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: pezzi[pezzi.length - 1], folder: {}, '@microsoft.graph.conflictBehavior': 'fail' }),
+  });
+  if (!r0.ok && r0.status !== 409) throw await erroreDa(r0);
+
+  const coda = sovrascrivi ? '' : '?@microsoft.graph.conflictBehavior=fail';
+  const r = await chiama(`${percorsoRadice(`${cartella}/${nome}`)}:/content${coda}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': tipo },
+    body: contenuto,
+  });
+  if (!sovrascrivi && r.status === 409) return 'esiste';
+  if (!r.ok) throw await erroreDa(r);
+  return 'scritto';
+}

@@ -90,6 +90,8 @@ export interface Progetto {
   commessa: string;
   localita: string;
   revisione: string;
+  /** Cartella della commessa su OneDrive (`23 - Cigliani`), scelta salvandoci il JSON. */
+  cartella?: string;
 }
 
 export interface AppState {
